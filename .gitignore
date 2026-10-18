@@ -1,0 +1,12 @@
+# build outputs and local files
+build/
+dist/
+dist_new/
+__pycache__/
+*.pyc
+*.spec
+graphify-out/
+old_*/
+legacy_opengl/
+shot_*.png
+_*.py

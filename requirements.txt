@@ -1,0 +1,6 @@
+numpy
+pygame-ce
+PyAudioWPatch
+wgpu
+rendercanvas
+glfw
