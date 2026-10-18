@@ -31,6 +31,7 @@ class ControlWindow:
         self.fb = pygame.font.SysFont("segoeui", 15, bold=True)
         self.f_s = pygame.font.SysFont("segoeui", 12)
         self.last = -1.0
+        self.interval = 0.05
         self.force = True
         self.win = self.ren = self.tex = None
         if not headless:
@@ -115,30 +116,71 @@ class ControlWindow:
             self.bar(x0 + 76, yy + 5, w - 76 - 40, v, c)
             self._t(self.f_s, f"{v * 100:3.0f}", (x0 + w, yy), M.DIM, "r")
 
-        # spectrum (160 bands, dB scale, peak hold)
-        y += len(rows) * 24 + 14
-        self._t(self.f_s, "ESPECTRO", (x0, y), M.DIM)
-        sh = 92
-        base = y + 18 + sh
-        n = len(an.spec)
-        bw = w / n
-        for i in range(n):
-            v = float(an.spec[i])
-            t = i / n
-            c = (int(255 - 175 * t), int(70 + 150 * t), int(200 + 55 * t))
-            x = int(x0 + i * bw)
-            wpx = max(1, int(x0 + (i + 1) * bw) - x - (1 if bw > 2.4 else 0))
-            hgt = int(v * sh)
-            if hgt > 0:
-                pygame.draw.rect(s, c, (x, base - hgt, wpx, hgt))
-            ph = int(float(an.spec_peak[i]) * sh)
-            if ph > 1:
-                pygame.draw.rect(s, (235, 240, 255), (x, base - ph - 1, wpx, 1))
-        for f_hz, lab in ((50, "50"), (200, "200"), (1000, "1k"), (5000, "5k"), (15000, "15k")):
-            fx = x0 + w * (math.log10(f_hz / 25.0) / math.log10(18000.0 / 25.0))
-            self._t(self.f_s, lab, (int(fx), base + 3), (110, 118, 160), "c")
+        y += len(rows) * 24 + 10
+        # rhythm counter: bar / beat / phrase position, and the 16-step rhythm of the kick and of the melody
+        self._t(self.f_s, "RITMO   kick · melodia", (x0, y), M.DIM)
+        if an.bpm > 0 and not silent:
+            info = f"compasso {max(0, an.bar_n) + 1}  ·  batida {an.beat_in_bar + 1}/4  ·  frase {an.phrase_pos + 1}/{an.phrase_len}"
+            self._t(self.f_s, info, (x0 + w, y), M.TEXT, "r")
+        y += 18
+        gap = 4
+        bw_ = (w - 3 * gap) // 4
+        for i in range(4):
+            r_ = pygame.Rect(x0 + i * (bw_ + gap), y, bw_, 12)
+            cur = an.bpm > 0 and not silent and i == an.beat_in_bar
+            if cur:
+                k_ = 1.0 - an.phase * 0.6
+                base_c = M.ACCENT if i == 0 else M.ACCENT2
+                col_ = tuple(int(46 + (v - 46) * k_) for v in base_c)
+            else:
+                col_ = (46, 44, 84) if i else (78, 52, 104)
+            pygame.draw.rect(s, col_, r_, border_radius=4)
+        y += 18
+        seg_w = (w - 7 * 3) / an.phrase_len
+        for i in range(an.phrase_len):
+            r_ = pygame.Rect(int(x0 + i * (seg_w + 3)), y, int(seg_w), 5)
+            pygame.draw.rect(s, (46, 44, 84), r_, border_radius=2)
+            if an.bpm > 0 and not silent:
+                if i < an.phrase_pos:
+                    pygame.draw.rect(s, (150, 120, 255), r_, border_radius=2)
+                elif i == an.phrase_pos:
+                    pygame.draw.rect(s, (150, 120, 255), (r_.x, r_.y, max(2, int(r_.w * an.bar_phase)), r_.h), border_radius=2)
+        y += 12
+        cw = (w - 15 * 2) / 16.0
+        cur_step = int(an.bar_phase * 16) % 16 if an.bpm > 0 and not silent else -1
+        for row_i, (grid, hue) in enumerate(((an.kick_grid, (255, 70, 200)), (an.mel_grid, (80, 220, 255)))):
+            gm = max(float(grid.max()), 1.0)
+            for i in range(16):
+                v = float(grid[i]) / gm
+                r_ = pygame.Rect(int(x0 + i * (cw + 2)), y + row_i * 13, max(3, int(cw)), 10)
+                col_ = tuple(int(36 + (h - 36) * v) for h in hue)
+                pygame.draw.rect(s, col_, r_, border_radius=2)
+                if i == cur_step:
+                    pygame.draw.rect(s, (235, 240, 255), r_, width=1, border_radius=2)
+        self._t(self.f_s, "kick", (x0 + w + 0, y - 1), M.DIM, "r") if False else None
+        y += 30
+        # waveform of the last ~2.7 seconds (min / max of every hop, one line per column)
+        self._t(self.f_s, "ONDA", (x0, y), M.DIM)
         if silent:
-            self._t(self.fb, "Toque uma música no computador", (x0 + w // 2, y + 18 + sh // 2 - 10), (255, 200, 90), "c")
+            self._t(self.fb, "Toque uma música no computador", (x0 + w, y - 2), (255, 200, 90), "r")
+        y += 18
+        wh = 84
+        mid_y = y + wh // 2
+        pygame.draw.line(s, (46, 44, 84), (x0, mid_y), (x0 + w, mid_y))
+        wv = list(an.wave)
+        if wv:
+            n_ = len(wv)
+            for px_ in range(w):
+                lo_, hi_ = wv[min(n_ - 1, int(px_ * n_ / w))]
+                t_ = px_ / w
+                col_ = (int(255 - 175 * t_), int(70 + 150 * t_), int(200 + 55 * t_))
+                # fixed scale (no auto gain): the size of the wave is the real loudness, so quiet parts look small and drops look big
+                up = min(1.0, (max(hi_, 0.0) * 1.6) ** 0.8)
+                dn = min(1.0, (max(-lo_, 0.0) * 1.6) ** 0.8)
+                y1 = mid_y - int(up * wh / 2)
+                y2 = mid_y + int(dn * wh / 2)
+                pygame.draw.line(s, col_, (x0 + px_, y1), (x0 + px_, max(y2, y1 + 1)))
+        base = y + wh - 6
 
         # fps / latency / beat
         y = base + 30
@@ -168,6 +210,8 @@ class ControlWindow:
                     self._t(self.f_s, msg[44:88], (x0, gy + 53), (255, 170, 185))
 
         # shortcuts
+        if status and status.get("look"):
+            self._t(self.f_s, "Visual: " + status["look"][:46], (x0, card.bottom - 62), M.TEXT)
         self._t(self.f_s, "Na imagem:  F tela cheia  ·  D drop de teste", (x0, card.bottom - 40), (130, 138, 180))
         self._t(self.f_s, "Esc sai da tela cheia", (x0, card.bottom - 24), (130, 138, 180))
 
@@ -190,7 +234,7 @@ class ControlWindow:
             self._t(self.fb, txt, (r.centerx, r.y + 5), M.ON_ACCENT, "c")
 
     def update(self, now, an, fps, lat, vsync, status=None, force=False):
-        if not (force or self.force or self.menu.need or now - self.last >= 0.05):
+        if not (force or self.force or self.menu.need or now - self.last >= self.interval):
             return
         self.last = now
         self.force = False

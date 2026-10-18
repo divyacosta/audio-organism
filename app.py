@@ -48,14 +48,15 @@ def main():
     from renderer import Renderer
 
     notice = None
+    power = "low-power" if cfg.get("gpu", 0) == 1 else "high-performance"
     try:
-        rend = Renderer(headless=test, size=(1280, 720))
+        rend = Renderer(headless=test, size=(1280, 720), power=power)
     except Exception as e:                                  # forced backend not available: fall back to automatic
         if not forced:
             raise
         os.environ.pop("WGPU_BACKEND_TYPE", None)
         notice = f"Backend {forced} indisponível: usando automático"
-        rend = Renderer(headless=test, size=(1280, 720))
+        rend = Renderer(headless=test, size=(1280, 720), power=power)
     print(f"GPU: {rend.gpu_name} | backend: {rend.backend}", flush=True)
 
     # ---------------------------------------------------------------- audio
@@ -163,17 +164,24 @@ def main():
                 menu.say("VSync indisponível neste backend")
         if cfg["fullscreen"] != rend.fullscreen:
             rend.set_fullscreen(cfg["fullscreen"])
-        # graphics options (menu "Gráficos")
-        rend.steps, rend.bounces = cfg["steps"], 0
+        # graphics options (aba Gráficos)
+        rend.steps, rend.bounces = max(24, int(cfg["steps"] * (0.55 + 0.45 * dyn))), 0          # dynamic quality: fewer ray steps too when the FPS is short
         rend.shadow_q, rend.ao_q, rend.refl_q = cfg["shadows"], cfg["ao"], cfg["reflect"]
-        rend.aa, rend.bloom_levels, rend.rt, rend.anime = cfg["aa"], cfg["bloomq"], bool(cfg["rt"]), bool(cfg["style"])
+        am = cfg["aa_mode"]                                                       # 0 off, 1 edges, 2 FXAA, 3..5 MSAA 2x / 4x / 8x
+        rend.aa, rend.fxaa, rend.msaa = (am == 1), (am == 2), {3: 1, 4: 2, 5: 3}.get(am, 0)
+        rend.bloom_levels, rend.rt = cfg["bloomq"], bool(cfg["rt"])
+        rend.sharp = (0.0, 0.35, 0.7, 1.2)[cfg["sharp"]]
+        rend.bloom_shift = 1 + cfg["bloomres"]
+        rend.dist = (5.0, 9.0, 14.0)[cfg["dist"]]
+        dyn_floor = max(0.1, min(1.0, cfg["dynmin"] / max(cfg["res"], 1)))
+        ctl.interval = 1.0 / max(5, cfg["panel_hz"])
         rend.mblur, rend.mblur_fps, rend.dt = cfg["mblur"], cfg["mblur_fps"], dt
         if cfg["dynres"] and not test and bench is None:
             if clock_t - dyn_t > 0.6:                           # trade resolution for FPS: down fast, up slowly
                 dyn_t = clock_t
                 target = cfg["fps_target"]
                 if fps < target * 0.93:
-                    dyn = max(0.5, dyn - 0.06)
+                    dyn = max(dyn_floor, dyn - 0.07)
                 elif fps > target * 1.20 and dyn < 1.0:
                     dyn = min(1.0, dyn + 0.03)
         else:
@@ -267,17 +275,29 @@ def main():
 
         # --------------------------------------------------- procedural scene
         params = ndir.update(dt, an, cfg)
+        # image style: the user's choice, or the style that suits the current scene (3D, 2D or holograma; painted by the Facetas engine)
+        eff = (params.get("style_auto", 1) if cfg["auto_style"] else params.get("style_default", 1)) if cfg["style"] == 8 else (cfg["style"] or params.get("style_default", 1))
+        rend.style = {1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5}.get(eff, 0)
+        rend.duo = (eff == 7)
+        if eff in (2, 5):                                 # neon and chrome only read on a dark room: the background stays black
+            params["bg"] = (0.0, 0.0, 0.0)
+        if eff == 4:                                      # raio X: a deep blue-black room
+            params["bg"] = (0.0, 0.01, 0.025)
+        if eff == 6:                                      # aquarela: the background is paper
+            params["bg"] = (0.97, 0.95, 0.91)
         params["complexity"] = min(params["complexity"], max(0.30, cfg["detail"] / 100.0))     # panel density cap
         params.update(bass=an.bass * rk, mid=an.mid * rk, high=an.high * rk, kick=an.kick * rk, snare=an.snare, hat=an.hat)
         rend.bloom = cfg["bloom"] / 100.0
         rend.flash = min(1.0, max(max(an.strobe, an.burst_pulse) * strobe_on, an.flash * strobe_on, an.drop_flash * 1.1))
-        frame_img = rend.render(params)
+        skip = cfg["rrate"] > 0 and not test and frame % (cfg["rrate"] + 1) != 0       # render rate: draw 1 frame out of 2 or 3
+        frame_img = None if skip else rend.render(params)
 
         # ------------------------------------------------ control window + save
         ok, msg = rend.shader_status()
         status = dict(gpu=rend.gpu_name, backend=rend.backend, shader_ok=ok, shader_msg=msg, reloads=rend.lib.reloads)
         lat = (cap.frames / rate * 1000.0 if cap else 10.0) + HOP / rate * 1500.0 + dt * 1000.0
         if not test:
+            status["look"] = ndir.look_name() + (f"  ·  gênero: {ndir.genre}" if ndir.genre != "?" else "")
             ctl.update(time.perf_counter(), an, fps, lat, rend.vsync, status)
             if menu.dirty and time.perf_counter() - menu.dirty_t > 1.0:
                 save_cfg(cfg)
@@ -287,7 +307,7 @@ def main():
         if not test and frame % 20 == 0:                    # resolution and FPS in the window title, so the picture stays clean
             sw, sh = rend.scene_size
             rend.set_title(f"Audio Organism  ·  {sw}×{sh}  ·  {fps:.0f} fps")
-            menu.set_live(f"{fps:.0f} FPS  ·  render {sw}×{sh}" + (f"  ·  {dyn * 100:.0f}% dinâmico" if cfg["dynres"] and dyn < 0.999 else ""))
+            menu.set_live(f"{fps:.0f} FPS  ·  render {sw}×{sh}" + (f"  ·  {dyn * 100:.0f}% dinâmico" if cfg["dynres"] and dyn < 0.999 else "") + (f"  ·  1 a cada {cfg['rrate'] + 1} quadros" if cfg["rrate"] else ""))
         if os.environ.get("VIS_DEBUG") and frame % 120 == 0:
             print(f"[dbg] backend={rend.backend} vsync={rend.vsync} fs={rend.fullscreen} fps={fps:.0f} res={rend.res} steps={rend.steps} bounces={rend.bounces}", flush=True)
         if test and frame in shots:
@@ -302,8 +322,9 @@ def main():
             break
 
         # fps cap (only when not synced to the monitor)
-        if not test and not rend.vsync and cfg["fps_cap"] > 0:
-            target = 1.0 / cfg["fps_cap"]
+        pace = cfg["fps_cap"] if cfg["fps_cap"] > 0 else (cfg["fps_target"] if cfg["rrate"] > 0 else 0)      # skipped frames need a pace of their own
+        if not test and not rend.vsync and pace > 0:
+            target = 1.0 / pace
             while time.perf_counter() - t_start < target:
                 time.sleep(0.0005)
 

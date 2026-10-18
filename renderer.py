@@ -29,9 +29,51 @@ def shader_dir():
     return os.path.join(base_dir(), "shaders")
 
 
-def pack_scene(p, w, h, steps, bounces, flags=0, quality=0):   # flags: bit0 anime, bit1 ray traced lighting, bit2 edge AA
-    """Uniform block of neon3d.wgsl (512 bytes)."""
-    a = np.zeros(128, np.float32)
+PROF = {  # per scene profile: panel half size, layer offset, decay per layer (see the Facetas engine in neon3d.wgsl)
+    0: ((0.52, 0.34), (0.70, 0.38), 0.84), 1: ((0.95, 0.075), (0.42, 0.22), 0.89), 2: ((0.62, 0.30), (0.55, 0.30), 0.86),
+    3: ((0.50, 0.40), (0.75, 0.42), 0.82), 4: ((0.46, 0.33), (0.66, 0.36), 0.85), 5: ((0.92, 0.05), (0.50, 0.26), 0.88)}
+
+
+def facet_tables(p, w, h, prof):
+    """Per-frame scalars and per-layer tables of the Facetas distance function, so the GPU does not recompute them at every step."""
+    import math
+    aspect = w / max(h, 1)
+    sx = min(8.0, max(1.0, aspect / 1.78)) ** 0.70
+    sy = min(8.0, max(1.0, 1.78 / aspect)) ** 0.70
+    n = min(7 + int(p["complexity"] * 4.0) + int((sx - 1.0) * 1.5 + (sy - 1.0) * 1.5), 12)
+    sc = 1.0 - 0.35 * p["collapse"] + 0.6 * p["explode"]
+    thick = 0.009 + 0.012 * p["bass"] + 0.010 * p["kick"]
+    if prof == 1:
+        thick *= 0.7
+    elif prof == 2:
+        thick *= 0.5
+    elif prof == 3:
+        thick = thick * 2.4 + 0.012 * p["kick"]
+    elif prof == 4:
+        thick = 0.016 + 0.020 * p["mid"] + 0.006 * p["high"]
+    elif prof == 5:
+        thick = 0.020 + 0.012 * p["bass"] + 0.012 * p["kick"]            # round sticks
+    (psx, psy), (pox, poy), decay = PROF.get(prof, PROF[0])
+    fn = min(1.0, max(0.0, p.get("funnel", 0.0)))
+    t, seed = p["time"], p["seed"]
+    tiers = p.get("tier_uni", (0, 1, 2))
+    trig, szs = [], []
+    rot = p.get("rot", t * 0.10 * (1.0 + 0.6 * p["build"]))
+    rdir = p.get("rdir", 0)
+    pulse = 1.0 + p.get("pulse", 0.0)
+    for i in range(12):
+        uni = tiers[0 if i < 4 else (1 if i < 8 else 2)]
+        ang = seed[0] * 3.0 + uni * 1.9 + i * 0.75 + (1.0 if (i % 2 == 0 or rdir != 2) else -1.0) * (-1.0 if rdir == 1 else 1.0) * rot
+        tilt = 0.55 + seed[1] * 1.4 + uni * 0.8 + 0.45 * math.sin(t * 0.27 + i * 1.3)
+        trig.append((math.cos(ang), math.sin(ang), math.cos(tilt), math.sin(tilt)))
+        wave = 1.0 + 0.40 * fn * math.sin(p["travel"] * 1.1 - i * 0.9)
+        szs.append((decay ** i * wave * pulse, (1.0 - fn) + fn * 0.80 ** i, (p.get("roll", 0.0) if i == 0 else (p.get("dist", 9.0) if i == 1 else 0.0)), (p.get("fov", 2.0) if i == 0 else 0.0)))
+    return (sx, sy, float(n), sc), (psx, psy, pox, poy), (thick, 1.0 if prof in (1, 5) else 0.0, 0.0, 0.0), trig, szs
+
+
+def pack_scene(p, w, h, steps, bounces, flags=0, quality=0, prof=0):   # flags: bit0 anime, bit1 ray traced lighting, bit2 edge AA
+    """Uniform block of neon3d.wgsl (944 bytes)."""
+    a = np.zeros(236, np.float32)
     a[0:2] = (w, h)
     a[2], a[3] = p["time"], p["travel"]
     a[4], a[5], a[6], a[7] = p["fov"], p["bass"], p["mid"], p["high"]
@@ -40,7 +82,7 @@ def pack_scene(p, w, h, steps, bounces, flags=0, quality=0):   # flags: bit0 ani
     a[16], a[17] = p["gain"], p["fade"]
     iv = a.view(np.uint32)
     iv[18], iv[19], iv[20] = p["gen"], steps, bounces
-    iv[21], iv[22] = flags, quality
+    iv[21], iv[22], iv[23] = flags, quality, prof
     a[24:28] = p["seed"]
     a[28:31] = p["cam"]
     a[31] = p.get("funnel", 0.0)
@@ -55,13 +97,17 @@ def pack_scene(p, w, h, steps, bounces, flags=0, quality=0):   # flags: bit0 ani
     for k, pal in enumerate(p.get("upals") or ()):
         for j, col in enumerate(pal):
             a[92 + (k * 3 + j) * 4: 95 + (k * 3 + j) * 4] = col
+    geo, prm0, prm1, trig, szs = facet_tables(p, w, h, prof)
+    a[128:132], a[132:136], a[136:140] = geo, prm0, prm1
+    a[140:188] = np.array(trig, np.float32).ravel()
+    a[188:236] = np.array(szs, np.float32).ravel()
     return a.tobytes()
 
 
 class Renderer:
-    def __init__(self, headless=False, size=(1280, 720), title="Audio Organism", shader_dir_arg=None):
+    def __init__(self, headless=False, size=(1280, 720), title="Audio Organism", shader_dir_arg=None, power="high-performance"):
         self.headless = headless
-        adapter = wgpu.gpu.request_adapter_sync(power_preference="high-performance")
+        adapter = wgpu.gpu.request_adapter_sync(power_preference=power)
         self.device = adapter.request_device_sync()
         self.adapter = adapter
         info = adapter.info
@@ -90,26 +136,34 @@ class Renderer:
         self.vsync = False
 
         self.lib = ShaderLib(self.device, shader_dir_arg or shader_dir())
-        for name in ("neon3d", "bloom", "composite", "accum"):
+        for name in ("neon3d", "bloom", "composite", "accum", "fxaa"):
             self.lib.load(name, name + ".wgsl")
         ok, msg = self.lib.status()
         if not ok:
             raise RuntimeError("Shader inicial com erro: " + msg)
 
         d = self.device
-        self.u_scene = d.create_buffer(size=512, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
+        self.u_scene = d.create_buffer(size=944, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
         self.u_acc = d.create_buffer(size=16, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
         self.mblur, self.mblur_fps, self.dt = 180, 24, 1 / 60   # shutter angle (degrees), reference film rate, frame time (set by the app)
-        self.u_comp = d.create_buffer(size=32, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
+        self.u_fx = d.create_buffer(size=16, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
+        self.u_comp = d.create_buffer(size=80, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
         self.sampler = d.create_sampler(mag_filter="linear", min_filter="linear",
                                         address_mode_u="clamp-to-edge", address_mode_v="clamp-to-edge")
         self.pipes = {}
         self.pipe_errors = {}
         self._build_pipelines()
         self.res, self.steps, self.bounces = 100, 72, 1
-        self.anime = True
+        self.style = 0                 # image style: 0 = 3D, 1 = neon, 2 = holograma
+        self.duo = False               # duotone post-process
         self.rt = True
-        self.aa = True
+        self.aa = True                 # analytic edge anti-aliasing
+        self.fxaa = False              # FXAA pass over the finished picture
+        self.msaa = 0                  # extra samples on edge pixels: 0 off, 1 = 2x, 2 = 4x, 3 = 8x
+        self.sharp = 0.0               # sharpening amount (composite)
+        self.bloom_shift = 1           # bloom base size = window >> shift
+        self.dist = 9.0                # how far past the first layer the rays travel
+        self._bs = 1
         self.shadow_q, self.ao_q, self.refl_q, self.bloom_levels = 2, 2, 2, 3     # graphics quality knobs (menu "Gráficos")
         self.size = (0, 0)
         self.scene_size = (0, 0)
@@ -134,7 +188,8 @@ class Renderer:
         specs = {"neon3d": [("scene", "vs", "fs", HDR)],
                  "bloom": [("down", "vs", "fs_down", HDR), ("blur", "vs", "fs_blur", HDR)],
                  "composite": [("comp", "vs", "fs", None)],
-                 "accum": [("accum", "vs", "fs", HDR)]}
+                 "accum": [("accum", "vs", "fs", HDR)],
+                 "fxaa": [("fxaa", "vs", "fs", None)]}
         for name, items in specs.items():
             if only and name != only:
                 continue
@@ -171,11 +226,20 @@ class Renderer:
     def _ubuf(self, vals):
         return self.device.create_buffer_with_data(data=np.array(vals, np.float32).tobytes(), usage=wgpu.BufferUsage.UNIFORM)
 
+    def _scene_dims(self, w, h):
+        s = max(0.25, min(2.0, self.res / 100.0))                  # above 100 % the scene is rendered larger than the window (supersampling)
+        s = min(s, 8192.0 / max(w, h, 1))
+        return max(int(w * s), 16), max(int(h * s), 16)
+
     def _build_targets(self, w, h):
-        s = max(0.25, min(1.0, self.res / 100.0))
-        sw, sh = max(int(w * s), 16), max(int(h * s), 16)
+        sw, sh = self._scene_dims(w, h)
         self.size, self.scene_size = (w, h), (sw, sh)
         self.scene = self._tex(sw, sh)
+        self.ldr = self.device.create_texture(size=(max(w, 2), max(h, 2), 1), format=self.fmt,
+                                              usage=wgpu.TextureUsage.RENDER_ATTACHMENT | wgpu.TextureUsage.TEXTURE_BINDING)
+        self.ldr_v = self.ldr.create_view()
+        self._bs = self.bloom_shift
+        self.device.queue.write_buffer(self.u_fx, 0, np.array([1.0 / max(w, 2), 1.0 / max(h, 2), 0.0, 0.0], np.float32).tobytes())
         self.scene_v = self.scene.create_view()
         # motion blur: `disp` = scene blended with the previous frame (what bloom and the composite read); `hist` = last `disp`
         self.disp, self.hist = self._tex(sw, sh, copy=True), self._tex(sw, sh, copy=True)
@@ -184,7 +248,7 @@ class Renderer:
         self.levels = []
         src_w, src_h = sw, sh
         for i in range(BLOOM_LEVELS):
-            lw, lh = max(w >> (i + 1), 2), max(h >> (i + 1), 2)
+            lw, lh = max(w >> (i + self.bloom_shift), 2), max(h >> (i + self.bloom_shift), 2)
             down, tmp, lv = self._tex(lw, lh), self._tex(lw, lh), self._tex(lw, lh)
             self.levels.append(dict(
                 down=down, tmp=tmp, lv=lv, dv=down.create_view(), tv=tmp.create_view(), lvv=lv.create_view(),
@@ -199,7 +263,7 @@ class Renderer:
     def _build_bind(self):
         d, pipes = self.device, self.pipes
         bind = {"scene": d.create_bind_group(layout=pipes["scene"].get_bind_group_layout(0),
-                                             entries=[self._entry(0, {"buffer": self.u_scene, "offset": 0, "size": 512})])}
+                                             entries=[self._entry(0, {"buffer": self.u_scene, "offset": 0, "size": 944})])}
         bind["accum"] = d.create_bind_group(layout=pipes["accum"].get_bind_group_layout(0), entries=[
             self._entry(0, self.scene_v), self._entry(1, self.hist_v), self._entry(2, self.sampler),
             self._entry(3, {"buffer": self.u_acc, "offset": 0, "size": 16})])
@@ -216,7 +280,9 @@ class Renderer:
             lv.append(L["lvv"])
         bind["comp"] = d.create_bind_group(layout=pipes["comp"].get_bind_group_layout(0), entries=[
             self._entry(0, self.disp_v), self._entry(1, lv[0]), self._entry(2, lv[1]), self._entry(3, lv[2]),
-            self._entry(4, lv[3]), self._entry(5, self.sampler), self._entry(6, {"buffer": self.u_comp, "offset": 0, "size": 32})])
+            self._entry(4, lv[3]), self._entry(5, self.sampler), self._entry(6, {"buffer": self.u_comp, "offset": 0, "size": 80})])
+        bind["fxaa"] = d.create_bind_group(layout=pipes["fxaa"].get_bind_group_layout(0), entries=[
+            self._entry(0, self.ldr_v), self._entry(1, self.sampler), self._entry(2, {"buffer": self.u_fx, "offset": 0, "size": 16})])
         self.bind = bind
 
     # ---------------------------------------------------------------------- draw
@@ -231,18 +297,20 @@ class Renderer:
     def _draw(self):
         tex = self.context.get_current_texture()
         w, h = tex.width, tex.height
-        scene_size = (max(int(w * max(0.25, min(1.0, self.res / 100.0))), 16),
-                      max(int(h * max(0.25, min(1.0, self.res / 100.0))), 16))
-        if (w, h) != self.size or scene_size != self.scene_size or self.bind is None:
-            if (w, h) != self.size or scene_size != self.scene_size:
+        scene_size = self._scene_dims(w, h)
+        if (w, h) != self.size or scene_size != self.scene_size or self.bind is None or self._bs != self.bloom_shift:
+            if (w, h) != self.size or scene_size != self.scene_size or self._bs != self.bloom_shift:
                 self._build_targets(w, h)
             self._build_bind()
         p = self.params
+        p["dist"] = self.dist
         d = self.device
         d.queue.write_buffer(self.u_scene, 0, pack_scene(p, *self.scene_size, self.steps, self.bounces,
-                                                                     (1 if self.anime else 0) | (2 if self.rt else 0) | (4 if self.aa else 0),
-                                                                     self.shadow_q | (self.ao_q << 4) | (self.refl_q << 8)))
-        d.queue.write_buffer(self.u_comp, 0, np.array([self.bloom, self.flash, self.exposure, float(self.bloom_levels), *p.get("bg", (0.0, 0.0, 0.0)), p["fade"] * p["gain"]], np.float32).tobytes())
+                                                                     (2 if self.rt else 0) | (4 if self.aa else 0) | (self.style << 8) | (max(0, min(3, int(self.msaa))) << 12),
+                                                                     self.shadow_q | (self.ao_q << 4) | (self.refl_q << 8), p.get("prof", 0)))
+        d.queue.write_buffer(self.u_comp, 0, np.array([self.bloom, self.flash, self.exposure, float(self.bloom_levels), *p.get("bg", (0.0, 0.0, 0.0)), p["fade"] * p["gain"],
+                                                      0.0, p["time"], float(self.sharp), 0.0,
+                                                      *(p.get("duo") or ((0, 0, 0), (1, 1, 1)))[0], 1.0 if self.duo else 0.0, *(p.get("duo") or ((0, 0, 0), (1, 1, 1)))[1], 0.0], np.float32).tobytes())
         enc = d.create_command_encoder()
         self._pass(enc, self.scene_v, self.pipes["scene"], self.bind["scene"])
         # motion blur by SHUTTER ANGLE, as in cinema: the shutter is open for (angle / 360) of one frame of the reference film rate, so
@@ -261,12 +329,18 @@ class Renderer:
             self._pass(enc, L["dv"], self.pipes["down"], L["g_down"])
             self._pass(enc, L["tv"], self.pipes["blur"], L["g_h"])
             self._pass(enc, L["lvv"], self.pipes["blur"], L["g_v"])
-        self._pass(enc, tex.create_view(), self.pipes["comp"], self.bind["comp"])
+        if self.fxaa:
+            self._pass(enc, self.ldr_v, self.pipes["comp"], self.bind["comp"])
+            self._pass(enc, tex.create_view(), self.pipes["fxaa"], self.bind["fxaa"])
+        else:
+            self._pass(enc, tex.create_view(), self.pipes["comp"], self.bind["comp"])
         d.queue.submit([enc.finish()])
 
     def render(self, params):
         """Draw one frame. Returns the frame (H, W, 4 uint8) when headless."""
         self.params = params
+        if not self.headless and self.minimized():
+            return None                                   # nothing to see: do not spend the GPU
         if self.headless:
             self.canvas.request_draw(self._draw)
             return np.asarray(self.canvas.draw())
@@ -337,6 +411,13 @@ class Renderer:
             glfw.poll_events()
         ev, self.events = self.events, []
         return ev
+
+    def minimized(self):
+        try:
+            glfw, win = self._glfw()
+            return bool(glfw.get_window_attrib(win, glfw.ICONIFIED))
+        except Exception:
+            return False
 
     def closed(self):
         return False if self.headless else bool(self.canvas.get_closed())
