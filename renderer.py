@@ -54,6 +54,13 @@ def facet_tables(p, w, h, prof):
     elif prof == 5:
         thick = 0.020 + 0.012 * p["bass"] + 0.012 * p["kick"]            # round sticks
     (psx, psy), (pox, poy), decay = PROF.get(prof, PROF[0])
+    mnd = p.get("mandala")
+    if mnd:                                                  # the scene's own numbers replace the character's
+        psx, psy, pox, poy, decay = mnd["psx"], mnd["psy"], mnd["pox"], mnd["poy"], mnd["decay"]
+        thick *= mnd["thick"]
+        rnd, glass = float(mnd["round"]), float(mnd["glass"])
+    else:
+        rnd, glass = (1.0 if prof == 4 else (2.0 if prof == 5 else 0.0)), (0.4 if prof == 2 else 1.0)
     fn = min(1.0, max(0.0, p.get("funnel", 0.0)))
     t, seed = p["time"], p["seed"]
     tiers = p.get("tier_uni", (0, 1, 2))
@@ -68,12 +75,12 @@ def facet_tables(p, w, h, prof):
         trig.append((math.cos(ang), math.sin(ang), math.cos(tilt), math.sin(tilt)))
         wave = 1.0 + 0.40 * fn * math.sin(p["travel"] * 1.1 - i * 0.9)
         szs.append((decay ** i * wave * pulse, (1.0 - fn) + fn * 0.80 ** i, (p.get("roll", 0.0) if i == 0 else (p.get("dist", 9.0) if i == 1 else 0.0)), (p.get("fov", 2.0) if i == 0 else 0.0)))
-    return (sx, sy, float(n), sc), (psx, psy, pox, poy), (thick, 1.0 if prof in (1, 5) else 0.0, 0.0, 0.0), trig, szs
+    return (sx, sy, float(n), sc), (psx, psy, pox, poy), (thick, 1.0 if prof in (1, 5) else 0.0, rnd, glass), trig, szs
 
 
 def pack_scene(p, w, h, steps, bounces, flags=0, quality=0, prof=0):   # flags: bit0 anime, bit1 ray traced lighting, bit2 edge AA
-    """Uniform block of neon3d.wgsl (944 bytes)."""
-    a = np.zeros(236, np.float32)
+    """Uniform block of neon3d.wgsl (1152 bytes)."""
+    a = np.zeros(288, np.float32)
     a[0:2] = (w, h)
     a[2], a[3] = p["time"], p["travel"]
     a[4], a[5], a[6], a[7] = p["fov"], p["bass"], p["mid"], p["high"]
@@ -101,11 +108,15 @@ def pack_scene(p, w, h, steps, bounces, flags=0, quality=0, prof=0):   # flags: 
     a[128:132], a[132:136], a[136:140] = geo, prm0, prm1
     a[140:188] = np.array(trig, np.float32).ravel()
     a[188:236] = np.array(szs, np.float32).ravel()
+    shp = p.get("shapes")
+    if shp:
+        a[236:284] = np.array(shp, np.float32).ravel()                       # per layer: shape A, shape B, morph, unused
+    a[284:288] = p.get("mat", (1.0, 1.0, 1.0, 0.0))                         # the shader preset's numbers
     return a.tobytes()
 
 
 class Renderer:
-    def __init__(self, headless=False, size=(1280, 720), title="Audio Organism", shader_dir_arg=None, power="high-performance"):
+    def __init__(self, headless=False, size=(1280, 720), title="Audio Organism", shader_dir_arg=None, power="high-performance", on_wait=None):
         self.headless = headless
         adapter = wgpu.gpu.request_adapter_sync(power_preference=power)
         self.device = adapter.request_device_sync()
@@ -143,22 +154,37 @@ class Renderer:
             raise RuntimeError("Shader inicial com erro: " + msg)
 
         d = self.device
-        self.u_scene = d.create_buffer(size=944, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
+        self.u_scene = d.create_buffer(size=1152, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
         self.u_acc = d.create_buffer(size=16, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
         self.mblur, self.mblur_fps, self.dt = 180, 24, 1 / 60   # shutter angle (degrees), reference film rate, frame time (set by the app)
         self.u_fx = d.create_buffer(size=16, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
-        self.u_comp = d.create_buffer(size=80, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
+        self.u_blit = d.create_buffer(size=16, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
+        self.u_comp = d.create_buffer(size=144, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST)
         self.sampler = d.create_sampler(mag_filter="linear", min_filter="linear",
                                         address_mode_u="clamp-to-edge", address_mode_v="clamp-to-edge")
         self.pipes = {}
         self.pipe_errors = {}
-        self._build_pipelines()
+        if on_wait is None:
+            self._build_pipelines()
+        else:                                      # the first launch after an update compiles the shaders for a while: do it in a thread so
+            import threading                       # the program can keep a window alive (on_wait is called about 20 times a second)
+            th = threading.Thread(target=self._build_pipelines, daemon=True)
+            th.start()
+            while th.is_alive():
+                on_wait()
+                time.sleep(0.05)
+            th.join()
         self.res, self.steps, self.bounces = 100, 72, 1
         self.style = 0                 # image style: 0 = 3D, 1 = neon, 2 = holograma
         self.duo = False               # duotone post-process
         self.rt = True
         self.aa = True                 # analytic edge anti-aliasing
         self.fxaa = False              # FXAA pass over the finished picture
+        self.preview = False           # keep a small copy of the finished picture (the thumbnail in the settings tabs)
+        self.preview_every = 8         # frames between two thumbnails (the read-back waits for the GPU, so it is rare)
+        self.preview_rgba, self.preview_size, self.preview_n = None, (320, 180), 0
+        self._pv_count = 0
+        self.preview_err = None        # why the last read-back failed (shown in the panel when the preview stays empty)
         self.msaa = 0                  # extra samples on edge pixels: 0 off, 1 = 2x, 2 = 4x, 3 = 8x
         self.sharp = 0.0               # sharpening amount (composite)
         self.bloom_shift = 1           # bloom base size = window >> shift
@@ -239,7 +265,13 @@ class Renderer:
                                               usage=wgpu.TextureUsage.RENDER_ATTACHMENT | wgpu.TextureUsage.TEXTURE_BINDING)
         self.ldr_v = self.ldr.create_view()
         self._bs = self.bloom_shift
-        self.device.queue.write_buffer(self.u_fx, 0, np.array([1.0 / max(w, 2), 1.0 / max(h, 2), 0.0, 0.0], np.float32).tobytes())
+        self.device.queue.write_buffer(self.u_fx, 0, np.array([1.0 / max(w, 2), 1.0 / max(h, 2), 1.0, 0.0], np.float32).tobytes())
+        self.device.queue.write_buffer(self.u_blit, 0, np.array([1.0 / max(w, 2), 1.0 / max(h, 2), 0.0, 0.0], np.float32).tobytes())
+        pw, ph = self.preview_size
+        self.ptex = self.device.create_texture(size=(pw, ph, 1), format=self.fmt,
+                                               usage=wgpu.TextureUsage.RENDER_ATTACHMENT | wgpu.TextureUsage.COPY_SRC)
+        self.ptex_v = self.ptex.create_view()
+        self.pbuf = self.device.create_buffer(size=pw * 4 * ph, usage=wgpu.BufferUsage.MAP_READ | wgpu.BufferUsage.COPY_DST)
         self.scene_v = self.scene.create_view()
         # motion blur: `disp` = scene blended with the previous frame (what bloom and the composite read); `hist` = last `disp`
         self.disp, self.hist = self._tex(sw, sh, copy=True), self._tex(sw, sh, copy=True)
@@ -263,7 +295,7 @@ class Renderer:
     def _build_bind(self):
         d, pipes = self.device, self.pipes
         bind = {"scene": d.create_bind_group(layout=pipes["scene"].get_bind_group_layout(0),
-                                             entries=[self._entry(0, {"buffer": self.u_scene, "offset": 0, "size": 944})])}
+                                             entries=[self._entry(0, {"buffer": self.u_scene, "offset": 0, "size": 1152})])}
         bind["accum"] = d.create_bind_group(layout=pipes["accum"].get_bind_group_layout(0), entries=[
             self._entry(0, self.scene_v), self._entry(1, self.hist_v), self._entry(2, self.sampler),
             self._entry(3, {"buffer": self.u_acc, "offset": 0, "size": 16})])
@@ -280,9 +312,11 @@ class Renderer:
             lv.append(L["lvv"])
         bind["comp"] = d.create_bind_group(layout=pipes["comp"].get_bind_group_layout(0), entries=[
             self._entry(0, self.disp_v), self._entry(1, lv[0]), self._entry(2, lv[1]), self._entry(3, lv[2]),
-            self._entry(4, lv[3]), self._entry(5, self.sampler), self._entry(6, {"buffer": self.u_comp, "offset": 0, "size": 80})])
+            self._entry(4, lv[3]), self._entry(5, self.sampler), self._entry(6, {"buffer": self.u_comp, "offset": 0, "size": 144})])
         bind["fxaa"] = d.create_bind_group(layout=pipes["fxaa"].get_bind_group_layout(0), entries=[
             self._entry(0, self.ldr_v), self._entry(1, self.sampler), self._entry(2, {"buffer": self.u_fx, "offset": 0, "size": 16})])
+        bind["blit"] = d.create_bind_group(layout=pipes["fxaa"].get_bind_group_layout(0), entries=[
+            self._entry(0, self.ldr_v), self._entry(1, self.sampler), self._entry(2, {"buffer": self.u_blit, "offset": 0, "size": 16})])
         self.bind = bind
 
     # ---------------------------------------------------------------------- draw
@@ -309,8 +343,9 @@ class Renderer:
                                                                      (2 if self.rt else 0) | (4 if self.aa else 0) | (self.style << 8) | (max(0, min(3, int(self.msaa))) << 12),
                                                                      self.shadow_q | (self.ao_q << 4) | (self.refl_q << 8), p.get("prof", 0)))
         d.queue.write_buffer(self.u_comp, 0, np.array([self.bloom, self.flash, self.exposure, float(self.bloom_levels), *p.get("bg", (0.0, 0.0, 0.0)), p["fade"] * p["gain"],
-                                                      0.0, p["time"], float(self.sharp), 0.0,
-                                                      *(p.get("duo") or ((0, 0, 0), (1, 1, 1)))[0], 1.0 if self.duo else 0.0, *(p.get("duo") or ((0, 0, 0), (1, 1, 1)))[1], 0.0], np.float32).tobytes())
+                                                      0.0, p["time"], float(self.sharp), float(p.get("duo_contrast", 1.0)),
+                                                      *(p.get("duo") or ((0, 0, 0), (1, 1, 1)))[0], 1.0 if self.duo else 0.0, *(p.get("duo") or ((0, 0, 0), (1, 1, 1)))[1], 0.0,
+                                                      *self._lights_block(p)], np.float32).tobytes())
         enc = d.create_command_encoder()
         self._pass(enc, self.scene_v, self.pipes["scene"], self.bind["scene"])
         # motion blur by SHUTTER ANGLE, as in cinema: the shutter is open for (angle / 360) of one frame of the reference film rate, so
@@ -329,18 +364,46 @@ class Renderer:
             self._pass(enc, L["dv"], self.pipes["down"], L["g_down"])
             self._pass(enc, L["tv"], self.pipes["blur"], L["g_h"])
             self._pass(enc, L["lvv"], self.pipes["blur"], L["g_v"])
-        if self.fxaa:
+        self._pv_count += 1
+        want_pv = self.preview and self._pv_count % max(1, self.preview_every) == 0
+        if self.fxaa or want_pv:
             self._pass(enc, self.ldr_v, self.pipes["comp"], self.bind["comp"])
-            self._pass(enc, tex.create_view(), self.pipes["fxaa"], self.bind["fxaa"])
+            self._pass(enc, tex.create_view(), self.pipes["fxaa"], self.bind["fxaa" if self.fxaa else "blit"])
+            if want_pv:                                    # a small copy of the finished picture, for the thumbnail
+                self._pass(enc, self.ptex_v, self.pipes["fxaa"], self.bind["blit"])
+                enc.copy_texture_to_buffer({"texture": self.ptex}, {"buffer": self.pbuf, "bytes_per_row": self.preview_size[0] * 4},
+                                           (self.preview_size[0], self.preview_size[1], 1))
         else:
             self._pass(enc, tex.create_view(), self.pipes["comp"], self.bind["comp"])
         d.queue.submit([enc.finish()])
+        if want_pv:
+            try:
+                self.pbuf.map_sync(wgpu.MapMode.READ)
+                self.preview_rgba = bytes(self.pbuf.read_mapped())
+                self.pbuf.unmap()
+                self.preview_n += 1
+            except Exception as e:
+                self.preview_rgba = None
+                self.preview_err = repr(e)[:90]
+
+    def _lights_block(self, p):
+        """The 16 floats of the background lights: style / intensity / speed / blank, two colours with bass and kick, then mid, high, beat and aspect."""
+        lg = p.get("lights") or (0, 1.0, 1.0)
+        pal = p.get("pal") or ((1.0, 0.3, 0.8), (0.2, 0.8, 1.0))
+        ca = pal[0][:3]
+        cb = pal[1][:3] if len(pal) > 1 else ca
+        w, h = self.size
+        return [float(lg[0]), float(lg[1]), float(lg[2]), 1.0 if p.get("blank") else 0.0,
+                ca[0], ca[1], ca[2], float(p.get("bass", 0.0)),
+                cb[0], cb[1], cb[2], float(p.get("kick", 0.0)),
+                float(p.get("mid", 0.0)), float(p.get("high", 0.0)), float(p.get("beat", p.get("time", 0.0) * 2.0)), w / max(h, 1)]
 
     def render(self, params):
         """Draw one frame. Returns the frame (H, W, 4 uint8) when headless."""
         self.params = params
         if not self.headless and self.minimized():
-            return None                                   # nothing to see: do not spend the GPU
+            time.sleep(0.03)                              # nothing to see: do not spend the GPU (nor spin the CPU)
+            return None
         if self.headless:
             self.canvas.request_draw(self._draw)
             return np.asarray(self.canvas.draw())

@@ -23,6 +23,7 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
   let uv = in.uv;
   let t = f.texel;
   let cM = textureSample(src, samp, uv).rgb;
+  if (f.pad.x < 0.5) { return vec4<f32>(cM, 1.0); }               // filter off: this pass only copies (used for the preview thumbnail)
   let lNW = lum(textureSample(src, samp, uv + vec2<f32>(-t.x, -t.y)).rgb);
   let lNE = lum(textureSample(src, samp, uv + vec2<f32>(t.x, -t.y)).rgb);
   let lSW = lum(textureSample(src, samp, uv + vec2<f32>(-t.x, t.y)).rgb);

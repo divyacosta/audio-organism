@@ -4,11 +4,15 @@ import collections
 import math
 import random
 import threading
-import time
 
 import numpy as np
 
 HOP = 512
+KEY_WIN = 8192          # window of the key (tom) estimate: 5.9 Hz per bin at 48 kHz
+DECK_CAP = 1 << 19      # hops of waveform history (about 90 minutes)
+NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+KS_MAJOR = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+KS_MINOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
 WIN = 2048
 RING = 1 << 17
 N_BANDS = 64
@@ -226,15 +230,37 @@ class Analyzer:
         self.beat_event = self.bar_event = self.phrase_event = 0.0
         self.down_acc = np.zeros(4)                       # kick / bass weight at each of the 4 beat positions: the heaviest one is the downbeat
         self.down_off = 0
-        self.kick_grid = np.zeros(16)
-        self.mel_grid = np.zeros(16)
-        self.mel_count = 0
-        self.mel_density = 0.0                            # 0..1: melody notes per bar (12 = full)
         self.mel_hit = 0.0                                # envelope of the melody notes
         self.mel_ev = 0.0
         self._hm = 0.0
-        self.wave = collections.deque(maxlen=256)         # (min, max) of every hop: the waveform of the last ~2.7 s
-        self.wave_peak = 0.05
+        # the key (tom) is estimated from a long FFT window
+        self.sbuf = np.zeros(KEY_WIN, np.float32)
+        self.swin = np.hanning(KEY_WIN).astype(np.float32)
+        self.sfreqs = np.fft.rfftfreq(KEY_WIN, 1.0 / rate)
+        self._key_acc = 0.0
+        # key: chroma (12 pitch classes) from the same FFT, long memory, Krumhansl-Schmuckler profiles
+        f = self.sfreqs
+        self.pc_mask = (f > 65.0) & (f < 1800.0)
+        self.pc_idx = (np.round(12.0 * np.log2(np.maximum(f, 1.0) / 440.0) + 69.0).astype(int) % 12)[self.pc_mask]
+        self.chroma = np.zeros(12)
+        self.key_name, self.key_conf, self.key_t = "--", 0.0, 0.0
+        # deck: waveform history (peak, low, mid, high per hop), markers, beat log, structure learning
+        self.deck = np.zeros((4, DECK_CAP), np.float32)
+        self.deck_n = 0
+        self.trk_i0 = 0                                   # hop index where this track started
+        self.marks = []                                   # (hop index, kind): the cue points of this track
+        self.state_log = [(0, "CALM")]                    # (hop index, state): every change of the state, the sections of the timeline
+        self.build_spans = []                             # [start hop, end hop or None]: the build-ups
+        self.beat_log = collections.deque(maxlen=4000)    # (time, beat in bar, bar number) of every beat
+        self.bpb = 4                                      # beats per bar, learned (4 or 3)
+        self.accents = collections.deque(maxlen=128)      # accent strength of every beat: the meter shows in its periodicity
+        self._beat_acc = 0.0
+        self.bar_abs = 0                                  # bars since the track started
+        self.phrase_votes = {4: 0.0, 8: 1.0, 16: 0.0, 32: 0.0}
+        self.last_change_bar = None
+        self.phrase_learned = False
+        self._bd_prev = self._tn_prev = False
+        self._m3 = 0
         self.fading = False                              # a slow fade-out (end of a track), not a breakdown
         self.low = False                                 # loudness well under the track's level (hysteresis)
         self.cand, self.cand_t = "CALM", 0.0             # state candidate and how long it has been stable
@@ -285,9 +311,23 @@ class Analyzer:
             self.hits_t.append(self.hop_count * self.hop_dt)
         if hm and not hs:                                      # a note of the melody: a mid-band onset that is not the snare
             self._hm = max(self._hm, hm)
-        lo, hi_ = float(chunk.min()), float(chunk.max())
-        self.wave.append((lo, hi_))
-        self.wave_peak = max(abs(lo), abs(hi_), self.wave_peak * math.exp(-self.hop_dt / 4.0), 0.02)
+        self.sbuf = np.concatenate((self.sbuf[HOP:], chunk))
+        j = self.deck_n
+        if j >= DECK_CAP:                                  # full: keep the newest half
+            keep = DECK_CAP // 2
+            self.deck[:, :keep] = self.deck[:, DECK_CAP - keep:]
+            self.trk_i0 = max(0, self.trk_i0 - (DECK_CAP - keep))
+            self.marks = [(i - (DECK_CAP - keep), k) for i, k in self.marks if i - (DECK_CAP - keep) >= 0]
+            sh = DECK_CAP - keep
+            old = [(i - sh, k) for i, k in self.state_log]
+            head = [e for e in old if e[0] < 0]
+            self.state_log = ([(0, head[-1][1])] if head else []) + [e for e in old if e[0] >= 0]
+            self.build_spans = [[a - sh, (None if b is None else b - sh)] for a, b in self.build_spans if (b is None or b - sh >= 0)]
+            j = self.deck_n = keep
+        self.deck[0, j] = min(1.0, float(np.abs(chunk).max()))
+        for row, name, off in ((1, "bass", 72.0), (2, "mid", 78.0), (3, "high", 84.0)):         # each band has its own reference so all three show
+            self.deck[row, j] = max(0.0, min(1.0, (20.0 * math.log10(amp[name] + 1e-7) + off) / 60.0))
+        self.deck_n += 1
         self._hk = max(self._hk, hk)
         self._hs = max(self._hs, snare_hit)
         self._hh = max(self._hh, hh)
@@ -424,7 +464,13 @@ class Analyzer:
             self.breakdown_flag = False
             self.l_hist.clear()
             self.bar_n, self.down_acc[:] = -1, 0.0
-            self.kick_grid[:] = self.mel_grid[:] = 0.0
+            self.trk_i0, self.marks, self.bar_abs = self.deck_n, [], 0              # a new track: the deck starts over
+            self.state_log, self.build_spans = [(self.deck_n, self.state)], []
+            self.accents.clear()
+            self.phrase_votes = {4: 0.0, 8: 1.0, 16: 0.0, 32: 0.0}
+            self.last_change_bar, self.phrase_learned = None, False
+            self.chroma *= 0.2
+            self.bpb = 4
             self.e_long = self.e_slow = self.energy
         else:
             self.active_t += dt
@@ -508,6 +554,7 @@ class Analyzer:
                 self.burst_cd = random.uniform(10.0, 22.0)
                 self.burst_event = 1.0
         self._rhythm(dt)
+        self._key(dt)
         self.pp = self.phase
         self.burst_amp += ((1.0 if self.burst_left > 0 else 0.0) - self.burst_amp) * k(0.03)
         self.burst_pulse = math.exp(-((self.phase * 4.0) % 1.0) * 6.0) * self.burst_amp * 0.75
@@ -526,6 +573,14 @@ class Analyzer:
             want = "BREAKDOWN"
         else:
             want = ("CALM", "GROOVE", "HIGH ENERGY")[int(np.argmax([self.wC, self.wG, self.wH]))]
+        if self.bd > 0.5 and not self._bd_prev:
+            self.mark("BREAK")
+        self._bd_prev = self.bd > 0.5
+        if self.tension > 0.55 and not self._tn_prev and self.silence < 0.5:
+            self.mark("BUILD")
+        self._tn_prev = self.tension > 0.55
+        if self.tension < 0.35 and self.build_spans and self.build_spans[-1][1] is None:
+            self.build_spans[-1][1] = self.deck_n                       # the tension is gone: the build-up ended
         # a part of a song lasts seconds, not frames: silence and drops show at once, everything else must hold for 2.5 s
         if want in ("SILENCE", "DROP") or self.state in ("SILENCE", "DROP"):
             self.state, self.cand_t = want, 0.0
@@ -536,6 +591,82 @@ class Analyzer:
             self.cand = want
             if self.cand_t >= (1.5 if want == "BREAKDOWN" else 2.5):
                 self.state, self.cand_t = want, 0.0
+        if self.state_log[-1][1] != self.state:                          # a new section of the music begins here
+            self.state_log.append((self.deck_n, self.state))
+            self.state_log = self.state_log[-150:]
+
+    def _key(self, dt):
+        """Musical key (tom) from the chroma of a long window. It only needs to be right on average, so it runs at about 12 Hz."""
+        self._key_acc += dt
+        if self._key_acc < 0.08:
+            return
+        dt, self._key_acc = self._key_acc, 0.0
+        mag = np.abs(np.fft.rfft(self.sbuf * self.swin)) * (4.0 / KEY_WIN)
+        ch = np.bincount(self.pc_idx, weights=mag[self.pc_mask] ** 0.8, minlength=12)
+        ch = ch / (ch.sum() + 1e-9)
+        if self.silence < 0.5:
+            self.chroma += (ch - self.chroma) * (1.0 - math.exp(-dt / 14.0))
+        self.key_t += dt
+        if self.key_t > 0.7 and self.chroma.sum() > 0:
+            self.key_t = 0.0
+            c = self.chroma - self.chroma.mean()
+            best, bs, second = (0, "M"), -2.0, -2.0
+            for k in range(12):
+                for mode, prof in (("M", KS_MAJOR), ("m", KS_MINOR)):
+                    r = float(np.corrcoef(c, np.roll(prof, k))[0, 1])
+                    if r > bs:
+                        second, bs, best = bs, r, (k, mode)
+                    elif r > second:
+                        second = r
+            self.key_conf = max(0.0, min(1.0, (bs - second) * 6.0 + 0.3 * bs))
+            if bs > 0.45 and self.active_t > 8.0:
+                self.key_name = NOTE_NAMES[best[0]] + ("m" if best[1] == "m" else "")
+
+    def mark(self, kind):
+        """A cue point of this track (drop, breakdown, build-up) and a vote for the phrase length."""
+        self.marks.append((self.deck_n, kind))
+        self.marks = self.marks[-40:]
+        if kind == "BUILD":
+            self.build_spans.append([self.deck_n, None])
+            self.build_spans = self.build_spans[-20:]
+        elif kind in ("DROP", "BREAK") and self.build_spans and self.build_spans[-1][1] is None:
+            self.build_spans[-1][1] = self.deck_n
+        if kind in ("DROP", "BREAK"):
+            if self.last_change_bar is not None:
+                gap = self.bar_abs - self.last_change_bar
+                if gap < 3:                                   # two changes within 3 bars: the same event, not two phrases
+                    return
+                for L in (4, 8, 16, 32):
+                    if abs(gap - L) <= max(1, 0.12 * L):
+                        for k in self.phrase_votes:
+                            self.phrase_votes[k] *= 0.92
+                        self.phrase_votes[L] += 1.0
+                        break
+                best = max(self.phrase_votes, key=self.phrase_votes.get)
+                if self.phrase_votes[best] >= 3.0 and self.phrase_votes[best] >= 1.5 * self.phrase_votes[8] + 1.0:
+                    self.phrase_len, self.phrase_learned = best, True
+                elif best == 8 and self.phrase_votes[8] >= 3.0:
+                    self.phrase_len, self.phrase_learned = 8, True
+            self.last_change_bar = self.bar_abs
+
+    def _learn_meter(self):
+        """3/4 or 4/4: the accent of the beats repeats every 3 or every 4 beats."""
+        if len(self.accents) < 24:
+            return
+        a = np.array(self.accents, float)[-96:]
+        a = a - a.mean()
+        den = float((a * a).sum()) + 1e-9
+        c3 = float((a[3:] * a[:-3]).sum()) / den
+        c4 = float((a[4:] * a[:-4]).sum()) / den
+        c6 = float((a[6:] * a[:-6]).sum()) / den
+        if self.bpb == 4:
+            self._m3 = self._m3 + 1 if (c3 > 0.5 and c3 > c4 + 0.3 and c3 > c6 * 0.9) else 0          # it must hold for 6 bars in a row
+            if self._m3 >= 6:
+                self.bpb, self.bar_n, self._m3, self.down_acc[:] = 3, -1, 0, 0.0
+        else:
+            self._m3 = self._m3 + 1 if c4 > c3 + 0.1 else 0
+            if self._m3 >= 2:
+                self.bpb, self.bar_n, self._m3, self.down_acc[:] = 4, -1, 0, 0.0
 
     def _rhythm(self, dt):
         """Beat / bar / phrase counter and the 16-step rhythm of kick and melody. Runs once per frame, after the beat phase advanced."""
@@ -544,40 +675,47 @@ class Analyzer:
         # which of the 4 beat positions carries the kick: the downbeat
         nb = self.beat_n + (1 if self.phase > 0.5 else 0)    # the beat a hit belongs to (the nearest one)
         if self.kick_hit and self.conf > 0.3:
-            self.down_acc[nb % 4] += 0.6 + self.bass
+            self.down_acc[nb % self.bpb] += 0.6 + self.bass
         if wrapped:
             self.down_acc *= 0.97
-            best = int(np.argmax(self.down_acc))
+            best = int(np.argmax(self.down_acc[:self.bpb]))
             if best != self.down_off and self.down_acc[best] > 1.35 * self.down_acc[self.down_off] + 0.8:      # hysteresis: do not flip-flop
                 self.down_off = best
+        if self.drop_event:
+            self.mark("DROP")
         if self.drop_event and self.bpm > 0:                 # a drop lands on the one
-            self.down_off = nb % 4
+            self.down_off = nb % self.bpb
             self.down_acc[:] = 0.0
             self.down_acc[self.down_off] = 3.0
             self.bar_n = -1
-            self.kick_grid[:] = self.mel_grid[:] = 0.0
+        if self.kick_hit and self.conf > 0.3:
+            self._beat_acc += 0.6 + self.bass
         if wrapped and self.bpm > 0 and self.silence < 0.5:
             self.beat_event = 1.0
-            self.beat_in_bar = (self.beat_n - self.down_off) % 4
+            self.accents.append(self._beat_acc)
+            self._beat_acc = 0.0
+            self.beat_in_bar = (self.beat_n - self.down_off) % self.bpb
+            self.beat_log.append((self.now_t, self.beat_in_bar, self.bar_n))
             if self.beat_in_bar == 0:
                 self.bar_n += 1
+                self.bar_abs += 1
                 self.bar_event = 1.0
-                self.kick_grid *= 0.85
-                self.mel_grid *= 0.85
-                self.mel_density += (min(1.0, self.mel_count / 12.0) - self.mel_density) * 0.4
-                self.mel_count = 0
+                self._learn_meter()
                 if self.bar_n >= 0 and self.bar_n % self.phrase_len == 0:
                     self.phrase_event = 1.0
-        # 16-step grid position inside the bar
-        step = int(((self.beat_in_bar + self.phase) % 4.0) * 4.0) % 16
-        if self.kick_hit and self.bpm > 0:
-            self.kick_grid[step] += 1.0
         self.mel_ev = self._hm
         self._hm = 0.0
-        if self.mel_ev and self.bpm > 0:
-            self.mel_grid[step] += 1.0
-            self.mel_count += 1
         self.mel_hit = max(self.mel_hit * math.exp(-dt / 0.14), self.mel_ev)
+
+    @property
+    def track_time(self):
+        """Seconds since this track started (since the music began or came back from a silence)."""
+        return max(0, self.deck_n - self.trk_i0) * self.hop_dt
+
+    @property
+    def level10(self):
+        """Energy 1..10 (the way DJ software shows it)."""
+        return int(round(1.0 + 9.0 * max(0.0, min(1.0, (self.energy - 0.05) / 0.60))))
 
     @property
     def phrase_pos(self):
@@ -586,12 +724,12 @@ class Analyzer:
     @property
     def bar_phase(self):
         """0..1 through the bar (continuous)."""
-        return ((self.beat_in_bar + self.phase) % 4.0) / 4.0
+        return ((self.beat_in_bar + self.phase) % float(self.bpb)) / float(self.bpb)
 
     @property
     def phrase_phase(self):
         """0..1 through the phrase (continuous)."""
-        return ((self.phrase_pos * 4.0 + self.beat_in_bar + self.phase) % (4.0 * self.phrase_len)) / (4.0 * self.phrase_len)
+        return ((self.phrase_pos * float(self.bpb) + self.beat_in_bar + self.phase) % (float(self.bpb) * self.phrase_len)) / (float(self.bpb) * self.phrase_len)
 
     @property
     def alive(self):

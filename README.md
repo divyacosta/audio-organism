@@ -14,6 +14,14 @@ Precisa de uma placa de vídeo com Vulkan ou Direct3D 12 e driver atualizado. Em
 Duas janelas abrem: a de imagem (só o efeito) e a de controles (monitor da música e ajustes).
 Na janela de imagem: `F` tela cheia, `D` drop de teste, `M` marcar um momento.
 
+## Como usar
+
+- **Ao vivo**: BPM, tom, energia e a linha do tempo da música, com as seções (calmo, groove, energia alta, breakdown, drop, silêncio, build-up) e a previsão da próxima frase.
+- **Cenas**: a galeria do que o visualizador pode mostrar, com miniaturas ao vivo. Um clique toca a cena (na próxima frase, no compasso ou na hora, como você escolher em *Trocar de cena*), duplo clique abre o editor.
+  Cada cena guarda tudo: **visual** (nenhum ou mandala, com presets Facetas, Estrela, Túnel, Catedral, Impacto e Palco), **fundo e luzes** (aurora, feixes, pulsos), **cores** (paletas), **shader** (3D, Neon, Holograma, Raio X, Cromado, Aquarela, Duotom), **câmera**, **movimento**, **formas**, reatividade, flashes e brilho.
+  O interruptor de cada cartão define se a cena entra na **troca automática**.
+- **Gráficos** e **Ajustes**: desempenho, qualidade e sistema, que valem para o programa todo.
+
 ## Atualizações
 
 Na aba **Ajustes**, o botão **Verificar atualização** consulta esta página de Releases. Se houver uma versão nova, aparece

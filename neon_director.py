@@ -15,6 +15,10 @@ Every new look re-rolls the seed, so no two looks are the same.
 import math
 import random
 
+import palettes as PAL
+import shaderpresets as SP
+import scenes as SC
+
 GENS = ["Facetas", "Estrela"]
 # Scenes: (engine, profile, name). Engine 0 = the Facetas engine, 1 = Estrela. Profiles re-dress the Facetas engine:
 #   0 Facetas, 1 Tunel (techno), 2 Catedral (trance), 3 Impacto (EDM), 4 Palco (pop)
@@ -102,7 +106,12 @@ SYM_W = [3, 5, 2, 2, 2, 2, 5, 0]
 
 class NeonDirector:
     def __init__(self):
-        self.scene = 0                 # index into SCENES (opening scene: Facetas)
+        self.scenes = SC.starter_scenes()      # the scene presets (the settings hand the live list over every frame, see set_scenes)
+        self.scene = 0                 # index into self.scenes (opening scene: the first)
+        self.palettes = PAL.factory()  # the palette presets (the settings hand the live list over every frame)
+        self.shaders = SP.factory()    # the shader presets
+        self.style_preset = 0          # index of the shader preset the automatic mode is showing
+        self.want_t, self.want_from, self.pending_scene = 0.0, -1, -1      # a scene asked for by hand that waits for its moment
         self.style_auto, self.style_t = 1, 0.0     # automatic image style (an id of STYLES) and time since it last changed
         # genre estimate (heuristic, refreshed every few seconds): tempo, how much of the sound sits in the mids, tempo confidence,
         # drops and long build-ups seen so far
@@ -118,10 +127,21 @@ class NeonDirector:
         self._hc = False               # a hard cut happened this frame (the motion-blur trail is cleared)
         self.tr = None                 # running change of universe: the old elements shrink away, the new ones grow in
         self.layer_scale = [1.0] * 12
-        self.layer_var = [0] * 12        # colour variant per layer (0..2); a few layers change colour on the beat in GROOVE
+        self.layer_var = [0.0] * 12      # colour variant per layer, a float: a step is a smooth move from one variant to the next
+        self.lv_tgt = [0] * 12           # the whole-number variant each layer is moving to
+        self._ctrans_dur = 0.0           # seconds a colour takes to turn into the next one (0 = hard cut)
+        self.col_t, self.col_dur, self.col_from = None, 0.0, None      # smooth palette / background change in progress
+        self.upals_disp, self.bg_disp = None, None
+        self.shape_tgt = [0] * 12        # the shape every layer is moving to (ids: see shader sdSolid)
+        self.shape_from = [0] * 12
+        self.shape_k = [1.0] * 12        # morph progress per layer, 1 = arrived
+        self.shape_delay = [0.0] * 12
+        self.shape_off = 0
+        self.shape_pool_seen = None
         self.var_step, self.var_off = -1, random.randrange(16)
         self.cam_p = dict(orbit=0.0, spin=0.0, sway=0.0, shake=0.0, punch=0.0, funnel=1.0, fov=90.0)
         self.cam_roll = 0.0
+        self.last_change = ("", 0.0)
         self.rot_a = 0.0               # accumulated layer rotation (rad)
         self.cam_auto = 3
         self.cam_auto_t = 0.0
@@ -154,13 +174,60 @@ class NeonDirector:
         self.stable, self.cand, self.cand_t = None, None, 0.0
 
     # ------------------------------------------------------------------ looks
+    def shader_now(self):
+        """The shader preset on screen: the scene's own, or the one the automatic mode picked."""
+        sid = int(self.cur.get("scene_shader", 0))
+        if 1 <= sid <= len(self.shaders):
+            return self.shaders[sid - 1]
+        return self.shaders[self.style_preset] if 0 <= self.style_preset < len(self.shaders) else self.shaders[0]
+
+    def set_palettes(self, lst):
+        """The palette list lives in the settings (the Cores tab edits it in place). Colours are redrawn when the scene's palette changes."""
+        if lst is not None:
+            self.palettes = lst
+        pid = int(self.cur.get("scene_palette", 0))
+        sig = (self.scene, pid, repr(self.palettes[pid - 1]) if 0 < pid <= len(self.palettes) else None)
+        first = not hasattr(self, "_pal_sig")
+        if (first and pid > 0) or (not first and sig != self._pal_sig):          # a palette was picked or edited: show it now
+            self.roll_colors()
+        self._pal_sig = sig
+
+    def set_scenes(self, lst):
+        """The settings own the list of scene presets (the menu edits it in place). Keep a reference and keep the current index valid."""
+        if lst and lst is not self.scenes:
+            self.scenes = lst
+        self.scene = max(0, min(self.scene, len(self.scenes) - 1))
+
+    @property
+    def cuts(self):
+        return self.cur.get("m_cuts", 100) / 100.0
+
+    @property
+    def cur(self):
+        return self.scenes[max(0, min(self.scene, len(self.scenes) - 1))]
+
+    def scene_name(self, k):
+        return self.scenes[k]["scene_name"] if 0 <= k < len(self.scenes) else "?"
+
+    def shader_mat(self):
+        sh = self.shader_now()
+        return (sh["p1"] / 100.0, sh["p2"] / 100.0, sh["p3"] / 100.0, 0.0)
+
+    def mandala(self):
+        """The geometry numbers of the scene, as the renderer and the shader want them."""
+        c = self.cur
+        return dict(psx=c.get("m_psx", 52) / 100.0, psy=c.get("m_psy", 34) / 100.0, pox=c.get("m_pox", 70) / 100.0, poy=c.get("m_poy", 38) / 100.0,
+                    decay=c.get("m_decay", 84) / 100.0, thick=c.get("m_thick", 100) / 100.0, round=int(c.get("m_round", 0)),
+                    glass=c.get("m_glass", 100) / 100.0)
+
     def note(self, text):
         self.log.append(text)
         self.log = self.log[-6:]
+        self.last_change = (text.split(":")[0], self.age)               # what changed the picture last, and when (shown in the Ao vivo tab)
 
     def look_name(self):
         if self.gen == 0 and self.prof != 0:
-            return f"{SCENES[self.scene][2]} · {' '.join(str(k + 1) for k in self.tiers)}"
+            return f"{self.scene_name(self.scene)} · {' '.join(str(k + 1) for k in self.tiers)}"
         if self.gen == 0:
             return f"{GENS[0]} · G/M/P {' '.join(str(k + 1) for k in self.tiers)} · fundo {self.bg_name}"
         return GENS[1]
@@ -172,26 +239,37 @@ class NeonDirector:
             self._apply()
         else:
             self.phase = "down"
-        self.note(f"{why}: {self.look_name() if style == 'now' else SCENES[gen][2]}")
+        self.note(f"{why}: {self.look_name() if style == 'now' else self.scene_name(gen)}")
 
     def duo_colors(self):
         """The two colours of the duotone: the dark one is a deep shade of the large layers' side colour, the light one their face colour.
         They follow the universes, so they change with every colour cut on the beat."""
-        u = self.upals[self.tiers[0]]
+        sh = self.shader_now()
+        if sh.get("kind") == 7 and sh.get("duo_mode", 0) == 1:
+            return (tuple(v / 255.0 for v in sh["duo_dark"]), tuple(v / 255.0 for v in sh["duo_light"]))
+        u = (self.upals_disp or self.upals)[self.tiers[0]]
         dark = tuple(c * 0.20 for c in u[1])
         light = tuple(min(1.0, c * 1.05) for c in u[0])
         return (dark, light)
 
     def pick_style(self):
-        """Automatic image style: drawn by the part of the music (AUTO_STYLE), favouring the scene's own style, never the one just used."""
+        """Automatic shader: a KIND drawn by the part of the music (AUTO_STYLE), favouring the scene's own, never the one just used; then one of
+        the presets of that kind that are marked Entra no Auto."""
         part = "BUILD-UP" if (self.why == "build-up" or self.tension_now > 0.5) else self.feat_state
         w = dict(AUTO_STYLE.get(part, AUTO_STYLE["GROOVE"]))
-        d = SCENE_STYLE[self.scene]
-        w[d] = w.get(d, 0) + 2
-        w.pop(self.style_auto, None)
+        pref = self.cur.get("scene_pref", 1)
+        w[pref] = w.get(pref, 0) + 2
+        have = {}
+        for i, sh in enumerate(self.shaders):
+            if sh.get("auto", True):
+                have.setdefault(sh["kind"], []).append(i)
+        w = {k: v for k, v in w.items() if k in have}
+        cur_kind = self.shaders[self.style_preset]["kind"] if 0 <= self.style_preset < len(self.shaders) else self.style_auto
+        w.pop(cur_kind, None)
         if not w:
             return self.style_auto
         self.style_auto = random.choices(list(w), weights=list(w.values()))[0]
+        self.style_preset = random.choice(have[self.style_auto])
         self.style_t = 0.0
         self._hc = True
         return self.style_auto
@@ -200,10 +278,32 @@ class NeonDirector:
         hc, self._hc = self._hc, False
         return hc
 
-    def roll_colors(self):
+    def roll_colors(self, smooth=True):
+        """Re-draw the colours. With a colour transition set (Movimento tab) the palettes and the background turn into the new ones over
+        that time; otherwise it is the hard cut."""
+        old_u = [[tuple(c) for c in pal] for pal in self.upals]
+        old_bg = tuple(self.bg)
+        hc = self._hc
+        if self.col_t is not None and self.upals_disp is not None:         # a change is already running: start from what is on screen
+            old_u, old_bg = [[tuple(c) for c in pal] for pal in self.upals_disp], tuple(self.bg_disp)
+        self._roll_colors_raw()
+        if smooth and self._ctrans_dur > 0.0 and self.pending is None and self.gen == 0:
+            self.col_from, self.col_t, self.col_dur = (old_u, old_bg), 0.0, self._ctrans_dur
+            self._hc = hc                                                # no hard cut for the motion blur: the picture is continuous
+        else:
+            self.col_t = None
+
+    def _roll_colors_raw(self):
         """Hard cut of the colours: the background takes one of black / red / blue / white and every universe re-draws its face, side and
         edge colours from the other colours, so the elements never disappear into the background."""
         self._hc = True
+        pid = int(self.cur.get("scene_palette", 0))
+        if 0 < pid <= len(self.palettes) and PAL.valid(self.palettes[pid - 1]):          # the scene has a palette of its own
+            ups, bg = PAL.roll(self.palettes[pid - 1], random)
+            self.bg_name, self.bg = "paleta", bg
+            for k in range(3):
+                self.upals[k] = [tuple(c) for c in ups[k]]
+            return
         if self.prof == 1:                                           # TUNEL: dark grey ribs, black room, one accent colour per universe
             acc = random.sample(list(ACCENTS), 3)
             self.bg_name, self.bg = "preto", (0.0, 0.0, 0.0)
@@ -276,7 +376,7 @@ class NeonDirector:
 
     def roll_universes(self):
         w, modes = list(SYM_W), []
-        pool = PROF_MODES.get(self.prof)
+        pool = [k for k in range(8) if self.cur.get("m_sym%d" % k)] or None          # the cuts the scene allows
         if pool:                                                      # the profile's favourite cuts
             w = [(SYM_W[k] if k in pool else 0) for k in range(len(SYM_NAMES))]
         for _ in range(3):                                           # every universe gets a different kaleidoscope cut, one-sided ones favoured
@@ -334,13 +434,14 @@ class NeonDirector:
         self._hc = True
         self._restyle = True
         self.scene = sc
-        self.gen, self.prof = SCENES[sc][0], SCENES[sc][1]
+        self.gen, self.prof = 0, SC.BASE_PROF[self.scenes[sc].get("m_base", 0) % 6]
         self.theme = (self.theme + 1) % len(THEMES)         # themes alternate in order
         self.roll_universes()
-        self.roll_colors()
+        self.roll_colors(smooth=False)
         self.tr = None
         self.layer_scale = [1.0] * 12
-        self.layer_var = [0] * 12
+        self.layer_var = [0.0] * 12
+        self.lv_tgt = [0] * 12
         self.var_off = random.randrange(16)                      # a new look re-draws which layers sit on which step
         self.cut_cd = 1.5
         self.pal = random.choice([p for p in range(len(PALETTES)) if p != self.pal])
@@ -410,24 +511,92 @@ class NeonDirector:
     def pick_scene(self, an):
         """A change of scene: with a genre guess, mostly that genre's scene (never the same one twice in a row), the rest from the others;
         """
-        cands = [k for k in range(len(SCENES)) if k != self.scene]
+        cands = [k for k in range(len(self.scenes)) if k != self.scene and self.scenes[k].get("scene_auto", True)]
+        if not cands:
+            return self.scene
+        want = [k for k in cands if self.scenes[k].get("scene_genre") == self.genre]
+        if want and self.cur.get("scene_genre") != self.genre and random.random() < 0.6:
+            return random.choice(want)
         w = []
         for k in cands:
-            wt = 1.0
-            if self.genre in GENRE_SCENE:
-                wt = 5.0 if k == GENRE_SCENE[self.genre] else (1.0 if SCENES[k][2] in ("Facetas", "Estrela") else 0.4)
-            w.append(wt)
-        if self.genre in GENRE_SCENE and self.scene != GENRE_SCENE[self.genre] and random.random() < 0.6:
-            return GENRE_SCENE[self.genre]
+            g = self.scenes[k].get("scene_genre", "")
+            w.append(5.0 if (g and g == self.genre) else (1.0 if not g else (0.4 if self.genre in ("techno", "trance", "edm", "pop") else 1.0)))
         return random.choices(cands, weights=w)[0]
 
     def intensity_calm(self):
         return self.feat_state in ("CALM", "BREAKDOWN", "SILENCE")
 
+    def update_smooth(self, dt, an, cfg):
+        """Smooth colour changes and the shapes of the layers (see Movimento and Formas tabs)."""
+        ct = int(cfg.get("ctrans", 0))
+        beat = 60.0 / an.bpm if an.bpm > 0 else 0.5
+        self._ctrans_dur = (0.0, 0.25, 0.8, 1.8, max(0.4, min(3.0, 2.0 * beat)))[ct]
+        # palettes and background: blend from the old to the new
+        if self.col_t is not None and self.col_from is not None:
+            self.col_t += dt
+            x = min(1.0, self.col_t / max(self.col_dur, 1e-3))
+            e = x * x * (3.0 - 2.0 * x)
+            fu, fb = self.col_from
+            self.upals_disp = [[tuple(a * (1.0 - e) + b * e for a, b in zip(ca, cb)) for ca, cb in zip(pa, pb)] for pa, pb in zip(fu, self.upals)]
+            self.bg_disp = tuple(a * (1.0 - e) + b * e for a, b in zip(fb, self.bg))
+            if x >= 1.0:
+                self.col_t = None
+        if self.col_t is None:
+            self.upals_disp, self.bg_disp = [[tuple(c) for c in pal] for pal in self.upals], tuple(self.bg)      # a copy: roll_colors changes self.upals in place
+        # colour variant of each layer: a step moves it to the next variant over the same time
+        dur = self._ctrans_dur
+        for i in range(12):
+            cur, tgt = self.layer_var[i], self.lv_tgt[i]
+            if dur <= 0.0 or abs(tgt - cur) < 1e-4:
+                cur = float(tgt)
+            else:
+                cur += math.copysign(min(abs(tgt - cur), dt / dur), tgt - cur)
+            if cur >= 3.0 and tgt >= 3:                                       # 3 steps = the same colours again: keep the numbers small
+                cur -= 3.0
+                self.lv_tgt[i] = tgt - 3
+            self.layer_var[i] = cur
+        # shapes
+        pool = [k for k in range(19) if cfg.get("sh_%d" % k, k == 0)] or [0]
+        mode, when = int(cfg.get("sh_mix", 0)), int(cfg.get("sh_when", 0))
+        morph = (0.0, 0.35, 0.9, 2.0)[int(cfg.get("sh_morph", 2))]
+        trig = ((when == 1 and an.phrase_event) or (when == 2 and an.bar_event)
+                or (when == 3 and cfg.get("auto_shape", True) and (an.phrase_event or an.drop_event)))
+        key = (tuple(pool), mode)
+        if trig:
+            self.shape_off = (self.shape_off + 1 + random.randrange(2)) % 1000
+        if trig or key != self.shape_pool_seen:
+            self.shape_pool_seen = key
+            for i in range(12):
+                tgt = pool[(i + self.shape_off) % len(pool)] if mode == 0 else pool[self.shape_off % len(pool)]
+                if tgt != self.shape_tgt[i]:
+                    self.shape_from[i] = self.shape_tgt[i] if self.shape_k[i] > 0.5 else self.shape_from[i]       # a retarget mid-morph starts from the nearer shape
+                    self.shape_tgt[i] = tgt
+                    self.shape_k[i] = 0.0 if morph > 0.0 else 1.0
+                    self.shape_delay[i] = 0.05 * i if morph > 0.0 else 0.0           # a wave runs through the layers
+        for i in range(12):
+            if self.shape_k[i] < 1.0:
+                if self.shape_delay[i] > 0.0:
+                    self.shape_delay[i] -= dt
+                else:
+                    self.shape_k[i] = min(1.0, self.shape_k[i] + dt / max(morph, 1e-3))
+
+    def shapes_out(self):
+        out = []
+        for i in range(12):
+            k = self.shape_k[i]
+            if k >= 1.0:
+                out.append((float(self.shape_tgt[i]),) * 2 + (0.0, 0.0))
+            else:
+                out.append((float(self.shape_from[i]), float(self.shape_tgt[i]), k * k * (3.0 - 2.0 * k), 0.0))
+        return out
+
     def resolve_auto(self, cfg, an, dt):
         """The settings the rest of the frame uses: where a mode is Auto, the parameters that the Auto tab includes come from the
         automatic choice for the current part of the music; the ones it leaves out keep the user's own value."""
         c = dict(cfg)
+        for k in SC.CAMERA_KEYS + SC.MOVEMENT_KEYS + SC.SHAPE_KEYS:            # camera, movement and shapes live inside the scene
+            if k in self.cur:
+                c[k] = self.cur[k]
         if int(c.get("camera", 0)) == 4:
             self.cam_auto_t += dt
             if self.cam_auto_t > 12.0:                       # at least 12 s per choice
@@ -466,25 +635,51 @@ class NeonDirector:
         self.age += dt
         E = an.energy
         cfg = self.resolve_auto(cfg, an, dt)
+        self.update_smooth(dt, an, cfg)
         ev = self.detect(dt, an)
         self.feat_state = an.state
         self.update_genre(dt, an)
         self.tension_now = an.tension
         self.style_t += dt
-        forced = int(cfg.get("effect", 0)) - 1            # -1 auto, otherwise an index into SCENES
-        forced = forced if forced < len(SCENES) else -1
+        self.set_scenes(cfg.get("scenes"))
+        self.set_palettes(cfg.get("palettes"))
+        if cfg.get("shaders"):
+            self.shaders = cfg["shaders"]
+        forced = int(cfg.get("effect", 0)) - 1            # -1 auto, otherwise an index into the scene list
+        forced = forced if forced < len(self.scenes) else -1
+        # when a scene change happens: 0 now, 1 next bar, 2 next phrase, 3 on the music's events (drop, breakdown, ...), 4 every N seconds
+        mode = int(cfg.get("scene_when", 2))
+        every = float(cfg.get("scene_every", 30))
+        bar_ev = bool(an.bar_event)
+        manual_wait = forced >= 0 and self.scene != forced
+        ok = False
+        if manual_wait:                                    # a scene picked by hand waits for its moment (never longer than 12 s: the beat may be lost)
+            self.want_t = self.want_t + dt if self.want_from == forced else 0.0
+            self.want_from = forced
+            ok = (bool(cfg.get("scene_now")) or mode == 0 or self.want_t > 12.0 or (mode == 1 and bar_ev) or (mode in (2, 4) and "phrase" in ev)
+                  or (mode == 3 and bool(ev)))
+            self.pending_scene = forced
+        else:
+            self.want_t, self.want_from, self.pending_scene = 0.0, -1, -1
+        sched = (forced < 0 and mode in (1, 2, 4) and cfg.get("auto_scene", True) and self.age > 8.0 and self.pending is None and self.phase == "idle"
+                 and ((mode == 1 and bar_ev) or (mode == 2 and "phrase" in ev) or (mode == 4 and self.age >= every)))
 
         def scene_for(swap):
             if forced >= 0:
-                return forced
+                return forced if (not manual_wait or ok) else self.scene
+            if mode in (1, 2, 4):                           # the schedule decides when scenes change, not the music's events
+                return self.scene
             if not cfg.get("auto_scene", True):             # the Auto tab leaves the scene out: it stays where it is
                 return self.scene
             if not swap:
                 return self.scene
             return self.pick_scene(an)
 
-        if forced >= 0 and self.scene != forced and self.pending is None and self.phase == "idle":
+        nxt = self.pick_scene(an) if sched else self.scene
+        if manual_wait and ok and self.pending is None and self.phase == "idle":
             self.new_look(forced, "manual", "cut")
+        elif nxt != self.scene:
+            self.new_look(nxt, "cena", "cut")
         elif "drop" in ev:
             self.new_look(scene_for(True), "drop", "now")
             self.explode = 1.0
@@ -496,11 +691,11 @@ class NeonDirector:
             self.new_look(scene_for(False), "mudança de parte", "cut")
         elif "phrase" in ev and self.age > 18.0 and self.phase == "idle":
             self.new_look(scene_for(False), "frase", "cut")
-        elif "phrase" in ev and self.style_t > 24.0 and cfg.get("style", 8) == 8 and cfg.get("auto_style", True):       # automatic style also changes inside a long look
+        elif "phrase" in ev and self.style_t > 24.0 and self.cur.get("scene_shader", 0) == 0:       # automatic style also changes inside a long look
             self.pick_style()
         if getattr(self, "_restyle", False) and self.pending is None:
             self._restyle = False
-            if cfg.get("style", 8) == 8 and cfg.get("auto_style", True):
+            if self.cur.get("scene_shader", 0) == 0:
                 self.pick_style()
 
         # hard cuts on the beat: a size tier jumps to another universe, or all colours (elements AND background) are re-drawn.
@@ -509,13 +704,13 @@ class NeonDirector:
         if an.beat_n != self.cut_beat and cfg.get("auto_cuts", True):
             self.cut_beat = an.beat_n
             calm = max(0.0, min(1.0, (0.35 - E) / 0.2))
-            period = (2 if E > 0.6 else (4 if calm < 0.3 else 8)) * (1 if PROF_CUTS[self.prof] >= 1 else 2)
+            period = (2 if E > 0.6 else (4 if calm < 0.3 else 8)) * (1 if self.cuts >= 1 else 2)
             mvc = int(cfg.get("mv_cuts", 1))
             period = max(1, int(round(period * (2.0, 1.0, 0.5)[mvc])))
             if (self.gen == 0 and self.pending is None and self.phase == "idle" and self.cut_cd <= 0 and (an.bar_n * 4 + an.beat_in_bar if an.bar_n >= 0 else an.beat_n) % period == 0
                     and self.age > 4.0 and random.random() < (0.5, 0.8, 0.95)[int(cfg.get("mv_cuts", 1))]):
                 self.cut_cd = 1.2
-                if random.random() < 0.55 * min(1.0, PROF_CUTS[self.prof] * 1.6):
+                if random.random() < 0.55 * min(1.0, self.cuts * 1.6):
                     self.roll_colors()
                 else:
                     self.swap_tier()
@@ -524,6 +719,7 @@ class NeonDirector:
         if (an.phrase_event and self.pending is None and self.phase == "idle" and self.cut_cd <= 0 and self.age > 4.0
                 and an.state not in ("SILENCE",) and cfg.get("auto_cuts", True) and random.random() < 0.9):
             self.cut_cd = 1.2
+            self.last_change = ("cores na frase", self.age)
             if random.random() < 0.6:
                 self.roll_colors()
             else:
@@ -538,7 +734,7 @@ class NeonDirector:
         #   silence            nothing
         e_n = max(0.0, min(1.0, (E - 0.10) / 0.55))                          # energy, 0..1
         beat_q = max(0.0, min(1.0, an.conf)) * (0.4 + 0.6 * min(1.0, an.kick))   # how firm the beat is: tempo confidence and live kick
-        p_change = (0.06 + 0.54 * e_n * (0.3 + 0.7 * beat_q)) * PROF_CUTS[self.prof]                  # lower energy and weaker beat: much rarer changes
+        p_change = (0.06 + 0.54 * e_n * (0.3 + 0.7 * beat_q)) * self.cuts                  # lower energy and weaker beat: much rarer changes
         st_res = {"CALM": 2, "BREAKDOWN": 2, "GROOVE": 4, "HIGH ENERGY": 8, "DROP": 8, "SILENCE": 0}.get(an.state, 4)
         if an.tension > 0.5 and an.state not in ("SILENCE", "DROP"):
             st_res = 16
@@ -553,7 +749,7 @@ class NeonDirector:
                     for i in range(12):
                         if (i * 3 + self.var_off) % slots == step:               # this layer's slot in the bar
                             if random.random() < p_change:                       # only now and then: more often with energy and a strong beat
-                                self.layer_var[i] = (self.layer_var[i] + 1) % 3
+                                self.lv_tgt[i] += 1                                  # moves there smoothly (or at once, see Movimento > Transição de cor)
 
         # fade state machine for cut transitions
         if self.phase == "down":
@@ -588,7 +784,7 @@ class NeonDirector:
         ft = min(1.0, 0.30 * (0.5 + 0.5 * math.sin(t * 0.45)) + 0.95 * b + 0.8 * self.explode + 0.25 * max(0.0, E - 0.4)) if cfg.get("cam_funnel", 2) > 0 else 0.0
         if self.prof == 3:
             ft += 0.45 * an.kick                                     # Impacto: the camera punches in on every kick
-        ft = max(ft, PROF_FUNNEL[self.prof]) if self.gen == 0 else ft
+        ft = max(ft, self.cur.get("m_funnel", 0) / 100.0)
         self.funnel += (ft - self.funnel) * (1.0 - math.exp(-dt / ((0.5 if ft > self.funnel else 1.4) * inert)))
         if True:                                            # camera: preset 0 is the fixed front view
             c = cfg
@@ -632,7 +828,7 @@ class NeonDirector:
             fov, pal = 2.0 * math.tan(math.radians(cp["fov"]) * 0.5), THEMES[self.theme]
             self.cam_roll_out = roll
         return dict(
-            gen=self.gen, prof=self.prof, style_default=SCENE_STYLE[self.scene], style_auto=self.style_auto, duo=self.duo_colors(), seed=self.seed, pal=pal, bg=(self.bg if self.gen == 0 else (0.0, 0.0, 0.0)), tier_uni=list(self.tiers), layer_scale=list(self.layer_scale), hardcut=self.pop_hardcut(), layer_var=list(self.layer_var), modes=list(self.modes), upals=self.upals, time=t, travel=self.travel, rot=self.rot_a, rdir=int(cfg.get("mv_dir", 0)), pulse=(0.0, 0.04, 0.08, 0.15)[int(cfg.get("mv_pulse", 0))] * an.kick * (1.0 if (not cfg.get("mv_one", False) or an.beat_in_bar == 0) else 0.0), fov=fov, roll=getattr(self,'cam_roll_out',0.0), cam=cam, funnel=(min(1.0, self.funnel * self.cam_p['funnel']) if self.gen == 0 else 0.0),
+            lights=(int(self.cur.get("bg_light", 0)), self.cur.get("bg_int", 100) / 100.0, self.cur.get("bg_speed", 100) / 100.0), pending_scene=self.pending_scene, scene_when=mode, gen=self.gen, prof=self.prof, style_default=self.cur.get("scene_pref", 1), style_id=self.shader_now()["kind"], shader_name=self.shader_now()["name"], mat=self.shader_mat(), duo_contrast=self.shader_now()["p1"] / 100.0 if self.shader_now()["kind"] == 7 else 1.0, mandala=self.mandala(), style_auto=self.style_auto, duo=self.duo_colors(), seed=self.seed, pal=pal, bg=(self.bg_disp if self.gen == 0 else (0.0, 0.0, 0.0)), tier_uni=list(self.tiers), layer_scale=list(self.layer_scale), hardcut=self.pop_hardcut(), layer_var=list(self.layer_var), shapes=self.shapes_out(), modes=list(self.modes), upals=self.upals_disp, time=t, travel=self.travel, rot=self.rot_a, rdir=int(cfg.get("mv_dir", 0)), pulse=(0.0, 0.04, 0.08, 0.15)[int(cfg.get("mv_pulse", 0))] * an.kick * (1.0 if (not cfg.get("mv_one", False) or an.beat_in_bar == 0) else 0.0), fov=fov, roll=getattr(self,'cam_roll_out',0.0), cam=cam, funnel=(min(1.0, self.funnel * self.cam_p['funnel']) if self.gen == 0 else 0.0),
             build=b, complexity=complexity, collapse=_ss(0.7, 1.0, b), explode=self.explode,
             drop=an.drop_b, fade=self.fade, gain=0.12 + 0.88 * alive,
         )
