@@ -988,6 +988,7 @@ def scene_layout(cfg, view="gallery", wide=False):
             info = LY.TYPES.get(ly[i].get("t"), {})
             grp = {"fx": "Efeitos de lente e tom", "bg": "Fundo", "part": "Partículas"}.get(info.get("group"), "")
             right = [("", [dict(id="phead", kind="phead", label=info.get("label", ""), help=info.get("help", ""), tag=grp, group=info.get("group"))])] + right
+            right.append(("", [dict(id="lreset", kind="action", label="Restaurar padrões deste efeito", btn="Restaurar", help="Os valores voltam ao padrão; o efeito continua na lista")]))
         slot_name = next((n for k, n, _ in LY.SLOTS if k == slot), "")
         left = left + [("", [dict(id="lbar", kind="lbar", label=slot_name, help="Efeitos")] + LY.list_items(cfg, slot)
                         + [dict(id="lhint", kind="note", label="A ordem de cima para baixo é a ordem de aplicação", help="")])]

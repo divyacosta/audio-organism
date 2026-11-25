@@ -1120,6 +1120,13 @@ class Menu(WizardMixin):
         if what == "eye":
             layers[i]["on"] = not layers[i].get("on", True)
             self._layers_changed(i)
+        elif what == "reset":                                                    # "Restaurar padrões deste efeito": its own settings back to the defaults, it stays where it is
+            keep = {k: layers[i][k] for k in ("t", "on") if k in layers[i]}
+            fresh_ = LY.new_layer(layers[i].get("t"))
+            fresh_.update(keep)
+            layers[i].clear()
+            layers[i].update(fresh_)
+            self._layers_changed(i)
         elif what in ("up", "down"):
             j = i + 1 if what == "up" else i - 1
             if 0 <= j < len(layers):
@@ -1562,6 +1569,9 @@ class Menu(WizardMixin):
             self.select_palette(0)
             self.touch()
             self.say("Paletas de fábrica restauradas")
+            return None
+        if cid == "lreset":                                                       # the button at the foot of the page of the effect
+            self.layer_action(("reset", int(self.cfg.get("ly_sel", 0))))
             return None
         if cid.startswith("layer_on:"):                                           # the button of a layer that is off: turns it on (the switch of its row does the same)
             self.set_value("ly_" + cid[9:], True)
