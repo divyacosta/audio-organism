@@ -67,6 +67,7 @@ class Menu(WizardMixin):
         self.preview_sym = None                                        # the symmetry the preview shows (the last one touched)
         self.dd_open, self.dd_hl, self.dd_rects = None, 0, {}          # the dropdown that is open, the option lit, and where each dropdown box is on the surface
         self.undo, self._undo_last = [], (None, 0.0)           # snapshots of the scenes, shaders and palettes (Ctrl+Z)
+        self._reveal = None                                    # the item just opened: the next frame scrolls its row to the top
         self.sys_undo = []                                     # (when, label, restore function) of the Sistema actions with no confirmation: the toast offers "Desfazer"
         self._push_t = 0.0                                     # when the last scene snapshot was taken (Ctrl+Z undoes the newest of the two stacks)
         self.del_armed = (-1, 0.0)             # (scene, until) the delete button of a row of the list of scenes asks twice
@@ -128,12 +129,18 @@ class Menu(WizardMixin):
                 h += run + max(tot["L"], tot["R"])
             else:
                 for ttl, rows in secs:
-                    h += self._card_h(rows, ttl) + self.GAP
+                    h += self._card_h(rows, ttl, self._single_w(t)) + self.GAP
             if t == TAB_LIVE:
                 h = self.HEAD + self.live_h + 8
             if t == TAB_SCENES and self.scene_view != "editor":
                 h = self.HEAD + self.gal_h + 8
             self.heights.append(h + self.FOOT)
+
+    EDITOR_W = 880                                                       # the widest the accordion of the editor gets: the labels stay near their controls
+
+    def _single_w(self, tab=None):
+        """Width of a card in the one-column layout: the editor does not stretch across a wide window."""
+        return min(self.W, self.EDITOR_W) if (self.tab if tab is None else tab) == TAB_SCENES else self.W
 
     def _card_h(self, rows, title="x", wc=None):
         """A card with a title is 40 high before its rows; one without a title (the bar of the editor) only has a little air. wc is the width of the card: a run of
@@ -421,6 +428,15 @@ class Menu(WizardMixin):
 
     def select_item(self, k):
         """A click on an item of the stack of the editor: its parameters show below (a layer of the six opens on the top thing it has)."""
+        if int(self.cfg.get("ed_item", 0)) == int(k):                       # the open item again: it folds
+            self.cfg["ed_item"] = -1
+            self.dd_open = None
+            self.rebuild_scenes()
+            return
+        self.open_item(k)
+
+    def open_item(self, k):
+        """Open item k of the accordion (it stays open if it already is)."""
         self.cfg["ed_item"] = int(k)
         slot = settings.ITEM_SLOT.get(int(k))
         if slot in ("bg", "lights", "parts", "finish"):
@@ -428,9 +444,9 @@ class Menu(WizardMixin):
             if i >= 0:
                 self.cfg["ly_sel"] = i
                 LY.load_lp(self.cfg)
+        self._reveal = int(k)
         self.cfg["ed_page"] = True                                       # its own page (in a wide window the item shows beside the stack: no page, the view stays where it is)
         self.dd_open = None
-        self.reset_scroll(inspector=True)
         self.rebuild_scenes()
 
     def reset_scroll(self, inspector=False):
@@ -1552,6 +1568,9 @@ class Menu(WizardMixin):
         if cid == "undo":
             self.undo_last()
             return None
+        if cid == "live_toggle":
+            self.set_live_edit(not self.cfg.get("live"))
+            return None
         if cid in ("profile_save", "profile_load"):
             getattr(self, cid)()
             return None
@@ -1765,7 +1784,7 @@ class Menu(WizardMixin):
             cid = self.order[self.focus].split("#")[0]
             if cid.startswith("tab"):
                 self.press(f"tab{max(0, min(len(TABS) - 1, self.tab + (-1 if k == pygame.K_LEFT else 1)))}")
-            elif self.find(cid)["kind"] in ("text", "action", "dd", "layer", "note", "item", "edbar", "scene"):
+            elif self.find(cid)["kind"] in ("text", "action", "dd", "layer", "note", "item", "scene"):
                 pass
             elif self.find(cid)["kind"] == "radio":
                 vals = [r["value"] for r in [x for _, rows in TABS[self.tab][1] for x in rows] if r["id"] == cid]
@@ -2009,8 +2028,16 @@ class Menu(WizardMixin):
                     yr += self._draw_card(title, rows, yr, wl + gap, wr) + self.GAP
             y = max(yl, yr)
         else:
+            wc = self._single_w()
             for title, rows in cards:
-                y += self._draw_card(title, rows, y, 0, W) + self.GAP
+                y += self._draw_card(title, rows, y, (W - wc) // 2, wc) + self.GAP
+        if self._reveal is not None:                                               # an item was opened: its row goes to the top, so its page is under it
+            k, self._reveal = self._reveal, None
+            rid = next((r["id"] for _, rs in TABS[self.tab][1] for r in rs if r.get("item") == k), None)
+            fr = self.frects.get(rid)
+            if fr is not None:
+                self.scroll = max(0, min(self.max_scroll(), fr.y - self.HEAD - 52))
+                self.need = True
         if self.dd_open:
             self._dropdown_popup()
         # keyboard focus ring, drawn once the full focus order is known
@@ -2022,36 +2049,18 @@ class Menu(WizardMixin):
 
     TAG_COLORS = {"fx": (24, 95, 165), "bg": (15, 110, 86), "part": (153, 60, 29), "vis": (83, 74, 183), "beh": (80, 86, 110), "sc": (80, 86, 110)}
 
-    def _edbar(self, row, y):
-        """The bar of the editor: whether the scene is saved, and the buttons Salvar, Descartar and Galeria."""
-        s = self.surf
-        dirty = self.is_dirty()
-        W = self.W
-        rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
-        cy = y + (self.ROW - 4) // 2
-        if dirty and self.cfg.get("live"):                                          # three states, one line each: saved / changing live / only in the preview
-            ui.circle(s, (*ACCENT, 255), (26, cy - 8), 5)
-            self._txt(self.fb, "Mudando ao vivo", (40, cy - 17), TEXT)
-            self._txt(self.f_s, "A tela grande já mostra  ·  Salvar guarda, Voltar desfaz", (40, cy + 3), DIM)
-        elif dirty:
-            ui.circle(s, (*ACCENT2, 255), (26, cy - 8), 5)
-            self._txt(self.fb, "Só na prévia", (40, cy - 17), TEXT)
-            self._txt(self.f_s, "A tela grande muda quando você salvar", (40, cy + 3), DIM)
-        else:
-            ui.circle(s, (*OK, 255), (26, cy - 8), 5)
-            self._txt(self.fb, "Tudo salvo", (40, cy - 17), TEXT)
-            self._txt(self.f_s, "A tela grande segue o que você muda" if self.cfg.get("live") else "O que você mexer fica num rascunho até salvar", (40, cy + 3), DIM)
-        x = W - 26
-        for cid, label, on, primary in ((("scene_back", "‹ Galeria", True, False),) if not self.workspace() else ()) + (("ed_discard", "Voltar ao que era" if self.cfg.get("live") else "Descartar", dirty, False), ("ed_save", "Salvar", dirty, True)):
-            w = max(78, self.fb.size(label)[0] + 26)
-            br = pygame.Rect(x - w, cy - 16, w, 32)
-            widgets.button(s, self.fb, br, label, "primary" if (primary and on) else "plain", hover=self.hover == cid and on, enabled=on, radius=9, dy=1)
-            if on:
-                self.hits.append((br, cid, "btn", None))
-                self.order.append(cid)
-                self.order_val.append(None)
-                self.frects[cid] = br
-            x -= w + 8
+    def ed_status(self):
+        """(colour, text) of the state of the scene being edited: saved / changing on the big picture / only in the preview."""
+        if self.is_dirty():
+            return (ACCENT, "Mudando ao vivo") if self.cfg.get("live") else (ACCENT2, "Só na prévia")
+        return OK, "Tudo salvo"
+
+    def ed_buttons(self):
+        """(id, label, enabled, primary) of the buttons of the editor, drawn in the strip over it: they stay in sight while the page scrolls."""
+        dirty, live = self.is_dirty(), bool(self.cfg.get("live"))
+        return [("live_toggle", "Ao vivo: " + ("ligado" if live else "desligado"), True, live),
+                ("ed_discard", "Voltar ao que era" if live else "Descartar", dirty, False), ("ed_save", "Salvar", dirty, True),
+                ("scene_back", "‹ Galeria", True, False)]
 
     def _item_row(self, row, y):
         """An item of the stack of the editor (the mandala, the camera ...): its tag, its name and how it is set; the selected one is lit."""
@@ -2079,7 +2088,7 @@ class Menu(WizardMixin):
         self._txt(self.f, self._fit(self.f, row["label"], tw_), (nx, cy - 17), TEXT if on_ else DIM)
         self._txt(self.f_s, self._fit(self.f_s, row["help"], tw_), (nx, cy + 3), DIM)
         kx, ky = rowr.right - 20, cy
-        pygame.draw.polygon(s, ACCENT2 if sel else DIM, [(kx - 3, ky - 5), (kx - 3, ky + 5), (kx + 3, ky)])
+        pygame.draw.polygon(s, ACCENT2 if sel else DIM, [(kx - 5, ky - 3), (kx + 5, ky - 3), (kx, ky + 3)] if sel else [(kx - 3, ky - 5), (kx - 3, ky + 5), (kx + 3, ky)])
         if row.get("sw"):                                                       # a layer of the stack: its switch, on the right of the row
             on = bool(c.get(row["sw"], True))
             pill = pygame.Rect(rowr.right - 36 - 46, cy - 13, 46, 26)
@@ -2364,8 +2373,6 @@ class Menu(WizardMixin):
         cid, kind = row["id"], row["kind"]
         if kind == "layer":
             return self._layer_row(row, y)
-        if kind == "edbar":
-            return self._edbar(row, y)
         if kind == "item":
             return self._item_row(row, y)
         if kind == "scene":

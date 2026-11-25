@@ -34,7 +34,7 @@ class ControlWindow:
         """The preview under the tab bar: 296 px wide in a narrow window, bigger (up to 500 px) in a wide one; always 16:9."""
         pw = max(296, min(420, int(self.menu.W * 0.33)))
         if self.menu.pv_mode() == "draft":                        # editing: the picture is a reference, the tabs and the controls get the room
-            pw = max(240, min(460, int(self.menu.W * 0.24)))
+            pw = max(240, min(340, int(self.menu.W * 0.24)))
         if self.menu.pv_mode() == "live":                         # Sistema > Imagem: the picture is a check on the settings, not the star: the settings get the height
             pw = max(240, min(pw, 264))
         if self.menu.wide:                                        # in two columns the strip must leave room for them: at most ~30% of the window's height
@@ -205,6 +205,11 @@ class ControlWindow:
         if rel < mw.HEAD:
             surf_y = rel                                           # the tab bar: fixed
         elif rel < mw.HEAD + mw.reserved:
+            if e.type == pygame.MOUSEBUTTONDOWN and getattr(e, "button", 0) == 1:
+                hit = next((cid for r, cid in getattr(self, "bar_hits", []) if r.collidepoint(e.pos)), None)
+                if hit and mw.pv_mode() == "draft":
+                    mw.press(hit)                                  # a button of the editor, drawn in the strip
+                    self.force = True
             return None                                            # the preview strip
         else:
             surf_y = mw.surf_y_at(e.pos[0] - ox, rel - mw.reserved)         # the content: scrolled (in two columns each one by its own)
@@ -481,16 +486,23 @@ class ControlWindow:
             self._t(self.fs, "vale para todas as cenas", (tx, y + 102), wg.DIM)
             return
         self._t(self.fm, self._fit(self.fm, ed, x + mw.W - tx - 16), (tx, y + 8), wg.TEXT)           # editing: one name, the scene being edited
+        sx = tx
         if cfg.get("scene_edit", -1) == live_i:
             self._pill(pygame.Rect(tx, y + 38, 64, 22), "NO AR", wg.ACCENT, (255, 255, 255))
-        pals = cfg.get("palettes") or []                                            # what the scene is made of, in three short lines (the draft, as it is now)
-        pi = int(cfg.get("scene_palette", 0))
-        cam = next((n for n, v in M.settings.CAM_OPTS if v == cfg.get("camera", 0)), "Manual")
-        mov = next((n for n, v in M.settings.MV_OPTS if v == cfg.get("movement", 0)), "Manual")
-        wmax = x + mw.W - tx - 16
-        for k, line in enumerate((M.settings.scene_sub(cfg, cfg), "Cores: " + (pals[pi - 1]["name"] if 0 < pi <= len(pals) else "do modelo"),
-                                  f"Câmera: {cam}  ·  Ritmo: {mov}")):
-            self._t(self.fs, self._fit(self.fs, line, wmax), (tx, y + 76 + 20 * k), wg.DIM)
+            sx = tx + 76
+        col, txt = mw.ed_status()                                                   # saved / only in the preview / changing live
+        ui.circle(s, col, (sx + 5, y + 49), 5)
+        self._t(self.fb, txt, (sx + 16, y + 40), wg.TEXT)
+        bx, by, self.bar_hits = tx, y + 74, []                                      # the buttons of the editor: Ao vivo, Descartar, Salvar, Galeria
+        for cid, label, on, primary in mw.ed_buttons():
+            w = max(70, self.fb.size(label)[0] + 24)
+            if bx > tx and bx + w > x + mw.W - 12:
+                bx, by = tx, by + 36
+            br = pygame.Rect(bx, by, w, 30)
+            wg.button(s, self.fb, br, label, "primary" if (primary and on) else "plain", hover=False, enabled=on, radius=9, dy=1)
+            if on:
+                self.bar_hits.append((br, cid))
+            bx += w + 8
 
     def _draw_ear(self, an):
         """The analysis of the music in Sistema > Áudio: the card the Palco used to have, painted live over the slot the panel leaves for it."""

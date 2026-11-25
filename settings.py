@@ -926,14 +926,15 @@ def scene_layout(cfg, view="gallery", wide=False):
     adv = bool(cfg.get("advanced", False))
     item = int(cfg.get("ed_item", 0))
     has_layers = bool(cfg.get("layers"))
-    live = dict(id="live", kind="toggle", label="Mostrar na tela grande enquanto edita", help=lambda c: "Cada mudança aparece no ar na hora" if c.get("live") else "As mudanças ficam na prévia até você salvar")
     if item in (1, 2, 3, 5) or (item == 0 and int(cfg.get("ed_sub", 0)) == 1):   # (the old tabs) are all in the settings of the scene now
         item = 6
     if item == 4:
         item = layer_item(cfg)
-    bar = ("", [live, dict(id="edbar", kind="edbar", label="", help="")])        # the bar has no title: the strip over it already says which scene is being edited
     left, right = stack_cards(cfg, item), []
+    closed = int(cfg.get("ed_item", 0)) < 0                                      # the accordion with every item folded
     # ---- the page of the item (the right column when the window is wide)
+    if closed:
+        item = -1
     if item in ITEM_SLOT and not LY.slot_on(cfg, ITEM_SLOT[item]):
         right.append(("", [dict(id="slot_off_note", kind="note", label="Esta camada está desligada", help="Ligue no interruptor dela, na pilha  ·  os ajustes ficam guardados")]))
     if item == 0:
@@ -946,6 +947,8 @@ def scene_layout(cfg, view="gallery", wide=False):
         right += layer_cards(cfg, adv, has_layers)[-1:]
     elif item == 12:
         right += links_cards(cfg)
+    elif item == -1:
+        pass
     elif item == 1:
         right += (CAMERA + [("O AUTOMÁTICO ESCOLHE", auto_rows("cam"))]) if adv else [("CÂMERA", [_preset_row(CAMERA[0][1][0], CAM_DESC)]),
                                                                                  ("RITMO DA CENA", [_preset_row(MOVEMENT[0][1][0], MV_DESC)])]
@@ -968,10 +971,23 @@ def scene_layout(cfg, view="gallery", wide=False):
             dict(id="undo", kind="action", label="Desfazer", btn="Desfazer", help="Volta a última mudança  ·  Ctrl+Z"),
             dict(id="scene_more", kind="note", label="Duplicar e apagar ficam no ••• da cena, na lista", help=""),
         ]))
-    if not wide:
-        return [bar] + left + right, []
-    cards = [bar] + left + right
-    return cards, (["F"] + ["L"] * len(left) + ["R"] * len(right)) if wide else []
+    return _accordion(left, right, item), []                                     # (Salvar, Descartar and Galeria are in the strip over the editor)                             # one column, in every width: the page of an item opens right under its row
+
+
+def _accordion(stack, page, item):
+    """The stack cards with the page of the open item inserted under its row (the rows after it go on in a card of their own)."""
+    out = []
+    for title, rows in stack:
+        k = next((i for i, r in enumerate(rows) if r.get("item") == item), -1)
+        if k < 0:
+            out.append((title, rows))
+            continue
+        out.append((title, rows[:k + 1]))
+        out += page
+        if k + 1 < len(rows):
+            out.append(("", rows[k + 1:]))
+        page = []
+    return out + page
 
 
 def stack_cards(cfg, item):

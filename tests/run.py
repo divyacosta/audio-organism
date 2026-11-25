@@ -172,7 +172,7 @@ def test_gallery():
     m = menu.Menu(cfg)
     m.tab = 1
     m.open_scene(4)                                                           # Impacto: Facetas ships with "Nenhum" on, this one starts off
-    m.select_item(0)
+    m.open_item(0)
     m.set_value("m_sym0", False)
     m.set_value("m_symnone", True)
     check("'Nenhum' is a toggle like the others", cfg["m_symnone"] and not cfg["m_sym0"] and cfg["m_sym2"])
@@ -784,8 +784,8 @@ def test_live():
         check("a show never starts in Live", menu.load_cfg()["live"] is False)
     finally:
         os.remove(settings.PATH)
-    bar = menu.scene_layout(menu.fresh(), "editor", False)[0][0][1]
-    check("the bar of the editor carries the Live switch", bar[0]["id"] == "live" and bar[0]["kind"] == "toggle")
+    first = menu.scene_layout(menu.fresh(), "editor", False)[0][0][1]
+    check("the editor starts with the settings of the scene (the buttons are in the strip over it)", first[0]["id"] == "stk_scene")
 
 
 # ------------------------------------------------------------------ 6o. The wide Palco: the Detalhes always open on the right
@@ -900,9 +900,9 @@ def test_slots():
     m = menu.Menu(menu.fresh())
     m.tab = menu.TAB_SCENES
     m.open_scene(0)
-    m.select_item(10)
+    m.open_item(10)
     ids = [r_["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r_ in rs]
-    m.select_item(11)
+    m.open_item(11)
     ids += [r_["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r_ in rs]
     lefts = [r_["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r_ in rs if r_["id"].startswith("stk_")]
     check("the stack has the six layers; Acabamento and Sobreposição have their pages", len(lefts) == 8 and all(k in ids for k in ("img_style", "fin_sat", "scr_vig", "ov_kind", "ov_text")), lefts)
@@ -938,7 +938,7 @@ def test_music():
     m = menu.Menu(menu.fresh())
     m.tab = menu.TAB_SCENES
     m.open_scene(0)
-    m.select_item(0)
+    m.open_item(0)
     m.mod_next("m_psx")
     mm = m.cfg["mods"]["m_psx"]
     check("the music button starts a range around the value, following the first source", mm["src"] == 0 and mm["lo"] < m.cfg["m_psx"] < mm["hi"] and m.draft["mods"]["m_psx"] == mm, mm)
@@ -947,10 +947,10 @@ def test_music():
     for _ in range(len(MOD.SOURCES) - 1):
         m.mod_next("m_psx")
     check("... and after the last one it is fixed again", "m_psx" not in m.cfg["mods"])
-    m.select_item(10)
+    m.open_item(10)
     m.cyc_next("img_style")
     check("the alternate button makes a choice alternate, starting from the value in use", m.cfg["cycles"]["img_style"] == dict(opts=[0], when=0))
-    m.select_item(12)
+    m.open_item(12)
     ids = [r["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs]
     check("the Ligações page lists what follows the music, with a way to stop it", "uncyc:img_style" in ids, ids[-4:])
     m.press("uncyc:img_style")
@@ -1608,7 +1608,7 @@ def test_layers():
     pygame.font.init()
     m.tab = menu.TAB_SCENES
     m.ed_back()
-    m.select_item(8)                                                               # Luzes: its list and its add menu
+    m.open_item(8)                                                               # Luzes: its list and its add menu
     m.need = True
     m.render()
 
@@ -1682,8 +1682,8 @@ def test_responsive():
     m.store_scene()
     m.rebuild_scenes()
     cols = m.cols[menu.TAB_SCENES]
-    check("a wide editor has the stack on the left and the item on the right", m.wide and "L" in cols and "R" in cols and cols[0] == "F" and len(cols) == len(menu.TABS[menu.TAB_SCENES][1]), cols)
-    left = [r["id"] for (_, rs), c_ in zip(menu.TABS[menu.TAB_SCENES][1], cols) if c_ == "L" for r in rs]
+    check("the editor is one column in every width, an accordion", m.wide and not cols and not m.panes(), cols)
+    left = [r["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs if r["id"].startswith("stk_")]
     check("the stack: the settings of the scene, then the six layers top first", left == ["stk_scene", "stk_links", "stk_over", "stk_finish", "stk_parts", "stk_form", "stk_lights", "stk_bg"], left)
     m.cfg["ed_item"], m.cfg["ed_sub"] = 0, 0
     m.rebuild_scenes()
@@ -1695,24 +1695,35 @@ def test_responsive():
             m.mouse(types.SimpleNamespace(type=typ, pos=pos, **extra), 0, 0, 1)
         m.need = True
         m.render()
+    def click_hit(r):
+        m.scroll = max(0, min(m.max_scroll(), r.centery - 300))
+        m.need = True
+        m.render()
+        click((r.centerx, r.centery - m.scroll))
     wl, wr, gap = m._col_widths()
     r = next(r for r, cid, kind, arg in m.hits if cid == "m_psx" and kind == "slider")
-    check("the slider of the right column is on the right", r.left > wl, (r, wl))
+    check("the slider of the open item is on the page", r.width > 100, r)
     tl, tw = m.slider_geos["m_psx"]
-    click((tl + tw // 2, r.centery))
+    m.scroll = max(0, min(m.max_scroll(), r.centery - 300))
+    m.need = True
+    m.render()
+    r = next(r for r, cid, kind, arg in m.hits if cid == "m_psx" and kind == "slider")
+    tl, tw = m.slider_geos["m_psx"]
+    click((tl + tw // 2, r.centery - m.scroll))
     check("a click on the middle of the slider of the right column sets the middle of its range", abs(cfg["m_psx"] - 60) <= 4, cfg["m_psx"])
-    click(next(r for r, cid, kind, arg in m.hits if cid == "stk_finish" and kind == "it").center)
+    click_hit(next(r for r, cid, kind, arg in m.hits if cid == "stk_finish" and kind == "it"))
     check("a click on Acabamento in the stack opens its page, on its first effect", cfg["ed_item"] == 10 and cfg["ly_sel"] == 0 and any(r["id"] == "lp_amt" for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs))
     box = next(r for r, cid, kind, arg in m.hits if cid == "lp_bm" and kind == "dd")
-    click(box.center)
-    check("a dropdown of the right column opens over it", m.dd_open == "lp_bm" and box.left > wl)
-    click(box.center)                                                              # (closes it)
+    click_hit(box)
+    check("a dropdown of the open page opens over it", m.dd_open == "lp_bm")
+    click_hit(box)                                                                 # (closes it)
     sw = next(r for r, cid, kind, arg in m.hits if cid == "ly_parts" and kind == "toggle")
-    click(sw.center)
+    click_hit(sw)
     check("the switch of a layer in the stack turns it off (and the scene being edited keeps it)", cfg["ly_parts"] is False and m.draft.get("ly_parts") is False, (cfg["ly_parts"], m.draft.get("ly_parts"), m.dd_open, sw))
-    click(sw.center)
+    sw = next(r for r, cid, kind, arg in m.hits if cid == "ly_parts" and kind == "toggle")
+    click_hit(sw)
     check("... and on again", cfg["ly_parts"] is True)
-    click(next(r for r, cid, kind, arg in m.hits if cid == "stk_scene" and kind == "it").center)
+    click_hit(next(r for r, cid, kind, arg in m.hits if cid == "stk_scene" and kind == "it"))
     ids = {r["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs}
     check("Ajustes da cena has the colours, the camera, the rhythm, the music and the name", {"scene_palette", "camera", "movement", "react", "scene_name"} <= ids, sorted(ids)[:10])
     m.store_scene()
@@ -1742,15 +1753,15 @@ def test_responsive():
     check("... and with none, the Camadas tab is still there (the six layers, the Acabamento) without the list of effects", "Camadas" in ed_tabs())
     cfg["layers"] = saved
     m.rebuild_scenes()
-    m.select_item(0)
+    m.open_item(0)
     m.cfg["ed_sub"] = 2
     m.rebuild_scenes()
     seg = next(r for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs if r["id"] == "ed_sub")
     check("the simple mandala has no editor of shaders and no Formas (the style is only a choice), and a hidden section opens on Modelo", [n for n, _ in seg["opts"]] == ["Modelo", "Estilo", "Simetrias"] and not any(r["id"] == "shd_name" for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs))
-    m.select_item(1)
+    m.open_item(1)
     ids = {r["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs}
     check("the simple camera is the choice of a style only", "camera" in ids and "cam_orbit" not in ids, sorted(ids)[:6])
-    m.select_item(3)
+    m.open_item(3)
     ids = {r["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs}
     check("the simple music has the reaction, the strobe and the glow", {"react", "strobe", "bloom"} <= ids and "react_bass" not in ids and "fl_roll" not in ids, sorted(ids)[:8])
     m.tab = menu.TAB_SYS
@@ -1778,31 +1789,17 @@ def test_responsive():
     cfg["ed_item"], cfg["ed_sub"] = 0, 0
     m.rebuild_scenes()
     cw.update(time.time(), an, 60.0, 10.0, False, st, force=True)
-    fixed, hl, hr = m.pane_dims()
-    check("the bar of the editor is the fixed part and each column has its own height", m.panes() and fixed > 0 and hl > 0 and hr > 0, (fixed, hl, hr))
-    check("both columns are taller than the window, so both can scroll", m.max_scroll(0) > 0 and m.max_scroll(1) > 0, (m.max_scroll(0), m.max_scroll(1), m.pane_view_h()))
-    wl_, wr_, gap_ = m._col_widths()
-    wheel = lambda x, dy: m.mouse(types.SimpleNamespace(type=pygame.MOUSEWHEEL, y=dy, pos=(x, 400)), 0, 0, 1)
-    wheel(wl_ + 100, -4)
-    check("the wheel over the right column scrolls only the right one", m.scroll2 > 0 and m.scroll == 0, (m.scroll, m.scroll2))
-    s2 = m.scroll2
-    wheel(60, -3)
-    check("the wheel over the left column scrolls only the left one", m.scroll > 0 and m.scroll2 == s2, (m.scroll, m.scroll2))
-    y_bar = m.HEAD + 10
-    check("a point on the bar maps to the surface without scroll, one under it by the scroll of its column",
-          m.surf_y_at(300, y_bar) == y_bar and m.surf_y_at(60, m.HEAD + fixed + 20) == m.HEAD + fixed + 20 + m.scroll
-          and m.surf_y_at(wl_ + 100, m.HEAD + fixed + 20) == m.HEAD + fixed + 20 + m.scroll2)
-    # a real click through the control window lands on what is under it, whatever the scroll of the other column is
-    m.scroll = min(m.max_scroll(0), 150)
-    m.scroll2 = 0
+    check("the editor is one column that scrolls as a whole", not m.panes() and m.max_scroll() > 0, (m.panes(), m.max_scroll()))
+    m.scroll = min(m.max_scroll(), 150)
     cw.update(time.time(), an, 60.0, 10.0, False, st, force=True)
-    row = next(r for r, cid, kind, arg in m.hits if cid == "stk_bg" and kind == "it")
-    py_ = cw.panel_pos[1] + m.reserved + row.centery - m.scroll
+    row = next(r for r, cid, kind, arg in m.hits if cid == "stk_form" and kind == "it")
+    py_ = cw.panel_pos[1] + m.HEAD + m.reserved + row.centery - m.HEAD - m.scroll
     for typ, extra in ((pygame.MOUSEMOTION, dict(buttons=(0, 0, 0))), (pygame.MOUSEBUTTONDOWN, dict(button=1, buttons=(1, 0, 0))), (pygame.MOUSEBUTTONUP, dict(button=1, buttons=(0, 0, 0)))):
         cw.handle(types.SimpleNamespace(type=typ, pos=(cw.panel_pos[0] + row.centerx, py_), **extra))
-    check("a click on a layer of the scrolled stack opens it", cfg["ed_item"] == 7, cfg["ed_item"])
-    m.select_item(1)
-    check("choosing an item sends the right column to the top and leaves the list where it is", m.scroll2 == 0 and m.scroll > 0, (m.scroll, m.scroll2))
+    check("a click on a layer of the scrolled editor folds it (it was the open one)", cfg["ed_item"] == -1, cfg["ed_item"])
+    m.open_item(7)
+    cw.update(time.time(), an, 60.0, 10.0, False, st, force=True)
+    check("opening an item brings its row to the top, with its page under it", m.scroll > 0, m.scroll)
     m.scroll2 = 80
     m.set_value("sys_item", 0)
     check("a category change does not break the scrolls", m.scroll >= 0 and m.scroll2 >= 0)
@@ -1922,7 +1919,7 @@ def test_generators():
         m.set_value("scene_visual", v, announce=False)
         for sub in range(5):
             cfg["ed_sub"] = sub
-            m.select_item(0)
+            m.open_item(0)
             try:
                 m.need = True
                 m.render()
@@ -2042,7 +2039,7 @@ def test_global():
     cfg["advanced"] = False
     m = menu.Menu(cfg)
     m.open_scene(0)
-    m.select_item(7)
+    m.open_item(7)
     m.rebuild_scenes()
     ids = [r["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs]
     check("Fundo has the choice of the room (simple mode too) and no sliders until a colour is asked", "scene_bg" in ids and "scene_bgr" not in ids, ids)
@@ -2059,7 +2056,7 @@ def test_global():
         bad_ = []
         for si in range(len(cfg["scenes"])):
             m.open_scene(si)
-            m.select_item(7)
+            m.open_item(7)
             m.rebuild_scenes()
             ids = {r["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs}
             if cfg["scene_visual"] != 0 and "scene_bg" not in ids:
