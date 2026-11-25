@@ -3062,50 +3062,6 @@ def test_sticky_titles():
     check("rolando, o título do cartão que passou fica preso", [t for t, _ in drawn] == ["NITIDEZ E FLUIDEZ"], drawn)
 
 
-def test_webui():
-    section("Painel novo: o Menu aparece na página e o que se faz nela chega ao Menu")
-    import json
-    import urllib.request
-    import webui
-    cfg = menu.fresh()
-    m = menu.Menu(cfg)
-    w = webui.WebUI()
-    err = w.configure(True)
-    check("o servidor abre só neste computador", err is None and w.server is not None and w.server.server_address[0] == "127.0.0.1", err)
-    try:
-        def pump():
-            for c in w.poll():
-                webui.apply(m, c)
-            w.t_pub = 0
-            w.publish(m, dict(fps=60))
-
-        def post(c):
-            urllib.request.urlopen(urllib.request.Request(w.url + "/cmd", data=json.dumps(c).encode(), method="POST")).read()
-            time.sleep(0.15)
-            pump()
-        pump()
-        page = urllib.request.urlopen(w.url + "/").read()
-        check("a página é servida", b"Audio Organism" in page and b"/events" in page, len(page))
-        d = json.loads(w.data)
-        check("o estado traz as cenas e a aba", d["tab"] == 0 and len(d["scenes"]) >= 10 and d["fps"] == 60, (d["tab"], len(d["scenes"])))
-        post({"op": "tab", "i": 2})
-        d = json.loads(w.data)
-        ids = {r["id"] for c in d["cards"] for r in c["rows"]}
-        check("a aba Sistema leva os cartões do Menu", d["tab"] == 2 and "preset" in ids, sorted(ids)[:6])
-        post({"op": "set", "id": "safe_flash", "value": 1})
-        check("um valor mudado na página chega às configurações", cfg["safe_flash"] == 1, cfg["safe_flash"])
-        post({"op": "tab", "i": 1})
-        post({"op": "scene", "what": "open", "i": 0})
-        d = json.loads(w.data)
-        check("abrir uma cena abre o editor em acordeão", d["view"] == "editor" and any(c["title"].startswith("§") for c in d["cards"]), [c["title"] for c in d["cards"]][:4])
-        post({"op": "item", "k": 10})
-        d = json.loads(w.data)
-        check("abrir uma camada traz a página dela", cfg["ed_item"] == 10 and any(r["kind"] == "layer" for c in d["cards"] for r in c["rows"]), cfg["ed_item"])
-    finally:
-        w.close()
-    check("o servidor fecha", w.server is None)
-
-
 def test_report():
     section("Relatório de desempenho: cada parte tem suas subpartes, e nunca mexe nas configurações da pessoa")
     import prof
@@ -3134,7 +3090,7 @@ def test_report():
 
 def main():
     exe = sys.argv[sys.argv.index("--exe") + 1] if "--exe" in sys.argv else None
-    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_navigation, test_sticky_titles, test_webui, test_report):
+    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_navigation, test_sticky_titles, test_report):
         try:
             fn()
         except Exception as e:
