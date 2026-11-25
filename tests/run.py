@@ -474,7 +474,7 @@ def test_widgets():
              ("the edge of a control on a card", wg.CTRL, wg.SURFACE, 3.0), ("... on a button", wg.CTRL, wg.SURFACE2, 3.0), ("... on the fill of a field", wg.CTRL, wg.CTRL_FILL, 3.0))
     bad = [(n, round(wg.contrast(a, b), 2)) for n, a, b, need in pairs if wg.contrast(a, b) < need]
     check("every colour pair is readable: text 4.5:1, the edge of a control 3:1", not bad, bad)
-    check("white on the blue would fail, which is why what is chosen has dark ink", wg.contrast(wg.ON_ACCENT, wg.SEL) < 4.5 <= wg.contrast(wg.ON_SEL, wg.SEL))
+    check("what is chosen (the lime) has dark ink, and the ink reads on it", wg.contrast(wg.ON_SEL, wg.SEL) >= 4.5 and wg.contrast(wg.ON_ACCENT, wg.ACCENT) >= 4.5)
     check("hover and focus are never the blue of 'chosen'", wg.HOVER_EDGE != wg.SEL and wg.FOCUS != wg.SEL)
     f = wg.font("cap")
     cut = wg.fit(f, "Vermelho, azul e branco e mais um pouco", 90)
@@ -3086,6 +3086,18 @@ def test_report():
     check("durante o aquecimento nada é medido", rec.step(1.0, 0.016, {}) is False and not rec.started)
     app_src = open(os.path.join(ROOT, "app.py"), encoding="utf-8").read()
     check("o modo relatório grava as configurações ao lado do relatório, não por cima das da pessoa", "_settings.PATH" in app_src and "VIS_REPORT" in app_src)
+
+
+def test_design_system():
+    section("Sistema de design: os contrastes dos tokens cumprem o mínimo, e a lima é a única cor de tema")
+    import widgets as W
+    for name, c in (("TEXT", W.TEXT), ("DIM", W.DIM), ("SEL", W.SEL), ("DANGER", W.DANGER), ("PRIMARY_INK", W.PRIMARY_INK)):
+        worst = min(W.contrast(c, bg) for bg in (W.BG, W.SURFACE, W.SURFACE2))
+        check(f"{name} lê sobre o fundo e os painéis (>= 4,5:1)", worst >= 4.5, round(worst, 2))
+    edge = min(W.contrast(W.CTRL, bg) for bg in (W.SURFACE, W.SURFACE2))
+    check("a borda dos controles é visível (>= 3:1)", edge >= 3, round(edge, 2))
+    check("a cor de tema é a lima, e o erro é o vermelho", W.SEL == W.ACCENT == (0xC6, 0xF2, 0x4E) and W.DANGER == (0xF0, 0x6A, 0x62))
+    check("o botão principal é neutro, sem cor de tema", W.button_colors("primary")[0] == W.PRIMARY_FILL)
 
 
 def main():

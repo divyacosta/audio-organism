@@ -1474,7 +1474,7 @@ class DeckWindow:
             w_ = self.fonts["xs"].size(name)[0] + 14
             if lx + w_ > rtn.right - 6:
                 break
-            ui.rect(s, wg.ACCENT if hot else ((30, 52, 110) if on and not silent else (26, 29, 43)), (lx, rtn.bottom - 30, w_, 20), border_radius=10)
+            ui.rect(s, wg.ACCENT if hot else ((0x2E, 0x33, 0x24) if on and not silent else (26, 29, 43)), (lx, rtn.bottom - 30, w_, 20), border_radius=10)
             ui.rect(s, wg.ACCENT if hot else (wg.ACCENT2 if on and not silent else wg.BORDER), (lx, rtn.bottom - 30, w_, 20), width=1, border_radius=10)
             if name == "RISER" and not silent and ear.riser > 0.02:                      # the level of the reading, so a weak riser shows before the lamp lights
                 ui.rect(s, (60, 66, 110), (lx + 3, rtn.bottom - 13, max(2, int((w_ - 6) * min(1.0, ear.riser / 0.35))), 2), border_radius=1)
@@ -1524,7 +1524,7 @@ class DeckWindow:
             r = pygame.Rect(x0 + (i % 4) * (bw + gap), y + 22 + (i // 4) * (bh + gap), bw, bh)
             lit = bool(st.get(flag)) if flag else False
             hov = key is not None and self.mouse is not None and r.collidepoint(self.mouse)
-            ui.rect(s, (30, 52, 110) if lit else (wg.HOVER_FILL if hov else wg.SURFACE2), r, border_radius=10)
+            ui.rect(s, (0x2E, 0x33, 0x24) if lit else (wg.HOVER_FILL if hov else wg.SURFACE2), r, border_radius=10)
             ui.rect(s, wg.SEL if lit else (wg.HOVER_EDGE if hov else wg.BORDER), r, width=1, border_radius=10)
             col = wg.SEL if lit else (wg.TEXT if (hov or key) else wg.DIM)
             img = self.fonts["sb"].render(cap, True, col)

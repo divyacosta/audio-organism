@@ -5,10 +5,11 @@ Nothing here knows about a window or a list of hits: every function draws on the
 that rectangle in its own list of hits (the three screens keep theirs in three formats). The shapes (rounded rectangles, circles) are ui.py's.
 
 One colour, one meaning:
-  SEL        what is chosen: the lit option, the switch that is on, the current step, the chosen tile (a fill with dark ink, or a thick edge); also the links
-  ACCENT     the main action and what is on the air (NO AR): never "chosen"
-  HOVER_EDGE the pointer is over it: never the blue of SEL
-  FOCUS      the keyboard focus ring: never the blue of SEL
+  SEL        what is chosen, on, selected or focused (the theme lime, with dark ink)
+  ACCENT     the same lime: the theme colour (NO AR, the main highlight)
+  DANGER     a real error and what deletes (never a fill for ordinary actions)
+  HOVER_EDGE the pointer is over it: a neutral, never the theme colour
+  FOCUS      the keyboard focus ring: near white, never the theme colour
 """
 import os
 
@@ -19,27 +20,37 @@ import i18n
 import ui
 
 # ------------------------------------------------------------------ colour tokens
-BG = (9, 10, 16)
-SURFACE = (18, 20, 30)
-SURFACE2 = (30, 33, 47)
-BORDER = (52, 56, 78)
-CTRL = (100, 108, 144)          # the border of the controls (buttons, fields, choices): >= 3:1 on SURFACE and on SURFACE2
-TITLE = (150, 158, 184)         # the titles of the cards
-TEXT = (235, 235, 235)         # EBEBEB
-DIM = (160, 165, 182)          # >= 4.5:1 on SURFACE
-ACCENT = (235, 8, 56)          # EB0838: the main action, and what is on the air
-SEL = (74, 134, 255)           # the blue (004FEC) lightened to read as text and lines on the dark surfaces: what is chosen or on
+# The design system of the ScreenMaster (its App.xaml), in the names this file has always used. Neutral greys, one theme colour (lime),
+# red only for a real error. The full write-up, with the rules and the components, is in DESIGN_SYSTEM.md.
+BG = (0x16, 0x16, 0x17)            # canvas: the content behind the panels
+SURFACE = (0x1C, 0x1C, 0x1F)       # Panel: the cards, the chrome (header, sidebar, footer)
+SURFACE2 = (0x23, 0x23, 0x26)      # Raised: control fills, the rows at rest
+HOVER_FILL = (0x26, 0x26, 0x2A)    # Hover: under the pointer
+BORDER = (0x2A, 0x2A, 0x2D)        # Line: the hairline between things
+LINE_STRONG = (0x3A, 0x3A, 0x3F)  # LineStrong: a stronger divider
+CTRL = (0x7E, 0x7E, 0x84)          # the edge of a control, a little lighter than Outline so it reads on SURFACE2 (>= 3:1)
+TITLE = (0x9A, 0x9A, 0xA0)         # the titles of the cards: the secondary text
+TEXT = (0xE6, 0xE6, 0xE8)          # Text
+DIM = (0x9A, 0x9A, 0xA0)           # Dim: the secondary text (>= 4.5:1 on SURFACE)
+FAINT = (0x5A, 0x5A, 0x60)         # Faint: off or not applicable, still readable as a shape
+SEL = (0xC6, 0xF2, 0x4E)           # Accent (the theme lime): what is chosen, on, selected, focused, and "agora"
+ACCENT = SEL                       # the main colour of the theme: NO AR is the same lime, not a second colour
+ACCENT_DIM = (0x2E, 0x33, 0x24)   # AccentDim: the selected row, the lime at ~12% over the panel
 ACCENT2 = OK = SEL
-DANGER = (255, 98, 120)
-ON_ACCENT = (255, 255, 255)    # text on the red
-ON_LIGHT = (10, 12, 22)        # dark text on the light fills (blue, danger)
-ON_SEL = ON_LIGHT              # text on SEL
-BLUE = (0, 79, 236)            # 004FEC, as it is, for fills and the waves
-CTRL_FILL = (26, 28, 42)       # the resting fill of a control of the settings panel
-HOVER_FILL = (40, 44, 64)      # the same under the pointer
-PRIMARY_HOVER = (255, 60, 100)  # the main action under the pointer
-HOVER_EDGE = (200, 204, 216)   # the edge of what is under the pointer: a light neutral, never the blue of SEL
-FOCUS = TEXT                   # the keyboard focus ring: near white, never the blue of SEL
+BLUE = SEL                         # the waves and fills that were blue are the lime now
+DANGER = (0xF0, 0x6A, 0x62)        # Danger: a real error and what deletes
+WARN = TEXT                        # warnings are the strong neutral; red is for errors
+PRIMARY_FILL = (0x2E, 0x2E, 0x33)  # PrimaryFill: the main action, a neutral button with a light label
+PRIMARY_HOVER = (0x38, 0x38, 0x3E)
+PRIMARY_LINE = (0x4A, 0x4A, 0x50)
+PRIMARY_INK = (0xF2, 0xF2, 0xF3)
+ON_SEL = (0x16, 0x16, 0x17)        # OnAccent: the text on the lime (the dark canvas)
+ON_LIGHT = ON_SEL                  # the dark text on the light fills (lime, danger)
+ON_ACCENT = ON_SEL                 # the text on ACCENT (the lime): the dark ink
+CTRL_FILL = SURFACE2               # the resting fill of a control
+HOVER_EDGE = (0x9A, 0x9A, 0xA0)    # the edge of what is under the pointer: the secondary neutral
+FOCUS = TEXT                       # the keyboard focus ring: near white, never the theme colour
+PRIMARY_HOVER_EDGE = CTRL
 
 MIN_H = 24                     # the least height of anything that is clicked (WCAG 2.5.8)
 
@@ -145,10 +156,14 @@ def pill(surf, fnt, rect, text, fill, fg, outline=None, dy=0):
 
 
 def button_colors(kind="plain", hover=False, armed=False, enabled=True, tone=None, tone_edge=False):
-    """(fill, edge, ink) of a button. kind: "primary" (the one main action, red), "select" (chosen, blue with dark ink), "tone" (quiet, its edge and text carry
-    a colour: blue, or red for what deletes; armed = asked once, press again) or "plain"."""
-    if kind == "primary":
-        fill, edge, ink = (PRIMARY_HOVER if hover else ACCENT), ACCENT, ON_ACCENT
+    """(fill, edge, ink) of a button. kinds: "primary" (the one main action: neutral fill, light label), "select" (chosen: the lime with dark ink),
+    "tone" (quiet, its edge and text carry a colour; armed = asked once, press again), "quiet" (text only), "danger" (what deletes) or "plain"."""
+    if kind == "primary":                                                       # the main action: a neutral button with a light label (ScreenMaster's Primary)
+        fill, edge, ink = (PRIMARY_HOVER if hover else PRIMARY_FILL), (CTRL if hover else PRIMARY_LINE), PRIMARY_INK
+    elif kind == "quiet":                                                       # no fill and no edge at rest: text and icons (ScreenMaster's Quiet / IconButton)
+        fill, edge, ink = (HOVER_FILL if hover else BG), (BORDER if hover else BG), (TEXT if hover else DIM)
+    elif kind == "danger":                                                      # what deletes: the danger colour on a neutral fill
+        fill, edge, ink = (HOVER_FILL if hover else SURFACE2), DANGER, DANGER
     elif kind == "select":
         fill, edge, ink = SEL, SEL, ON_SEL
     elif kind == "tone":

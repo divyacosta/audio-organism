@@ -2099,7 +2099,7 @@ class Menu(WizardMixin):
         rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
         sel = int(c.get("ed_item", 0)) == k
         hov = self.hover == cid
-        ui.rect(s, (*((30, 52, 110) if sel else (SURFACE2 if hov else (22, 25, 38))), 255), rowr, border_radius=10)
+        ui.rect(s, (*((0x2E, 0x33, 0x24) if sel else (SURFACE2 if hov else (22, 25, 38))), 255), rowr, border_radius=10)
         ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
         self.frects[cid] = rowr
         self.order.append(cid)
@@ -2150,7 +2150,7 @@ class Menu(WizardMixin):
         rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
         sel = i == c.get("scene_edit", 0) and self.scene_view == "editor"
         hov = self.hover == cid
-        ui.rect(s, (*((30, 52, 110) if sel else (SURFACE2 if hov else (22, 25, 38))), 255), rowr, border_radius=10)
+        ui.rect(s, (*((0x2E, 0x33, 0x24) if sel else (SURFACE2 if hov else (22, 25, 38))), 255), rowr, border_radius=10)
         ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
         self.frects[cid] = rowr
         self.order.append(cid)
@@ -2195,7 +2195,7 @@ class Menu(WizardMixin):
         W = self.W
         rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
         hov = self.hover == cid
-        ui.rect(s, (*((30, 52, 110) if sel else (SURFACE2 if hov else (22, 25, 38))), 255), rowr, border_radius=10)
+        ui.rect(s, (*((0x2E, 0x33, 0x24) if sel else (SURFACE2 if hov else (22, 25, 38))), 255), rowr, border_radius=10)
         ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
         self.frects[cid] = rowr
         self.order.append(cid)
