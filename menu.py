@@ -2194,7 +2194,7 @@ class Menu(WizardMixin):
         add_lbl = "+ Ajuste"
         aw = max(96, self.fb.size(add_lbl)[0] + 26)
         br = pygame.Rect(x - aw, cy - 15, aw, 30)
-        widgets.button(s, self.fb, br, add_lbl, "primary", hover=self.hover == "lbar_add", radius=9, dy=1)
+        widgets.button(s, self.fb, br, add_lbl, "primary", hover=self.hover == "lbar_add", radius=6, dy=1)
         self.hits.append((br, "lbar_add", "btn", None))
         self.order.append("lbar_add")
         self.order_val.append(None)
@@ -2400,8 +2400,8 @@ class Menu(WizardMixin):
         pr = pygame.Rect(box.right - pw if cid.startswith("scm:") else box.x, y0, pw, h)
         self.popup_rect = pr.inflate(8, 8)
         self.hits.append((pygame.Rect(0, 0, self.W, self.surf.get_height()), "ddclose", "ddclose", None))
-        ui.rect(s, (*widgets.SURFACE2, 255), pr.inflate(4, 4), border_radius=11)
-        ui.rect(s, (*ACCENT2, 255), pr.inflate(4, 4), width=1, border_radius=11)
+        ui.rect(s, (*widgets.SURFACE2, 255), pr.inflate(4, 4), border_radius=6)
+        ui.rect(s, (*widgets.CTRL, 255), pr.inflate(4, 4), width=1, border_radius=6)
         cur = c.get(cid)
         for k, (lbl, val) in enumerate(opts):
             r = pygame.Rect(pr.x + 4, pr.y + 4 + k * ih, pr.w - 8, ih - 2)
@@ -2732,10 +2732,10 @@ class Menu(WizardMixin):
             hov = self.hover == cid and en
             armed = (cid == "quit" and self.quit_armed > time.perf_counter()) or (cid == "scenes_restore" and self.restore_armed > time.perf_counter())
             widgets.button(s, self.fb, br, btn, "primary" if (row.get("primary") and en) else "tone", hover=hov, armed=armed, enabled=en,
-                           tone=DANGER if row.get("danger") else SEL, radius=9, dy=1, tone_edge=bool(row.get("danger")))
+                           tone=DANGER if row.get("danger") else SEL, radius=6, dy=1, tone_edge=bool(row.get("danger")))
             self.hits.append((br, cid, "btn", None))
         elif kind == "dd":
-            box = pygame.Rect(R - 220, cy - 17, 220, 34)
+            box = pygame.Rect(R - 220, cy - 14, 220, 28)
             hov = self.hover == cid and en
             opn = self.dd_open == cid
             ui.rect(s, (*(HOVER_FILL if (hov or opn) else CTRL_FILL), 255), box, border_radius=6)
@@ -2750,7 +2750,7 @@ class Menu(WizardMixin):
         elif kind == "text":
             fr = pygame.Rect(R - 250, cy - 16, 250, 32)
             foc = self.text_focus == cid
-            ui.rect(s, (*widgets.SURFACE2, 255), fr, border_radius=8)
+            ui.rect(s, (*widgets.SURFACE2, 255), fr, border_radius=6)
             ui.rect(s, (*(FOCUS if foc else CTRL), 255), fr, width=2 if foc else 1, border_radius=8)
             txt = str(c[cid]) + ("|" if foc and int(time.perf_counter() * 2) % 2 == 0 else "")
             if not c[cid] and not foc and row.get("placeholder"):                  # an empty field says what it is for
