@@ -527,7 +527,7 @@ def auto_rows(kind):
                  ("auto_mv_inertia", "Inércia"))
         mode, val = "movement", MV_AUTO
     else:
-        return [dict(id="auto_cuts", kind="toggle", label="Trocar as cores na batida", help="O Automático muda as cores nos cortes e nas frases"),
+        return [dict(id="auto_cuts", kind="toggle", box=True, label="Trocar as cores na batida", help="O Automático muda as cores nos cortes e nas frases"),
                 dict(id="auto_vars", kind="toggle", label="Cor diferente por elemento", help="O Automático varia a cor de cada camada"),
                 dict(id="auto_shape", kind="toggle", label="Trocar as formas", help="Troca as formas na frase e nos drops")]
     return [dict(id=k, kind="toggle", label=lab, help=lambda c, k=k: "O Automático muda isto com a música" if c[k] else "Fica no valor que você escolheu",

@@ -198,6 +198,14 @@ class ControlWindow:
                 return None
             if self.menu.text_key(e):
                 return None
+            if e.key == pygame.K_F1:                                              # F1: the keys that matter, in the footer's toast
+                self.menu.say("Atalhos: Ctrl+Z desfaz · Ctrl+Shift+Z refaz · Ctrl+S salva · Ctrl+F procura")
+                self.force = True
+                return None
+            if e.key == pygame.K_z and getattr(e, "mod", 0) & pygame.KMOD_CTRL and getattr(e, "mod", 0) & pygame.KMOD_SHIFT:
+                self.menu.redo_last()                              # Ctrl+Shift+Z: Refazer
+                self.force = True
+                return None
             if e.key == pygame.K_z and getattr(e, "mod", 0) & pygame.KMOD_CTRL:
                 self.menu.undo_last()
                 return None
@@ -413,7 +421,7 @@ class ControlWindow:
             ui.rect(s, wg.LINE_STRONG, (tx, top, 5, ch), border_radius=3)
             ui.rect(s, wg.ACCENT2, (tx, ty, 5, th), border_radius=3)
         self._draw_scene_bar(px, py + mw.HEAD + mw.reserved)
-        if mw.tab == M.TAB_SCENES and mw.scene_view == "editor":                  # the status line at the foot of the editor: the frame times, as ScreenMaster's footer
+        if mw.tab >= 0:                                                            # the status line at the foot of every page: the frame times, as ScreenMaster's footer
             t = (status or {}).get("timing") or {}
             now_w, now_c = time.perf_counter(), time.process_time()
             if getattr(self, "_cpu_t", None) and now_w - self._cpu_t[0] >= 1.0:
@@ -431,7 +439,9 @@ class ControlWindow:
             ui.rect(s, (*wg.BG, 255), (0, fy, self.W, 26))
             ui.rect(s, (*wg.BORDER, 255), (0, fy, self.W, 1))
             parts = [q.strip() for q in line.split("   ·   ")]
-            x = 16
+            hint = "F1  atalhos"
+            self._t(self.fs, hint, (16, fy + 5), wg.DIM)
+            x = 16 + self.fs.size(hint)[0] + 22
             for k, part in enumerate(parts):
                 if k:
                     x += self._t(self.fs, "·", (x + 4, fy + 5), wg.DIM) + 14
@@ -692,7 +702,7 @@ class ControlWindow:
                 continue                                                          # nothing to discard: the button is not there
             w = max(74, self.fb.size(label)[0] + 26)
             br = pygame.Rect(right - w, row.centery - 15, w, 30)
-            wg.button(s, self.fb, br, label, "primary" if (primary and on) else "plain", hover=False, enabled=on, radius=9, dy=1)
+            wg.button(s, self.fb, br, label, "primary" if primary else "plain", hover=False, enabled=on, radius=9, dy=1)
             if on:
                 self.bar_hits.append((br, cid))
             right = br.x - 8
@@ -705,7 +715,7 @@ class ControlWindow:
         right = hit.x - 6
         bw = max(64, self.fb.size("‹ Galeria")[0] + 22)                           # back is navigation, not an action: first, on the left
         br = pygame.Rect(cx, row.centery - 15, bw, 30)
-        wg.button(s, self.fb, br, "‹ Galeria", "plain", hover=False, enabled=True, radius=9, dy=1)
+        wg.button(s, self.fb, br, "‹ Galeria", "quiet", hover=False, enabled=True, radius=9, dy=1)
         self.bar_hits.append((br, "scene_back"))
         nx = br.right + 14
         col, txt = mw.ed_status()

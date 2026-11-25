@@ -371,7 +371,7 @@ class DeckWindow:
         h = 82
         s.fill(wg.BG, pygame.Rect(0, 0, Wc, h + 12))
         self._card(pygame.Rect(0, 0, Wc, h))
-        self._t("xs", "PRONTO  ·  você já sabe o essencial" if all_done else "COMECE POR AQUI", (14, 9), wg.OK if all_done else wg.TITLE)
+        self._t("xs", "Pronto  ·  você já sabe o essencial" if all_done else "Comece por aqui", (14, 9), wg.OK if all_done else wg.TITLE)
         br = pygame.Rect(Wc - 14 - self.TOUR_BTN, 6, self.TOUR_BTN, 26)
         self._button(br, "Fechar" if all_done else "Pular", "tour:close")
         if not all_done:
@@ -524,9 +524,9 @@ class DeckWindow:
         self._t("l", "Não estou ouvindo nada", (x, r.y + 20), wg.TEXT)
         self._t("s", self._fit_text("s", "Toque uma música no computador: a imagem começa sozinha quando o som chegar.", w - 48), (x, r.y + 58), wg.DIM)
         src = str(cfg.get("adev_name") or "") or "O que toca no computador"
-        self._t("xs", "OUVINDO", (x, r.y + 94), wg.TITLE)
+        self._t("xs", "Ouvindo", (x, r.y + 94), wg.TITLE)
         self._t("s", self._fit_text("s", src, w - 140), (x + 80, r.y + 91), wg.TEXT)
-        self._t("xs", "ENTRADA", (x, r.y + 120), wg.TITLE)
+        self._t("xs", "Entrada", (x, r.y + 120), wg.TITLE)
         mr = pygame.Rect(x + 80, r.y + 122, w - 140, 8)
         ui.rect(s, wg.SURFACE2, mr, border_radius=4)
         lv = max(0.0, min(1.0, float(getattr(an, "level", 0.0)) * 4.0))
@@ -585,7 +585,7 @@ class DeckWindow:
             if self.next_cb is not None:
                 self.next_cb(s, tr, pend)
             x = tr.right + 16
-            self._t("xs", "A SEGUIR", (x, y + 14), wg.TITLE)
+            self._t("xs", "A seguir", (x, y + 14), wg.TITLE)
             self._t("m", self._fit_text("m", scn[pend]["scene_name"], W - x - 12), (x, y + 32), wg.TEXT)
             eta = info.get("pending_eta")
             when = ("entra agora", "entra no próximo compasso", "entra na próxima frase", "entra no próximo evento da música", "entra na próxima frase")[int(info.get("scene_when", 2)) % 5]
@@ -598,7 +598,7 @@ class DeckWindow:
         r = pygame.Rect(0, y, W, 58)
         ui.rect(s, wg.SURFACE, r, border_radius=12)
         ui.rect(s, wg.BORDER, r, width=1, border_radius=12)
-        self._t("xs", "A SEGUIR", (14, y + 10), wg.TITLE)
+        self._t("xs", "A seguir", (14, y + 10), wg.TITLE)
         if keys.get("auto"):
             when = ("a cada momento forte", "no próximo compasso", "na próxima frase", "no próximo evento da música", "no tempo marcado")[int(info.get("scene_when", 2)) % 5]
             txt = f"O Automático escolhe e troca {when}"
@@ -611,7 +611,7 @@ class DeckWindow:
         """Where the music is in its phrase, and what the analysis expects at its end (the scenes change at the end of a phrase)."""
         s = self.surf
         t_end, txt, drop = self.predict(an)
-        self._t("xs", "A MÚSICA  ·  FRASE", (0, y), wg.TITLE)
+        self._t("xs", "A música  ·  frase", (0, y), wg.TITLE)
         self._t("xs", txt, (W, y), wg.TEXT if drop else wg.DIM, "r")
         y += 20
         n = max(1, int(an.phrase_len))
@@ -647,7 +647,7 @@ class DeckWindow:
         # ---- the music now
         cardy = y
         y = cardy + 14
-        self._t("xs", "A MÚSICA AGORA", (14, y), wg.TITLE)
+        self._t("xs", "A música agora", (14, y), wg.TITLE)
         y += 22
         bpm_txt = f"{an.bpm:.0f}" if an.bpm > 0 and not silent else "--"
         flash = max(0.0, 1.0 - (time.perf_counter() - self.tap_t) / 0.25)
@@ -702,7 +702,7 @@ class DeckWindow:
         s = self.surf
         cfg = self.cfg or {}
         changed = (cfg.get("macro_energy", 100), cfg.get("macro_speed", 100), cfg.get("macro_pal", 0)) != (100, 100, 0)
-        self._t("xs", "PARA TODAS AS CENAS", (mx, cy), wg.TITLE)
+        self._t("xs", "Para todas as cenas", (mx, cy), wg.TITLE)
         if changed:
             rr = pygame.Rect(mx + mw_ - 132, cy - 6, 132, 24)
             wg.button(s, self.fonts["xs"], rr, "Voltar ao normal", "plain", hover=self.mouse is not None and rr.collidepoint(self.mouse), radius=8)
@@ -825,7 +825,7 @@ class DeckWindow:
             ht, hc = "Entendendo o ritmo da música…", wg.ACCENT2
         else:
             ht, hc = "Tudo certo", wg.OK
-        self._t("xs", "AO VIVO", (x0, 2), wg.TITLE)
+        self._t("xs", "Ao vivo", (x0, 2), wg.TITLE)
         ew = self.fonts["xs"].size("Editar esta cena")[0] + 20                  # the way into the editor of the scene that is on the air
         er = pygame.Rect(x0 + rw - ew, 0, ew, wg.MIN_H)
         wg.button(s, self.fonts["xs"], er, "Editar esta cena", "plain", hover=self.mouse is not None and er.collidepoint(self.mouse), radius=er.h // 2)
@@ -1150,7 +1150,7 @@ class DeckWindow:
         info = (status or {}).get("image") or {}
         card2 = pygame.Rect(0, iy, Wc, 86)
         self._card(card2)
-        self._t("xs", "IMAGEM AGORA", (14, iy + 9), wg.TITLE)
+        self._t("xs", "Imagem agora", (14, iy + 9), wg.TITLE)
         x, y = 14, iy + 30
         chips = [f"{info.get('scene', '--')} · {info.get('style', '--')}", f"Câmera {info.get('camera', '--')}", f"Movimento {info.get('movement', '--')}"]
         for txt in chips:
@@ -1250,7 +1250,7 @@ class DeckWindow:
     def _panel(self, r, title, right=""):
         ui.rect(self.surf, wg.SURFACE, r, border_radius=10)
         ui.rect(self.surf, wg.BORDER, r, width=1, border_radius=10)
-        self._t("xs", title, (r.x + 10, r.y + 7), wg.ACCENT2)
+        self._t("xs", title[:1] + title[1:].lower(), (r.x + 10, r.y + 7), wg.TITLE)
         if right:
             self._t("xs", right, (r.right - 10, r.y + 7), wg.DIM, "r")
 
@@ -1296,7 +1296,7 @@ class DeckWindow:
         s = self.surf
         silent = an.silence > 0.6
         self._card(pygame.Rect(0, 0, Wc, ch))
-        self._t("xs", "O QUE ESTOU OUVINDO", (14, 9), wg.TITLE)
+        self._t("xs", "O que estou ouvindo", (14, 9), wg.TITLE)
         self._t("xs", "estimativas  ·  o card congela com a linha do tempo" if self.frozen is not None else ("estimativas  ·  aceso = confiável" if self.ear_open else "toque para abrir"), (Wc - 38, 9), wg.DIM, "r")
         kx, ky = Wc - 22, 15                                                                 # the caret: open / closed
         pygame.draw.polygon(s, wg.TITLE, [(kx - 5, ky - 3), (kx + 5, ky - 3), (kx, ky + 3)] if self.ear_open else [(kx - 3, ky - 5), (kx - 3, ky + 5), (kx + 3, ky)])
@@ -1519,7 +1519,7 @@ class DeckWindow:
         Wc = s.get_width()
         gap, bh = 8, 46
         bw = (Wc - x0 - 3 * gap) // 4
-        self._t("xs", "ATALHOS DA IMAGEM", (x0, y), wg.TITLE)
+        self._t("xs", "Atalhos da imagem", (x0, y), wg.TITLE)
         for i, (key, cap, name, flag) in enumerate(self.KEYS):
             r = pygame.Rect(x0 + (i % 4) * (bw + gap), y + 22 + (i // 4) * (bh + gap), bw, bh)
             lit = bool(st.get(flag)) if flag else False

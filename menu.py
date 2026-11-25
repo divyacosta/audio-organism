@@ -1546,6 +1546,11 @@ class Menu(WizardMixin):
             return self.undo_last()
         if cid == "hd_redo":
             return self.redo_last()
+        if cid == "hd_agenda":
+            self.tab = self.cfg["ui_tab"] = TAB_SYS
+            self.cfg["sys_item"] = 2                                # the Automático page: the agenda's rules
+            self.touch()
+            return None
         if cid.startswith("tab"):
             if int(cid[3:]) == TAB_SCENES and self.tab == TAB_SCENES and self.scene_view != "gallery":
                 return self.back_to_gallery()                         # the Estúdio tab again: back to the gallery (in a narrow window)
@@ -2243,6 +2248,11 @@ class Menu(WizardMixin):
         nx = x0 + int((x1 - x0) * (now.tm_hour * 60 + now.tm_min) / 1440)
         ui.rect(s, (*SEL, 255), (nx - 1, y + 1, 2, 16))
         self._txt(self.f_s, time.strftime("%H:%M"), (x1, y + 1), SEL, "r")
+        strip = pygame.Rect(x0, y - 2, x1 - x0, 26)                       # the strip is a button: a click opens the agenda (Sistema > Automático)
+        self.hits.append((strip, "hd_agenda", "btn", None))
+        self.order.append("hd_agenda")
+        self.order_val.append(None)
+        self.frects["hd_agenda"] = strip
 
     def _lbar_row(self, row, y):
         """The toolbar over the list of effects (ScreenMaster's): move up, move down, duplicate and delete the selected effect, and the main action "+ Ajuste"."""
@@ -2616,6 +2626,8 @@ class Menu(WizardMixin):
                 tlen = max(90, int(tlen * 0.6))                         # a number that can follow the music: a shorter track, the ♪ button beside it
             return R - 56 - 14 - tlen - 12 - (self.MODW + 8 if self._modable(row) else 0)
         if kind == "toggle":
+            if row.get("box"):
+                return R - 22 - 12
             return R - 46 - self.f_s.size("Desligado")[0] - 20
         if kind == "action":
             btn = row["btn"](self.cfg) if callable(row["btn"]) else row["btn"]
@@ -2749,13 +2761,21 @@ class Menu(WizardMixin):
             self.hits.append((rowr, cid, "radio", row["value"]))
         elif kind == "toggle":
             on = row["get"](c) if "get" in row else c[cid]
-            pill = pygame.Rect(R - 46, cy - 13, 46, 26)
-            col = OK if on else widgets.FAINT
-            ui.rect(s, (*(col if en else dimmed(col)), 255), pill, border_radius=13)
-            kx = pill.right - 13 if on else pill.left + 13
-            ui.circle(s, widgets.BG if en else dimmed(widgets.BG, 0.6), (kx, pill.centery), 9)
-            self._txt(self.f_s, "Ligado" if on else "Desligado", (pill.left - 10, cy - 8), (OK if (on and en) else dc), "r")
-            self.hits.append((rowr, cid, "toggle", None))
+            if row.get("box"):                                       # a checkbox (ScreenMaster's CheckBox): a square, lime with a dark tick when on
+                box = pygame.Rect(R - 22, cy - 9, 18, 18)
+                ui.rect(s, (*(widgets.SEL if on else widgets.SURFACE2), 255), box, border_radius=4)
+                ui.rect(s, (*(widgets.SEL if on else widgets.CTRL), 255), box, width=1, border_radius=4)
+                if on:
+                    pygame.draw.lines(s, widgets.ON_SEL, False, [(box.x + 4, box.centery), (box.x + 8, box.centery + 4), (box.x + 14, box.centery - 4)], 2)
+                self.hits.append((rowr, cid, "toggle", None))
+            else:
+                pill = pygame.Rect(R - 46, cy - 13, 46, 26)
+                col = OK if on else widgets.FAINT
+                ui.rect(s, (*(col if en else dimmed(col)), 255), pill, border_radius=13)
+                kx = pill.right - 13 if on else pill.left + 13
+                ui.circle(s, widgets.BG if en else dimmed(widgets.BG, 0.6), (kx, pill.centery), 9)
+                self._txt(self.f_s, "Ligado" if on else "Desligado", (pill.left - 10, cy - 8), (OK if (on and en) else dc), "r")
+                self.hits.append((rowr, cid, "toggle", None))
         elif kind == "seg":
             widths = [max(56, self.f.size(l)[0] + 26) for l, _ in row["opts"]]
             x = R - sum(widths)
