@@ -2131,6 +2131,9 @@ class Menu(WizardMixin):
         cy = y + (self.ROW - 4) // 2
         sel = int(c.get("ly_sel", 0))
         n = len(c.get("layers") or [])
+        # the column's header (ScreenMaster's): a small caption, the big name of the layer, and the toolbar on the right
+        self._txt(self.f_s, row.get("help", ""), (22, y + 2), DIM)
+        self._txt(widgets.font("label", True), self._fit(widgets.font("label", True), row.get("label", ""), W // 2), (22, y + 16), TEXT)
         x = W - 22
         add_lbl = "+ Ajuste"
         aw = max(96, self.fb.size(add_lbl)[0] + 26)
@@ -2563,7 +2566,12 @@ class Menu(WizardMixin):
             return self._scene_row(row, y)
         if kind == "phead":                                                      # the title of the page: the effect's name big, what it is under it
             self._txt(widgets.font("lead", True), row["label"], (22, y + 4), TEXT)
-            self._txt(self.f_s, row["help"], (22, y + 30), DIM)
+            x = 22
+            if row.get("tag"):                                                   # "Tons · placa de vídeo": the category as a colour square, then the words, then the chip GPU
+                ui.rect(s, (*self.TAG_COLORS.get(row.get("group"), (60, 60, 90)), 255), (x, y + 33, 9, 9), border_radius=2)
+                x += 16
+                x += self._txt(self.f_s, row["tag"], (x, y + 30), DIM) + 14
+            self._txt(self.f_s, row["help"], (x, y + 30), DIM)
             return
         if kind == "note":
             lab = row["label"](c) if callable(row["label"]) else row["label"]

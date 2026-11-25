@@ -986,8 +986,10 @@ def scene_layout(cfg, view="gallery", wide=False):
             i = LY.first_of(cfg, slot)                                         # nothing of this slot selected: its top effect is the one shown
         if 0 <= i < len(ly) and LY.SLOT_OF.get(ly[i].get("t")) == slot:
             info = LY.TYPES.get(ly[i].get("t"), {})
-            right = [("", [dict(id="phead", kind="phead", label=info.get("label", ""), help=info.get("help", ""))])] + right
-        left = left + [("EFEITOS  ·  " + SLOT_LIST_TITLE.get(slot, "").capitalize(), [dict(id="lbar", kind="lbar", label="", help="")] + LY.list_items(cfg, slot)
+            grp = {"fx": "Efeitos de lente e tom", "bg": "Fundo", "part": "Partículas"}.get(info.get("group"), "")
+            right = [("", [dict(id="phead", kind="phead", label=info.get("label", ""), help=info.get("help", ""), tag=grp, group=info.get("group"))])] + right
+        slot_name = next((n for k, n, _ in LY.SLOTS if k == slot), "")
+        left = left + [("", [dict(id="lbar", kind="lbar", label=slot_name, help="Efeitos")] + LY.list_items(cfg, slot)
                         + [dict(id="lhint", kind="note", label="A ordem de cima para baixo é a ordem de aplicação", help="")])]
     cards = left + right
     return cards, ["L"] * len(left) + ["R"] * len(right)
