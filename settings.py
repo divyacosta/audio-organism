@@ -30,8 +30,8 @@ DEFAULTS = {"vsync": False, "fullscreen": False, "strobe": 2, "bursts": True, "b
             "sh_0": True, "sh_2": False, "sh_16": False, "sh_1": False, "sh_3": False, "sh_4": False, "sh_15": False, "sh_9": False, "sh_10": False, "sh_14": False, "sh_5": False, "sh_6": False, "sh_7": False, "sh_8": False, "sh_17": False, "sh_11": False, "sh_12": False, "sh_13": False, "sh_18": False,
             # graphics (see PRESETS): render scale %, ray steps, ray-traced shadow / reflection / occlusion quality, lighting mode,
             # bloom levels, edge AA, panel density %, dynamic resolution and its FPS target
-            "preset": 1, "res": 80, "steps": 60, "bloomq": 2, "aa_mode": 1, "detail": 75,
-            "dynres": True, "fps_out": 60, "mblur": 90, "mblur_fps": 24, "auto_update": True,
+            "preset": 1, "res": 80, "steps": 60, "bloomq": 2, "aa_mode": 0, "detail": 75,
+            "dynres": True, "fps_out": 60, "mblur": 0, "mblur_fps": 24, "auto_update": True,
             # more performance options: sharpening, bloom resolution, ray distance, render rate, lowest dynamic scale, panel refresh, GPU choice
             "img_style": 0, "img_pix": 6, "fx_glass": True, "fx_bloom": True, "fx_trail": True, "fx_parts": True, "fx_mblur": True, "scr_aspect": 0, "scr_zoom": 100, "scr_mirror": 0, "scr_vig": 0, "fin_bright": 100, "fin_contrast": 100, "fin_sat": 100, "fin_gamma": 100, "fin_temp": 2, "fin_dither": False, "safe_flash": 0, "safe_motion": 0,
             "sharp": 0, "bloomres": 0, "dist": 1, "rrate": 0, "dynmin": 40, "gpu": 0, "panel_view": 2, "abuf": 1024, "adev": "", "monitor": 0, "react_bass": 100, "react_mid": 100, "react_high": 100, "expo": 100, "scene_weight": 1, "fl_mode": 0, "fl_drop": 2, "fl_roll": True, "fl_len": 1, "fl_start": 1}
@@ -55,9 +55,9 @@ FIN_KEYS = ("img_style", "img_pix", "fx_glass", "fx_bloom", "fx_trail", "fx_part
 GFX_KEYS = ("res", "steps", "bloomq", "aa_mode", "detail", "mblur", "mblur_fps", "sharp", "bloomres", "dist")
 PRESETS = [
     ("Baixo",  dict(res=60,  steps=48,  bloomq=1, aa_mode=0, detail=55,  mblur=0, mblur_fps=24, sharp=1, bloomres=1, dist=0)),
-    ("Médio",  dict(res=80,  steps=60,  bloomq=2, aa_mode=1, detail=75,  mblur=90, mblur_fps=24, sharp=0, bloomres=0, dist=1)),
-    ("Alto",   dict(res=100, steps=72,  bloomq=3, aa_mode=3, detail=100, mblur=180, mblur_fps=24, sharp=0, bloomres=0, dist=1)),
-    ("Ultra",  dict(res=100, steps=110, bloomq=4, aa_mode=4, detail=100, mblur=270, mblur_fps=24, sharp=0, bloomres=0, dist=2)),
+    ("Médio",  dict(res=80,  steps=60,  bloomq=2, aa_mode=0, detail=75,  mblur=0, mblur_fps=24, sharp=0, bloomres=0, dist=1)),
+    ("Alto",   dict(res=100, steps=72,  bloomq=3, aa_mode=0, detail=100, mblur=0, mblur_fps=24, sharp=0, bloomres=0, dist=1)),
+    ("Ultra",  dict(res=100, steps=110, bloomq=4, aa_mode=0, detail=100, mblur=0, mblur_fps=24, sharp=0, bloomres=0, dist=2)),
 ]
 CUSTOM = len(PRESETS)
 
@@ -273,7 +273,7 @@ GRAPHICS = [
     ("DESEMPENHO", [
         dict(id="res", kind="slider", label="Nitidez da imagem", lo=25, hi=100, step=5, unit="%",
              help="Menos nitidez, mais fluida"),
-        dict(id="fps_out", kind="seg", label="Fluidez (FPS)", opts=FPS_OPTS,
+        dict(id="fps_out", kind="slider", label="Fluidez (FPS)", lo=24, hi=240, step=6, unit=" fps",
              help=lambda c: "O que o programa tenta manter" + (" · limitada pelo monitor" if c["vsync"] else "")),
         dict(id="dynres", kind="toggle", label="Ajuste automático de nitidez",
              help="Se a imagem começar a travar, o programa reduz a nitidez sozinho"),
@@ -1211,10 +1211,9 @@ def color_rows(cfg):
 
 GFX_CARDS = [_card("ATALHO DE QUALIDADE", "preset"), _card("NITIDEZ E FLUIDEZ", "res", "dynres", "fps_out", "dynmin", "rrate"),
              _card("QUANTIDADE DE DETALHES", "detail", "steps", "dist"), _card("BRILHO", "bloomq", "bloomres"),
-             _card("BORRÃO DE MOVIMENTO", "mblur", "mblur_fps"), _card("SUAVIZAÇÃO", "aa_mode", "sharp"),
+             _card("NITIDEZ", "sharp"),
              _card("EFEITOS PESADOS", "fx_glass", "fx_bloom", "fx_trail", "fx_parts", "fx_mblur", "fx_none")]
-OUT_CARDS = [_card("CONFORTO", "safe_flash", "safe_motion"),
-             ("ACABAMENTO", [dict(id="goto:acab", kind="action", label="Estilo, cor final e vinheta ficam em cada cena", btn="Abrir no Estúdio", help="Estúdio > Acabamento")])]
+OUT_CARDS = []                                   # the comfort limits and the finish live in each scene now (Estúdio), not in the system page
 SCREEN_CARD = _card("FORMATO", "scr_aspect", "scr_zoom", "scr_mirror")
 TABS = [
     ("Palco", []),

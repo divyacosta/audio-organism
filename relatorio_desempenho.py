@@ -21,16 +21,17 @@ def main():
     exe = args[args.index("--exe") + 1] if "--exe" in args else None
     extra = ["--backend", args[args.index("--backend") + 1]] if "--backend" in args else []
     cmd = ([exe] if exe else [sys.executable, os.path.join(HERE, "app.py")]) + extra
+    preset = int(args[args.index("--preset") + 1]) if "--preset" in args else 3          # 0 Baixo, 1 Médio, 2 Alto, 3 Ultra
     t0 = time.time()
 
     def run(label, fps=None, profile=False):
         tmp = os.path.join(tempfile.mkdtemp(prefix="ao_rep_"), "r.json")
-        env = dict(os.environ, VIS_REPORT=tmp, VIS_SYNTH="1")
+        env = dict(os.environ, VIS_REPORT=tmp, VIS_SYNTH="1", VIS_REPORT_PRESET=str(preset))
         if fps:
             env["VIS_REPORT_FPS"] = str(fps)
         if profile:
             env["VIS_REPORT_PROF"] = "1"
-        print(f"medindo em qualidade Ultra, {label} (cerca de 35 s)...", flush=True)
+        print(f"medindo na predefinição {preset}, {label} (cerca de 35 s)...", flush=True)
         try:
             subprocess.run(cmd, env=env, cwd=HERE, timeout=240)
         except subprocess.TimeoutExpired:
@@ -47,7 +48,7 @@ def main():
     profiled = run("com o profiler por função", 1000, profile=True)
     os.makedirs(os.path.join(HERE, "relatorios"), exist_ok=True)
     stamp = time.strftime("%Y-%m-%d_%H%M")
-    tag = ("_" + extra[1]) if extra else ""
+    tag = (("_" + extra[1]) if extra else "") + f"_p{preset}"
     with open(os.path.join(HERE, "relatorios", stamp + tag + ".json"), "w", encoding="utf-8") as f:
         json.dump(r, f, ensure_ascii=False, indent=1)
     md = report.markdown(r, capped, profiled)

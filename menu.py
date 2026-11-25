@@ -330,9 +330,7 @@ class Menu(WizardMixin):
         """The strip with the picture under the tab bar: "draft" (the scene being edited), "live" (the picture on the air, in Sistema > Imagem) or None."""
         if self.tab == TAB_SCENES and self.scene_view == "editor" and self.draft is not None:
             return "draft"
-        if self.tab == TAB_SYS and int(self.cfg.get("sys_item", 0)) == SYS_IMAGE:
-            return "live"
-        return None
+        return None                                          # Sistema > Imagem has no picture strip any more
 
     def workspace(self):
         """The Estúdio that is only an editor (the scene chosen in a list beside it). Not any more: every width starts on the gallery, and the editor has the
@@ -2082,7 +2080,7 @@ class Menu(WizardMixin):
         if self.kbd and self.order:
             fr = self.frects.get(self.order[self.focus % len(self.order)])
             if fr is not None:
-                ui.rect(s, (*FOCUS, 255), fr.inflate(6, 6), width=2, border_radius=12)
+                ui.rect(s, (*FOCUS, 255), fr.inflate(-4, -4), width=2, border_radius=max(4, min(12, fr.h // 2 - 4)))
         return True
 
     TAG_COLORS = {"fx": (24, 95, 165), "bg": (15, 110, 86), "part": (153, 60, 29), "vis": (83, 74, 183), "beh": (80, 86, 110), "sc": (80, 86, 110)}

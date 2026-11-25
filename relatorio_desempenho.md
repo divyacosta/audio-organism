@@ -1,6 +1,6 @@
 # Relatório de desempenho — qualidade Ultra
 
-Gerado em 2026-11-25 07:22:56  ·  20.01 s medidos depois do aquecimento  ·  2263 quadros  ·  **sem limite de FPS**, para mostrar do que o programa é capaz
+Gerado em 2026-11-25 07:41:51  ·  20.0 s medidos depois do aquecimento  ·  2776 quadros  ·  **sem limite de FPS**, para mostrar do que o programa é capaz
 
 ## O que roda
 
@@ -10,88 +10,88 @@ Gerado em 2026-11-25 07:22:56  ·  20.01 s medidos depois do aquecimento  ·  22
 
 ## Quanto custa cada parte de um quadro, e cada subparte
 
-Um quadro leva em média **8.85 ms** (113.1 fps). Cada subparte é um cronômetro dentro do programa; a soma delas fecha o quadro.
+Um quadro leva em média **7.21 ms** (138.7 fps). Cada subparte é um cronômetro dentro do programa; a soma delas fecha o quadro.
 
 | Parte / subparte | ms por quadro | % do quadro | % da parte |
 |---|---:|---:|---:|
-| **Desenho da imagem** | **5.56** | **63%** | |
-| &nbsp;&nbsp;&nbsp;obter a imagem da janela (aqui o programa espera a placa liberar o quadro) | 3.91 | 44.2% | 70% |
-| &nbsp;&nbsp;&nbsp;fechar e enviar os comandos (submit) | 0.55 | 6.3% | 10% |
-| &nbsp;&nbsp;&nbsp;entregar o quadro (swap e espera pela placa) | 0.23 | 2.6% | 4% |
-| &nbsp;&nbsp;&nbsp;enviar parâmetros (buffers) | 0.20 | 2.2% | 4% |
-| &nbsp;&nbsp;&nbsp;brilho (bloom) | 0.20 | 2.2% | 4% |
-| &nbsp;&nbsp;&nbsp;composição, efeitos de tela, FXAA e cópia da prévia | 0.19 | 2.1% | 3% |
-| &nbsp;&nbsp;&nbsp;passe da cena (raymarching ou gerador) | 0.07 | 0.8% | 1% |
-| &nbsp;&nbsp;&nbsp;rastro (feedback) | 0.06 | 0.6% | 1% |
-| &nbsp;&nbsp;&nbsp;leitura da prévia (volta da placa) | 0.05 | 0.6% | 1% |
-| &nbsp;&nbsp;&nbsp;borrão de movimento (acúmulo) | 0.05 | 0.6% | 1% |
-| &nbsp;&nbsp;&nbsp;pilha de efeitos (plano do quadro) | 0.03 | 0.3% | 1% |
-| &nbsp;&nbsp;&nbsp;suavização temporal (TAA) | 0.02 | 0.2% | 0% |
+| **Desenho da imagem** | **4.36** | **60%** | |
+| &nbsp;&nbsp;&nbsp;obter a imagem da janela (aqui o programa espera a placa liberar o quadro) | 2.75 | 38.2% | 63% |
+| &nbsp;&nbsp;&nbsp;fechar e enviar os comandos (submit) | 0.53 | 7.3% | 12% |
+| &nbsp;&nbsp;&nbsp;entregar o quadro (swap e espera pela placa) | 0.22 | 3.0% | 5% |
+| &nbsp;&nbsp;&nbsp;brilho (bloom) | 0.20 | 2.8% | 5% |
+| &nbsp;&nbsp;&nbsp;composição, efeitos de tela, FXAA e cópia da prévia | 0.19 | 2.6% | 4% |
+| &nbsp;&nbsp;&nbsp;enviar parâmetros (buffers) | 0.19 | 2.6% | 4% |
+| &nbsp;&nbsp;&nbsp;passe da cena (raymarching ou gerador) | 0.07 | 0.9% | 2% |
+| &nbsp;&nbsp;&nbsp;rastro (feedback) | 0.06 | 0.8% | 1% |
+| &nbsp;&nbsp;&nbsp;leitura da prévia (volta da placa) | 0.05 | 0.7% | 1% |
+| &nbsp;&nbsp;&nbsp;borrão de movimento (acúmulo) | 0.05 | 0.7% | 1% |
+| &nbsp;&nbsp;&nbsp;pilha de efeitos (plano do quadro) | 0.03 | 0.4% | 1% |
+| &nbsp;&nbsp;&nbsp;suavização temporal (TAA) | 0.02 | 0.3% | 0% |
 | &nbsp;&nbsp;&nbsp;partículas | 0.00 | 0.0% | 0% |
 | &nbsp;&nbsp;&nbsp;texto na tela (OSD) | 0.00 | 0.0% | 0% |
-| **Painel de controles e miniaturas** | **1.77** | **20%** | |
-| &nbsp;&nbsp;&nbsp;enviar a imagem do painel à janela (textura) | 0.59 | 6.7% | 34% |
-| &nbsp;&nbsp;&nbsp;apresentar a janela do painel | 0.29 | 3.3% | 17% |
-| &nbsp;&nbsp;&nbsp;Palco, galeria, rolagem e avisos (resto do desenho) | 0.29 | 3.3% | 16% |
-| &nbsp;&nbsp;&nbsp;conteúdo e rolagem (cópia para a janela) | 0.23 | 2.6% | 13% |
-| &nbsp;&nbsp;&nbsp;painel: desenhar linhas e cartões (menu.render) | 0.20 | 2.3% | 11% |
-| &nbsp;&nbsp;&nbsp;faixa de cima (prévia e botões) | 0.16 | 1.8% | 9% |
+| **Painel de controles e miniaturas** | **1.50** | **21%** | |
+| &nbsp;&nbsp;&nbsp;enviar a imagem do painel à janela (textura) | 0.48 | 6.7% | 32% |
+| &nbsp;&nbsp;&nbsp;Palco, galeria, rolagem e avisos (resto do desenho) | 0.24 | 3.4% | 16% |
+| &nbsp;&nbsp;&nbsp;apresentar a janela do painel | 0.24 | 3.3% | 16% |
+| &nbsp;&nbsp;&nbsp;painel: desenhar linhas e cartões (menu.render) | 0.21 | 2.9% | 14% |
+| &nbsp;&nbsp;&nbsp;conteúdo e rolagem (cópia para a janela) | 0.19 | 2.6% | 13% |
+| &nbsp;&nbsp;&nbsp;faixa de cima (prévia e botões) | 0.14 | 1.9% | 9% |
 | &nbsp;&nbsp;&nbsp;miniaturas das cenas (thumbs.feed) | 0.00 | 0.0% | 0% |
-| **Análise do som** | **1.00** | **11%** | |
-| &nbsp;&nbsp;&nbsp;análise (FFT, bandas, batida, estados da música) | 0.58 | 6.6% | 58% |
-| &nbsp;&nbsp;&nbsp;entrada (captura ou sinal de teste) e troca de dispositivo | 0.42 | 4.7% | 42% |
-| **Diretor e parâmetros** | **0.13** | **1%** | |
-| &nbsp;&nbsp;&nbsp;diretor (escolha de cena, câmera, movimento, parâmetros) | 0.12 | 1.4% | 93% |
+| **Análise do som** | **0.88** | **12%** | |
+| &nbsp;&nbsp;&nbsp;análise (FFT, bandas, batida, estados da música) | 0.52 | 7.3% | 60% |
+| &nbsp;&nbsp;&nbsp;entrada (captura ou sinal de teste) e troca de dispositivo | 0.35 | 4.9% | 40% |
+| **Diretor e parâmetros** | **0.13** | **2%** | |
+| &nbsp;&nbsp;&nbsp;diretor (escolha de cena, câmera, movimento, parâmetros) | 0.12 | 1.7% | 93% |
 | &nbsp;&nbsp;&nbsp;look: tipo de shader, cores e sala | 0.01 | 0.1% | 4% |
-| &nbsp;&nbsp;&nbsp;ligar o som aos parâmetros e ao flash | 0.00 | 0.0% | 3% |
-| **Resto do laço** | **0.12** | **1%** | |
-| &nbsp;&nbsp;&nbsp;prévia, estado e salvar configurações | 0.07 | 0.7% | 56% |
-| &nbsp;&nbsp;&nbsp;eventos, atalhos, comandos remotos e painel web | 0.03 | 0.3% | 22% |
-| &nbsp;&nbsp;&nbsp;fim do quadro | 0.02 | 0.2% | 17% |
+| &nbsp;&nbsp;&nbsp;ligar o som aos parâmetros e ao flash | 0.00 | 0.1% | 3% |
+| **Resto do laço** | **0.11** | **2%** | |
+| &nbsp;&nbsp;&nbsp;prévia, estado e salvar configurações | 0.06 | 0.9% | 57% |
+| &nbsp;&nbsp;&nbsp;eventos, atalhos, comandos remotos e painel web | 0.02 | 0.3% | 21% |
+| &nbsp;&nbsp;&nbsp;fim do quadro | 0.02 | 0.3% | 18% |
 | &nbsp;&nbsp;&nbsp;gestos de drop e checagens | 0.00 | 0.0% | 2% |
-| &nbsp;&nbsp;&nbsp;preparar o quadro | 0.00 | 0.0% | 2% |
 | &nbsp;&nbsp;&nbsp;limitador de FPS (espera para chegar à meta) | 0.00 | 0.0% | 1% |
-| *Não coberto por nenhum cronômetro* | 0.28 | 3.1% | |
+| &nbsp;&nbsp;&nbsp;preparar o quadro | 0.00 | 0.0% | 1% |
+| *Não coberto por nenhum cronômetro* | 0.23 | 3.3% | |
 
-Com o limite de 60 fps do programa ligado: **55.1 fps** em média, 1% mais lento 36.9 fps, e 41.6% de um núcleo (o limitador dorme entre os quadros).
+Com o limite de 60 fps do programa ligado: **51.9 fps** em média, 1% mais lento 33.0 fps, e 39.2% de um núcleo (o limitador dorme entre os quadros).
 
 ## Como os quadros saem
 
-- **Média:** 113.1 fps
-- **1% mais lento:** 49.4 fps (quadro de 20.25 ms)
-- **Pior quadro:** 36.5 ms
+- **Média:** 138.7 fps
+- **1% mais lento:** 35.8 fps (quadro de 27.96 ms)
+- **Pior quadro:** 32.7 ms
 
 ## O que o programa consome
 
-- **Processador:** 57.9% de um núcleo (soma de todas as threads do programa; 100% = um núcleo inteiro)
-- **Memória:** 413 MB em uso, pico de 417 MB
+- **Processador:** 63.2% de um núcleo (soma de todas as threads do programa; 100% = um núcleo inteiro)
+- **Memória:** 414 MB em uso, pico de 418 MB
 
 ## Por módulo e por função (com profiler)
 
-Medição com o `cProfile` ligado: os tempos saem inflados (o profiler também custa), então use as proporções, não os valores. Média de 72.7 fps nesta execução.
+Medição com o `cProfile` ligado: os tempos saem inflados (o profiler também custa), então use as proporções, não os valores. Média de 73.6 fps nesta execução.
 
 ### Tempo próprio por módulo
 
 | Módulo | ms por quadro |
 |---|---:|
-| wgpu | 6.31 |
-| Python (embutido) | 2.55 |
-| control.py | 1.48 |
-| menu.py | 0.83 |
-| numpy | 0.74 |
+| wgpu | 5.86 |
+| Python (embutido) | 2.74 |
+| control.py | 1.40 |
+| menu.py | 0.86 |
+| numpy | 0.79 |
 | analysis.py | 0.41 |
-| neon_director.py | 0.27 |
-| renderer.py | 0.25 |
-| widgets.py | 0.22 |
-| Python (biblioteca padrão) | 0.22 |
+| neon_director.py | 0.28 |
+| renderer.py | 0.26 |
+| widgets.py | 0.23 |
+| Python (biblioteca padrão) | 0.23 |
 | cffi | 0.11 |
 | ear.py | 0.10 |
 | ui.py | 0.08 |
+| i18n.py | 0.04 |
 | fxstack.py | 0.04 |
-| i18n.py | 0.03 |
 | glfw | 0.03 |
 | rendercanvas | 0.03 |
-| prof.py | 0.02 |
+| prof.py | 0.03 |
 | app.py | 0.01 |
 | look.py | 0.01 |
 
@@ -99,31 +99,31 @@ Medição com o `cProfile` ligado: os tempos saem inflados (o profiler também c
 
 | Função | Onde | Módulo | Chamadas por quadro | ms por quadro |
 |---|---|---|---:|---:|
-| `proxy_func` | _helpers.py:352 | wgpu | 150.9 | 5.334 |
-| `update` | control.py:1259 | control.py | 1.0 | 1.407 |
-| `<function TFont.size at 0x000001BFBDDC0EB0>` |  | Python (embutido) | 446.33 | 0.471 |
-| `<method 'blit' of 'pygame.surface.Surface' objects>` |  | Python (embutido) | 43.35 | 0.339 |
-| `_rows_h` | menu.py:227 | menu.py | 120.23 | 0.268 |
-| `<method 'get' of 'dict' objects>` |  | Python (embutido) | 1838.68 | 0.218 |
-| `size` | widgets.py:89 | widgets.py | 446.33 | 0.211 |
-| `<genexpr>` | menu.py:2334 | menu.py | 543.13 | 0.193 |
-| `_new_struct_p` | _api.py:121 | wgpu | 75.32 | 0.188 |
-| `chunk` | analysis.py:844 | analysis.py | 1.0 | 0.181 |
-| `<built-in method time.sleep>` |  | Python (embutido) | 0.14 | 0.153 |
-| `_stacked` | menu.py:255 | menu.py | 317.57 | 0.111 |
-| `_var` | _methods.py:148 | numpy | 15.48 | 0.107 |
-| `capture` | _helpers.py:270 | wgpu | 150.9 | 0.104 |
-| `<built-in method builtins.sum>` |  | Python (embutido) | 108.69 | 0.104 |
-| `_draw` | renderer.py:522 | renderer.py | 1.0 | 0.103 |
-| `_mean` | _methods.py:115 | numpy | 43.88 | 0.102 |
-| `_hop` | analysis.py:342 | analysis.py | 1.29 | 0.095 |
-| `<built-in method builtins.isinstance>` |  | Python (embutido) | 798.03 | 0.090 |
+| `proxy_func` | _helpers.py:352 | wgpu | 150.9 | 4.843 |
+| `update` | control.py:1259 | control.py | 1.0 | 1.326 |
+| `<function TFont.size at 0x000001EF32B20EB0>` |  | Python (embutido) | 446.53 | 0.485 |
+| `<method 'blit' of 'pygame.surface.Surface' objects>` |  | Python (embutido) | 41.97 | 0.339 |
+| `_rows_h` | menu.py:227 | menu.py | 120.47 | 0.280 |
+| `<method 'get' of 'dict' objects>` |  | Python (embutido) | 1840.83 | 0.232 |
+| `size` | widgets.py:89 | widgets.py | 446.53 | 0.221 |
+| `<built-in method time.sleep>` |  | Python (embutido) | 0.13 | 0.217 |
+| `<genexpr>` | menu.py:2334 | menu.py | 543.83 | 0.202 |
+| `_new_struct_p` | _api.py:121 | wgpu | 75.33 | 0.197 |
+| `chunk` | analysis.py:844 | analysis.py | 1.0 | 0.183 |
+| `_stacked` | menu.py:255 | menu.py | 318.03 | 0.116 |
+| `_var` | _methods.py:148 | numpy | 15.46 | 0.112 |
+| `<built-in method builtins.sum>` |  | Python (embutido) | 108.43 | 0.111 |
+| `_draw` | renderer.py:522 | renderer.py | 1.0 | 0.109 |
+| `capture` | _helpers.py:270 | wgpu | 150.9 | 0.109 |
+| `_mean` | _methods.py:115 | numpy | 44.06 | 0.106 |
+| `_hop` | analysis.py:342 | analysis.py | 1.27 | 0.097 |
+| `<built-in method builtins.isinstance>` |  | Python (embutido) | 799.12 | 0.094 |
 | `<built-in method pygame.transform.smoothscale>` |  | Python (embutido) | 0.61 | 0.085 |
-| `<built-in method builtins.max>` |  | Python (embutido) | 815.67 | 0.081 |
-| `base` | neon_director.py:216 | neon_director.py | 157.95 | 0.072 |
-| `<built-in method pygame.draw.rect>` |  | Python (embutido) | 33.82 | 0.072 |
-| `<method 'reduce' of 'numpy.ufunc' objects>` |  | Python (embutido) | 85.54 | 0.071 |
-| `_ctl_left` | menu.py:2331 | menu.py | 104.13 | 0.070 |
+| `<built-in method builtins.max>` |  | Python (embutido) | 813.63 | 0.083 |
+| `select` | selectors.py:310 | Python (biblioteca padrão) | 0.03 | 0.080 |
+| `lstsq` | _linalg.py:2417 | numpy | 3.73 | 0.076 |
+| `<method 'reduce' of 'numpy.ufunc' objects>` |  | Python (embutido) | 85.91 | 0.075 |
+| `_ctl_left` | menu.py:2331 | menu.py | 104.19 | 0.074 |
 
 ## Como ler
 

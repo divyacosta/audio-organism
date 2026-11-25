@@ -647,7 +647,7 @@ def test_custom():
     m.tab = menu.TAB_SYS
     m.set_value("sys_item", 0)
     ids = lambda: {r["id"] for _, rs in menu.TABS[menu.TAB_SYS][1] for r in rs}
-    opts = {"res", "steps", "bloomq", "aa_mode", "mblur", "sharp"}
+    opts = {"res", "steps", "bloomq", "sharp"}
     check("simple mode with a shortcut: the shortcut and the measure, no options", "preset" in ids() and "bench" in ids() and not (opts & ids()), sorted(ids())[:6])
     before = {k: cfg[k] for k in menu.GFX_KEYS}
     m.set_value("preset", menu.CUSTOM)
@@ -992,7 +992,7 @@ def test_review():
     cfg = menu.fresh()
     ids0 = [r["id"] for _, rs in menu.sys_cards(cfg, 0) for r in rs]
     ids5 = [r["id"] for _, rs in menu.sys_cards(cfg, 5) for r in rs]
-    check("Sistema > Imagem shows the comfort card without Personalizado and says where the Acabamento went; the format is on the Tela page", cfg["preset"] != menu.CUSTOM and all(i in ids0 for i in ("safe_flash", "goto:acab")) and not any(i in ids0 for i in ("img_style", "fin_bright", "scr_vig", "scr_aspect")) and "scr_aspect" in ids5 and "monitor" in ids5)
+    check("Sistema > Imagem has no comfort, finish, motion blur or smoothing cards (they are in each scene, or gone)", not any(i in ids0 for i in ("safe_flash", "safe_motion", "goto:acab", "mblur", "aa_mode")), sorted(ids0)[:8])
     cards, cols = menu.sys_layout(cfg, 0, True)
     check("leaving the program is under the pages of Sistema (wide)", any(r["id"] == "quit" for (_, rs), col in zip(cards, cols) if col == "L" for r in rs))
     check("... and only there", sum(r["id"] == "quit" for _, rs in menu.sys_layout(cfg, 4, True)[0] for r in rs) == 1)
@@ -1823,7 +1823,7 @@ def test_responsive():
     cfg["sys_item"] = 0
     m.rebuild_scenes()
     check("the page Imagem has the quality cards, the measure and the restore", {"res", "bench", "reset"} <= {r["id"] for _, rs in menu.TABS[menu.TAB_SYS][1] for r in rs})
-    check("the picture of the air is the strip of the page Imagem", m.pv_mode() == "live")
+    check("Sistema > Imagem has no picture strip any more (the picture is on the Palco and the Estúdio)", m.pv_mode() is None)
     m.tab = menu.TAB_SCENES
     check("and the draft is the strip of the Estúdio", m.pv_mode() == "draft")
     # narrow again: the same editor goes back to one column with pages
