@@ -490,8 +490,8 @@ class ControlWindow:
             name = sc.get("scene_name", "?")
             self._t(wg.font("label"), wg.fit(wg.font("label"), name, r.w - 70), (r.x + 12, r.y + 8), wg.TEXT if cur else wg.DIM)
             self._t(wg.font("small"), wg.fit(wg.font("small"), M.settings.scene_sub(cfg, sc), r.w - 24), (r.x + 12, r.y + 30), wg.DIM)
-            if i == getattr(self, "live_scene", -1):
-                self._pill(pygame.Rect(r.right - 60, r.y + 8, 52, 18), "NO AR", wg.ACCENT, wg.ON_ACCENT)
+            if i == getattr(self, "live_scene", -1):                                  # "agora": the scene on the air, as text in the theme colour (ScreenMaster)
+                self._t(wg.font("small"), "agora", (r.right - 10, r.y + 8), wg.SEL, "r")
             if top <= r.y and r.bottom <= y + h:
                 self.side_hits.append((r, i))
             yy += 62

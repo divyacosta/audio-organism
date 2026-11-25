@@ -2033,10 +2033,12 @@ class Menu(WizardMixin):
             tw = min(220, (W - adv_w - 6 - 6 * (len(TABS) - 1)) // len(TABS))          # the tabs do not stretch across a wide window
             r = pygame.Rect(x, 0, tw, 36)
             sel, hov = i == self.tab, self.hover == cid
-            ui.rect(s, (*(SEL if sel else (SURFACE2 if hov else SURFACE)), 255), r, border_radius=10)   # the chosen tab is blue like every choice: red is for what is on the air and for leaving
-            if not sel:
-                ui.rect(s, (*BORDER, 255), r, width=1, border_radius=10)
-            self._txt(self.ftab, name, (r.centerx, r.y + 9), ON_SEL if sel else TEXT, "c")
+            if sel:                                                                     # the open tab: bright text and a lime line under it, no box (ScreenMaster)
+                ui.rect(s, (*SEL, 255), pygame.Rect(r.x + 10, r.bottom - 3, r.w - 20, 3), border_radius=2)
+            elif hov:
+                ui.rect(s, (*SURFACE2, 255), r, border_radius=6)   # the chosen tab is blue like every choice: red is for what is on the air and for leaving
+            pass
+            self._txt(self.ftab, name, (r.centerx, r.y + 9), TEXT if sel else DIM, "c")      # the open tab is bright; the others dim (no box)
             self.hits.append((r, cid, "btn", None))
             self.order.append(cid)
             self.order_val.append(None)
@@ -2084,8 +2086,8 @@ class Menu(WizardMixin):
                 while j < len(plan) and plan[j]["grp"]:
                     j += 1
                 total = sum(q["h"] + q["gap"] for q in plan[i:j]) - plan[j - 1]["gap"]
-                ui.rect(self.surf, (*SURFACE, 255), (x0, y, wc, total), border_radius=14)
-                ui.rect(self.surf, (*BORDER, 255), (x0, y, wc, total), width=1, border_radius=14)
+                ui.rect(self.surf, (*SURFACE, 255), (x0, y, wc, total))                       # flat panels, with a hairline (ScreenMaster)
+                ui.rect(self.surf, (*BORDER, 255), (x0, y, wc, total), width=1)
                 y0 = y
                 for q in plan[i:j]:
                     if q["kid"]:
@@ -2432,8 +2434,8 @@ class Menu(WizardMixin):
         s = self.surf
         ch = self._card_h(rows, title, wc)
         if bg:
-            ui.rect(s, (*SURFACE, 255), (0, y, wc, ch), border_radius=14)
-            ui.rect(s, (*BORDER, 255), (0, y, wc, ch), width=1, border_radius=14)
+            ui.rect(s, (*SURFACE, 255), (0, y, wc, ch))
+            ui.rect(s, (*BORDER, 255), (0, y, wc, ch), width=1)
         if title:
             self._txt(self.f_sb, title, (18, y + 14), TITLE)
             self.card_marks.append((x0, y, ch, wc, title))
