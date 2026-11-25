@@ -1489,6 +1489,9 @@ class Menu(WizardMixin):
                 return self.back_to_gallery()                         # the Estúdio tab again: back to the gallery (in a narrow window)
             self.tab = self.cfg["ui_tab"] = max(0, min(int(cid[3:]), len(TABS) - 1))
             self.scroll = self.scroll2 = 0
+            if self.tab == TAB_SCENES and self.scene_view == "gallery" and self.cfg.get("scenes"):
+                # coming to the Estúdio from another tab: straight into the scene being edited (or the one on the air), not the gallery
+                self.open_scene(max(0, min(int(self.cfg.get("scene_edit", 0)), len(self.cfg["scenes"]) - 1)))
             self.rebuild_scenes()                                     # the wide Estúdio opens its editor
             self.need = True
             return None
