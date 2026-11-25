@@ -1570,6 +1570,18 @@ class Menu(WizardMixin):
             self.touch()
             self.say("Paletas de fábrica restauradas")
             return None
+        if cid.startswith("ag_"):                                                # the agenda: each click changes one rule (agenda.apply)
+            import agenda as AG
+            op, _, idx = cid.partition(":")
+            kind = op[3:]
+            if kind == "add":
+                AG.apply(self.cfg.setdefault("agenda", []), "add", 0)
+            elif kind != "none":
+                AG.apply(self.cfg.setdefault("agenda", []), {"time": "time", "scene": "scene", "days": "days", "on": "on", "del": "del"}[kind], int(idx or 0), scenes=len(self.cfg.get("scenes") or []))
+            self.touch()
+            self.rebuild_scenes()
+            self.need = True
+            return None
         if cid == "lreset":                                                       # the button at the foot of the page of the effect
             self.layer_action(("reset", int(self.cfg.get("ly_sel", 0))))
             return None

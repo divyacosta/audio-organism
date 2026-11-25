@@ -736,7 +736,7 @@ def test_chips():
     m.render()
     w1 = next(r.w for r, cid, kind, arg in m.hits if cid == "sc_auto:1")
     check("a very long name gets a pill of at most 200 px (the name is cut with an ellipsis)", w1 <= 200, w1)
-    check("the page of the Automático is much shorter than the list was", m.heights[menu.TAB_SYS] < 760, m.heights[menu.TAB_SYS])
+    check("the page of the Automático is shorter than the list was (the agenda adds its rows at the foot)", m.heights[menu.TAB_SYS] < 900, m.heights[menu.TAB_SYS])
 
 
 # ------------------------------------------------------------------ 6m. No idle demo

@@ -46,3 +46,46 @@ class Ticker:
             return []
         self.last = key
         return due(agenda, now)
+
+
+# ---- the edits of the agenda, as the page of Sistema does them (each one is a click)
+DAY_CHOICES = [[], [0, 1, 2, 3, 4], [5, 6], [0], [1], [2], [3], [4], [5], [6]]
+DAY_NAMES = {(): "Todos os dias", (0, 1, 2, 3, 4): "Dias úteis", (5, 6): "Fim de semana",
+             (0,): "Segunda", (1,): "Terça", (2,): "Quarta", (3,): "Quinta", (4,): "Sexta", (5,): "Sábado", (6,): "Domingo"}
+
+
+def day_label(rule):
+    return DAY_NAMES.get(tuple(rule.get("days") or []), "Dias escolhidos")
+
+
+def clock(rule):
+    m = parse_time(rule.get("time")) or 0
+    return f"{m // 60:02d}:{m % 60:02d}"
+
+
+def new_rule(scene=0):
+    return {"time": "09:00", "days": [], "scene": int(scene), "on": True}
+
+
+def apply(agenda, op, i, scenes=1):
+    """One click on the agenda: op is "time", "scene", "days", "on", "del" or "add". Returns the agenda (changed in place)."""
+    if op == "add":
+        agenda.append(new_rule())
+        return agenda
+    if not 0 <= i < len(agenda):
+        return agenda
+    rule = agenda[i]
+    if op == "time":
+        m = ((parse_time(rule.get("time")) or 0) + 30) % 1440
+        rule["time"] = f"{m // 60:02d}:{m % 60:02d}"
+    elif op == "scene":
+        rule["scene"] = (int(rule.get("scene", 0)) + 1) % max(1, scenes)
+    elif op == "days":
+        choices = [tuple(d) for d in DAY_CHOICES]
+        cur = choices.index(tuple(rule.get("days") or [])) if tuple(rule.get("days") or []) in choices else 0
+        rule["days"] = list(DAY_CHOICES[(cur + 1) % len(DAY_CHOICES)])
+    elif op == "on":
+        rule["on"] = not rule.get("on", True)
+    elif op == "del":
+        del agenda[i]
+    return agenda

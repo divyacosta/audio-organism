@@ -657,6 +657,24 @@ def search_cards(cfg):
     return cards
 
 
+def agenda_rows(cfg):
+    """The agenda: each rule is a small group of clicks (time, scene, days, on/off, delete), and a row to add one. A click changes the value."""
+    import agenda as AG
+    scn = cfg.get("scenes") or []
+    rows = []
+    for i, rule in enumerate(cfg.get("agenda") or []):
+        name = scn[int(rule.get("scene", 0))].get("scene_name", "?") if 0 <= int(rule.get("scene", 0)) < len(scn) else "?"
+        rows.append(dict(id=f"ag_time:{i}", kind="action", label=f"Regra {i + 1}  ·  horário", btn=AG.clock(rule), help="Um clique avança 30 minutos"))
+        rows.append(dict(id=f"ag_scene:{i}", kind="action", label="Cena", btn=name[:18], help="Um clique troca para a próxima cena"))
+        rows.append(dict(id=f"ag_days:{i}", kind="action", label="Dias", btn=AG.day_label(rule)[:18], help="Um clique troca o conjunto de dias"))
+        rows.append(dict(id=f"ag_on:{i}", kind="action", label="Regra", btn="Ligada" if rule.get("on", True) else "Desligada", help="Liga ou desliga esta regra"))
+        rows.append(dict(id=f"ag_del:{i}", kind="action", label="Apagar esta regra", btn="Apagar", danger=True, help="Tira a regra da agenda"))
+    rows.append(dict(id="ag_add", kind="action", label="Nova regra", btn="+ Adicionar", primary=True, help="A regra nova começa às 09:00, todos os dias, na cena 1"))
+    if not cfg.get("agenda"):
+        rows.insert(0, dict(id="ag_none", kind="note", label="Nenhuma regra ainda", help="Adicione uma para trocar a cena no horário marcado"))
+    return rows
+
+
 def sys_cards(cfg, k, devices=(), monitors=1, menu=None):
     """The cards of page k of Sistema (SYS_ITEMS). The audio devices and the monitors are asked of the system when the program opens, so the rows are built here;
     `menu` lends the live text, the version and the update button to the rows that show them."""
@@ -686,7 +704,7 @@ def sys_cards(cfg, k, devices=(), monitors=1, menu=None):
     if k == 2:
         musica = [dict(id="link_riser", kind="toggle", label="Perceber a subida antes do drop", help="Quando a música vai subindo, a imagem esquenta junto (strobe, câmera)"),
                   dict(id="link_vocal", kind="toggle", label="Voz acalma os flashes", help="Quando alguém está cantando, os flashes ficam mais fracos")]
-        return auto_cards(cfg) + [("A MÚSICA CONTROLA A CENA", musica)] + ([("O QUE O AUTOMÁTICO FAZ", ae_rows(cfg))] if adv else [])
+        return auto_cards(cfg) + [("A MÚSICA CONTROLA A CENA", musica), ("AGENDA", agenda_rows(cfg))] + ([("O QUE O AUTOMÁTICO FAZ", ae_rows(cfg))] if adv else [])
     if k == 3:
         perfis = [dict(id="profile", kind="seg", label="Perfil", opts=[("1", 1), ("2", 2), ("3", 3)],
                        help=lambda c: "Salvo" if os.path.exists(profile_path(c["profile"])) else "Vazio  ·  Salvar guarda tudo o que está configurado"),
