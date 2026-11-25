@@ -1494,8 +1494,8 @@ class DeckWindow:
             col = self.SECT_COL[(ord(lab) - 65) % len(self.SECT_COL)]
             ui.rect(s, col, (x0, sb.y + 2, x1 - x0 - 1, sb.h - 4), border_radius=4)
             if x1 - x0 > 16:
-                self._t("xs", lab, (x0 + 6, sb.y + 6), (255, 255, 255))
-        pygame.draw.line(s, (255, 255, 255), (sb.right - 1, sb.y - 2), (sb.right - 1, sb.bottom + 2), 2)
+                self._t("xs", lab, (x0 + 6, sb.y + 6), (255, 255, 255))   # the label on a coloured bar: white, as the bar is content
+        pygame.draw.line(s, wg.TEXT, (sb.right - 1, sb.y - 2), (sb.right - 1, sb.bottom + 2), 2)
         self._t("xs", "−2 min", (sb.x, sb.bottom + 4), wg.DIM)
         self._t("xs", "agora", (sb.right, sb.bottom + 4), wg.DIM, "r")
         txt = f"soa igual a {mmss_(ear.repeat_at)}" if ear.repeat_at is not None else ("parte nova" if ear.sect_now else "ouvindo…")
@@ -1524,7 +1524,7 @@ class DeckWindow:
             r = pygame.Rect(x0 + (i % 4) * (bw + gap), y + 22 + (i // 4) * (bh + gap), bw, bh)
             lit = bool(st.get(flag)) if flag else False
             hov = key is not None and self.mouse is not None and r.collidepoint(self.mouse)
-            ui.rect(s, (0x2E, 0x33, 0x24) if lit else (wg.HOVER_FILL if hov else wg.SURFACE2), r, border_radius=10)
+            ui.rect(s, wg.ACCENT_DIM if lit else (wg.HOVER_FILL if hov else wg.SURFACE2), r, border_radius=10)
             ui.rect(s, wg.SEL if lit else (wg.HOVER_EDGE if hov else wg.BORDER), r, width=1, border_radius=10)
             col = wg.SEL if lit else (wg.TEXT if (hov or key) else wg.DIM)
             img = self.fonts["sb"].render(cap, True, col)

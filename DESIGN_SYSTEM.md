@@ -36,7 +36,7 @@ Títulos de cartão: `TITLE` (= `DIM`), em frase normal (como as legendas do Scr
 
 ## Espaço e forma
 
-- Raio de cartão e controle: 6 a 10 px (botões 6–9, cartões 10–14).
+- Raio: 6 px em botões, linhas, cartões e miniaturas (como o ScreenMaster). Pílulas e interruptores são redondos.
 - Altura mínima de qualquer coisa que se clica: `MIN_H` = 24 px.
 - Hairline de 1 px (`BORDER`) para separar painéis; nunca linhas grossas.
 

@@ -224,11 +224,11 @@ class Menu(WizardMixin):
             fkey = f"{cid}#{val}"
             sel = c[cid] == val
             r = pygame.Rect(x, y + dy, tw, rh)
-            ui.rect(s, (*SURFACE2, 255), r, border_radius=10)
+            ui.rect(s, (*SURFACE2, 255), r, border_radius=6)
             tr = pygame.Rect(r.x + 4, r.y + 4, tw - 8, th)
-            ui.rect(s, (6, 7, 11, 255), tr, border_radius=8)
+            ui.rect(s, (*widgets.BG, 255), tr, border_radius=6)
             self.thumb_slots.append((tr, self._tile_scene(row)))
-            ui.rect(s, (*(SEL if sel else BORDER), 255), r, width=3 if sel else 1, border_radius=10)
+            ui.rect(s, (*(SEL if sel else BORDER), 255), r, width=3 if sel else 1, border_radius=6)
             self._txt(self.f_s, self._fit(self.f_s, row["label"], tw - 12), (r.x + 8, r.y + th + 11), TEXT if sel else DIM)
             self.frects[fkey] = r
             self.order.append(fkey)
@@ -2295,7 +2295,7 @@ class Menu(WizardMixin):
         master_on = bool(self.cfg.get("master_on", True))
         if W >= 900:                                                                 # Ajustes: the master switch (ScreenMaster's), off = the picture goes black
             mr = pygame.Rect(adv_r.x - strip_w, 6, 96, 24)
-            ui.rect(s, (*(SEL if master_on else widgets.FAINT), 255), pygame.Rect(mr.x, mr.y + 4, 36, 16), border_radius=8)
+            ui.rect(s, (*(SEL if master_on else widgets.FAINT), 255), pygame.Rect(mr.x, mr.y + 4, 36, 16), border_radius=6)
             ui.circle(s, (*widgets.BG, 255), (mr.x + 26 if master_on else mr.x + 10, mr.y + 12), 6)
             self._txt(self.ftab, "Ajustes", (mr.x + 44, mr.y + 2), TEXT if master_on else DIM)
             self.hits.append((mr, "master", "btn", None))
@@ -2321,10 +2321,10 @@ class Menu(WizardMixin):
         self._timeline(W, 44)
         on = bool(c.get("advanced", False))                                        # the switch of the advanced mode, on the right of the tab bar
         hv = self.hover == "advanced"
-        ui.rect(s, (*(SURFACE2 if hv else SURFACE), 255), adv_r, border_radius=10)
-        ui.rect(s, (*(ACCENT2 if on else CTRL), 255), adv_r, width=2 if on else 1, border_radius=10)
+        ui.rect(s, (*(SURFACE2 if hv else SURFACE), 255), adv_r, border_radius=6)
+        ui.rect(s, (*(ACCENT2 if on else CTRL), 255), adv_r, width=2 if on else 1, border_radius=6)
         pill = pygame.Rect(adv_r.x + 10, adv_r.centery - 8, 28, 16)
-        ui.rect(s, (*(widgets.SEL if on else widgets.FAINT), 255), pill, border_radius=8)
+        ui.rect(s, (*(widgets.SEL if on else widgets.FAINT), 255), pill, border_radius=6)
         ui.circle(s, widgets.BG, (pill.right - 8 if on else pill.left + 8, pill.centery), 6)
         self._txt(self.ftab, "Avançado" + (f"  +{hidden_n}" if hidden_n else ""), (pill.right + 8, adv_r.y + 9), TEXT if on else DIM)
         self.hits.append((adv_r, "advanced", "btn", None))
@@ -2366,7 +2366,7 @@ class Menu(WizardMixin):
                 y0 = y
                 for q in plan[i:j]:
                     if q["kid"]:
-                        ui.rect(self.surf, (23, 26, 39, 255), (x0 + 12, y, wc - 24, q["h"]), border_radius=10)
+                        ui.rect(self.surf, (*widgets.SURFACE2, 255), (x0 + 12, y, wc - 24, q["h"]), border_radius=6)
                         self._draw_card(q["title"], q["rows"], y, x0 + 14, wc - 28, bg=False)
                     else:
                         self._draw_card(q["title"], q["rows"], y, x0, wc, bg=False)
@@ -2544,8 +2544,8 @@ class Menu(WizardMixin):
         rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
         sel = int(c.get("ed_item", 0)) == k
         hov = self.hover == cid
-        ui.rect(s, (*((0x2E, 0x33, 0x24) if sel else (SURFACE2 if hov else widgets.SURFACE2)), 255), rowr, border_radius=10)
-        ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
+        ui.rect(s, (*(widgets.ACCENT_DIM if sel else (SURFACE2 if hov else widgets.SURFACE2)), 255), rowr, border_radius=6)
+        ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=6)
         self.frects[cid] = rowr
         self.order.append(cid)
         self.order_val.append(None)
@@ -2600,8 +2600,8 @@ class Menu(WizardMixin):
         rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
         sel = i == c.get("scene_edit", 0) and self.scene_view == "editor"
         hov = self.hover == cid
-        ui.rect(s, (*((0x2E, 0x33, 0x24) if sel else (SURFACE2 if hov else widgets.SURFACE2)), 255), rowr, border_radius=10)
-        ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
+        ui.rect(s, (*(widgets.ACCENT_DIM if sel else (SURFACE2 if hov else widgets.SURFACE2)), 255), rowr, border_radius=6)
+        ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=6)
         self.frects[cid] = rowr
         self.order.append(cid)
         self.order_val.append(None)
@@ -2617,7 +2617,7 @@ class Menu(WizardMixin):
         nw = self._txt(self.fb if sel else self.f, name, (nx, cy - 17), TEXT)
         if st:
             cr = pygame.Rect(nx + nw + 8, cy - 14, self.f_sb.size(st[0])[0] + 14, 17)
-            ui.rect(s, (*st[1], 255), cr, border_radius=8)
+            ui.rect(s, (*st[1], 255), cr, border_radius=6)
             self._txt(self.f_sb, st[0], (cr.centerx, cr.y + 1), st[2], "c")
         self._txt(self.f_s, self._fit(self.f_s, row["help"], right - nx - 4), (nx, cy + 3), DIM)
         armed = self.del_armed[0] == i and self.del_armed[1] > time.perf_counter()
@@ -2645,8 +2645,8 @@ class Menu(WizardMixin):
         W = self.W
         rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
         hov = self.hover == cid
-        ui.rect(s, (*((0x2E, 0x33, 0x24) if sel else (SURFACE2 if hov else widgets.SURFACE2)), 255), rowr, border_radius=10)
-        ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
+        ui.rect(s, (*(widgets.ACCENT_DIM if sel else (SURFACE2 if hov else widgets.SURFACE2)), 255), rowr, border_radius=6)
+        ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=6)
         ui.rect(s, (*self.TAG_COLORS.get(info.get("group"), widgets.SURFACE2), 255), pygame.Rect(rowr.x + 3, rowr.y + 8, 2, rowr.h - 16))
         if sel:
             ui.rect(s, (*ACCENT, 255), pygame.Rect(rowr.x, rowr.y + 6, 3, rowr.h - 12))
@@ -2722,7 +2722,7 @@ class Menu(WizardMixin):
             r = pygame.Rect(pr.x + 4, pr.y + 4 + k * ih, pr.w - 8, ih - 2)
             hl = k == self.dd_hl or (self.hover == cid and False)
             if hl:
-                ui.rect(s, (*HOVER_FILL, 255), r, border_radius=8)
+                ui.rect(s, (*HOVER_FILL, 255), r, border_radius=6)
             if cur == val and cid not in ("ly_add", "ly_tpl"):
                 ui.rect(s, (*SEL, 255), pygame.Rect(r.x, r.y + 6, 3, r.h - 12), border_radius=2)
             self._txt(self.fb if cur == val and cid not in ("ly_add", "ly_tpl") else self.f, lbl, (r.x + 12, r.y + 6), TEXT)
@@ -2762,8 +2762,8 @@ class Menu(WizardMixin):
         pr = pygame.Rect(box.x, y, pw, ui_h + 12)
         self.popup_rect = pr.inflate(8, 8)
         self.hits.append((pygame.Rect(0, 0, self.W, self.surf.get_height()), "ddclose", "ddclose", None))
-        ui.rect(s, (*widgets.SURFACE2, 255), pr.inflate(4, 4), border_radius=10)
-        ui.rect(s, (*widgets.CTRL, 255), pr.inflate(4, 4), width=1, border_radius=10)
+        ui.rect(s, (*widgets.SURFACE2, 255), pr.inflate(4, 4), border_radius=6)
+        ui.rect(s, (*widgets.CTRL, 255), pr.inflate(4, 4), width=1, border_radius=6)
         sf = pygame.Rect(pr.x + 6, pr.y + 6, pr.w - 12, 32)                   # the search field
         ui.rect(s, (*widgets.BG, 255), sf, border_radius=7)
         ui.rect(s, (*widgets.CTRL, 255), sf, width=1, border_radius=7)
@@ -2838,7 +2838,7 @@ class Menu(WizardMixin):
                 i += 1
             elif rows[i].get("kind") == "ear":                                         # a dark slot: the control window paints the live analysis over it
                 r = pygame.Rect(12, ry, wc - 24, self.EAR_H - 8)
-                ui.rect(s, (*widgets.BG, 255), r, border_radius=10)
+                ui.rect(s, (*widgets.BG, 255), r, border_radius=6)
                 self.ear_slots.append(r)
                 ry += self.EAR_H
                 i += 1
@@ -2967,10 +2967,10 @@ class Menu(WizardMixin):
         stk = self._stacked(row, W)
         rowr = pygame.Rect(10, y, W - 20, self.ROW - 4 + (self.STACK if stk else 0))
         if kind == "radio" and cid == "sys_item" and c[cid] == row["value"]:      # a list of pages, not a choice of a setting: the page you are on is lit, with no circle
-            ui.rect(s, (*HOVER_FILL, 255), rowr, border_radius=10)
+            ui.rect(s, (*HOVER_FILL, 255), rowr, border_radius=6)
             ui.rect(s, (*SEL, 255), pygame.Rect(rowr.x + 2, rowr.y + 8, 4, rowr.h - 16), border_radius=2)
         elif self.hover == cid and en:
-            ui.rect(s, (*SURFACE2, 255), rowr, border_radius=10)
+            ui.rect(s, (*SURFACE2, 255), rowr, border_radius=6)
         tc, dc = (TEXT, DIM) if en else (dimmed(TEXT, 0.62), dimmed(DIM, 0.74))
         ic = icons.has(cid)
         lx = 62 if ic else 22                                       # a row with an icon starts its text after it
@@ -3084,7 +3084,7 @@ class Menu(WizardMixin):
             fr = pygame.Rect(R - 250, cy - 16, 250, 32)
             foc = self.text_focus == cid
             ui.rect(s, (*widgets.SURFACE2, 255), fr, border_radius=6)
-            ui.rect(s, (*(FOCUS if foc else CTRL), 255), fr, width=2 if foc else 1, border_radius=8)
+            ui.rect(s, (*(FOCUS if foc else CTRL), 255), fr, width=2 if foc else 1, border_radius=6)
             txt = str(c[cid]) + ("|" if foc and int(time.perf_counter() * 2) % 2 == 0 else "")
             if not c[cid] and not foc and row.get("placeholder"):                  # an empty field says what it is for
                 self._txt(self.f, row["placeholder"], (fr.x + 10, fr.y + 5), dc)
@@ -3106,14 +3106,14 @@ class Menu(WizardMixin):
                 self._music_pill(pygame.Rect(tl - 12 - self.MODW, cy - 13, self.MODW, 26), MOD.SOURCES[int(m["src"]) % len(MOD.SOURCES)][0] if m else "Fixo", m is not None, cid, "modbtn")
             if m is not None:                                           # with the music: the range it moves in, two handles
                 f0, f1 = sorted(((m["lo"] - lo) / (hi - lo), (m["hi"] - lo) / (hi - lo)))
-                ui.rect(s, (66, 72, 100, 255), (tl, cy - 3, tlen, 6), border_radius=3)
+                ui.rect(s, (*widgets.LINE_STRONG, 255), (tl, cy - 3, tlen, 6), border_radius=3)
                 ui.rect(s, (*ACCENT, 255), (tl + int(tlen * f0), cy - 3, max(4, int(tlen * (f1 - f0))), 6), border_radius=3)
                 for fr_ in (f0, f1):
                     kc = (tl + int(tlen * fr_), cy)
                     ui.circle(s, widgets.BG, kc, 9)
                     ui.circle(s, (*ACCENT, 255), kc, 9, 2)
                 vr = pygame.Rect(R - pw, cy - 14, pw, 28)
-                ui.rect(s, (*widgets.SURFACE2, 255), vr, border_radius=8)
+                ui.rect(s, (*widgets.SURFACE2, 255), vr, border_radius=6)
                 self._txt(self.f_s, f"{min(m['lo'], m['hi'])}–{max(m['lo'], m['hi'])}", (vr.centerx, vr.y + 6), tc, "c")
                 self.hits.append((pygame.Rect(tl - 12, cy - 20, tlen + 24, 40), cid, "slider", None))
                 return

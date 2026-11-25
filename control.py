@@ -505,7 +505,7 @@ class ControlWindow:
             for x0, y, ch, wc, title in mw.card_marks:
                 if x_from <= x0 < x_to and y >= view and y + 14 < edge and y + ch - self.STICKY_H > edge:
                     r = pygame.Rect(px + x0 + 1, top, wc - 2, self.STICKY_H)
-                    ui.rect(s, wg.SURFACE2, r, border_radius=8)
+                    ui.rect(s, wg.SURFACE2, r, border_radius=6)
                     ui.rect(s, wg.BORDER, pygame.Rect(r.x, r.bottom - 2, r.w, 2))
                     self._t(mw.f_sb, title[:1] + title[1:].lower(), (r.x + 17, r.y + 7), wg.TITLE)     # the title in sentence case, as the card's
                     break
@@ -612,7 +612,7 @@ class ControlWindow:
             return self._draw_editor_head(x, y, status)
         pw, ph = self.pv_size()
         r = pygame.Rect(x, y + 6, pw, ph)
-        ui.rect(s, wg.BG, r, border_radius=10)
+        ui.rect(s, wg.BG, r, border_radius=6)
         mode = mw.pv_mode()
         editing = mode == "draft" and self.thumbs is not None
         dimg = None
@@ -631,7 +631,7 @@ class ControlWindow:
             pv = (status or {}).get("preview") or {}
             why = ("preview desligado" if not pv.get("on", True) else (pv.get("err") or self.preview_err or ("aguardando o 1º quadro (%s)" % pv.get("n", 0)))) if pv else "preview…"
             self._t(self.fs, self._fit(self.fs, why, pw - 16), (r.centerx, r.centery - 8), wg.DIM, "c")
-        ui.rect(s, wg.BORDER, r, width=1, border_radius=10)
+        ui.rect(s, wg.BORDER, r, width=1, border_radius=6)
         if editing:
             self._pill(pygame.Rect(r.x + 8, r.y + 8, 84, 20), "RASCUNHO" if mw.is_dirty() else "EDITANDO", wg.ACCENT2, wg.ON_LIGHT)
         info = (status or {}).get("image") or {}
@@ -661,7 +661,7 @@ class ControlWindow:
     def _draft_pic(self, r, status, label=True):
         """The picture of the DRAFT (what is being edited, not what is on the air) in rectangle r."""
         s, mw = self.surf, self.menu
-        ui.rect(s, wg.BG, r, border_radius=10)
+        ui.rect(s, wg.BG, r, border_radius=6)
         if self.thumbs is not None:
             self.thumbs.set_draft(mw.draft, extra=any(isinstance(x, dict) for _, x in mw.thumb_slots))          # the tiles of Modelo and Cores need their frames too
             dimg = self._tsurface(mw.draft)
@@ -672,7 +672,7 @@ class ControlWindow:
             else:
                 if r.w >= 160:                                                  # a small thumbnail (the header) has no room for words: it stays a dark square
                     self._t(self.fs, "preparando o rascunho…", (r.centerx, r.centery - 8), wg.DIM, "c")
-        ui.rect(s, wg.BORDER, r, width=1, border_radius=10)
+        ui.rect(s, wg.BORDER, r, width=1, border_radius=6)
         if label:
             self._pill(pygame.Rect(r.x + 8, r.y + 8, 84, 20), "RASCUNHO" if mw.is_dirty() else "EDITANDO", wg.ACCENT2, wg.ON_LIGHT)
 
@@ -891,8 +891,8 @@ class ControlWindow:
             r = pygame.Rect((k % ncol) * (cw_ + gap), y0 + (k // ncol) * (rh + gap), cw_, rh)
             lit, waits = k == live_i, k == pend
             hv = self.live.mouse is not None and r.collidepoint(self.live.mouse)
-            ui.rect(surf, wg.SURFACE2 if (waits or hv) else wg.SURFACE, r, border_radius=10)
-            ui.rect(surf, wg.ACCENT if lit else (wg.TEXT if waits else (wg.HOVER_EDGE if hv else wg.BORDER)), r, width=2 if (lit or waits) else 1, border_radius=10)
+            ui.rect(surf, wg.SURFACE2 if (waits or hv) else wg.SURFACE, r, border_radius=6)
+            ui.rect(surf, wg.ACCENT if lit else (wg.TEXT if waits else (wg.HOVER_EDGE if hv else wg.BORDER)), r, width=2 if (lit or waits) else 1, border_radius=6)
             x = r.x + 10
             if k < 9:
                 self._t_on(surf, "xs", str(k + 1), (x, r.y + 12), wg.DIM)
@@ -907,8 +907,8 @@ class ControlWindow:
         k = min(len(scn), self.STRIP_MAX)                                  # the last item makes a new scene (also up there, by the title)
         r = pygame.Rect((k % ncol) * (cw_ + gap), y0 + (k // ncol) * (rh + gap), cw_, rh)
         hv = self.live.mouse is not None and r.collidepoint(self.live.mouse)
-        ui.rect(surf, wg.SURFACE2 if hv else wg.SURFACE, r, border_radius=10)
-        ui.rect(surf, wg.HOVER_EDGE if hv else wg.CTRL, r, width=1, border_radius=10)
+        ui.rect(surf, wg.SURFACE2 if hv else wg.SURFACE, r, border_radius=6)
+        ui.rect(surf, wg.HOVER_EDGE if hv else wg.CTRL, r, width=1, border_radius=6)
         surf.blit(self.fs.render("+  Nova cena", True, wg.ACCENT2 if hv else wg.DIM), (r.x + 10, r.y + 11))
         hits.append((r, "wiz:start"))
         rows = (k + 1 + ncol - 1) // ncol
@@ -1042,28 +1042,28 @@ class ControlWindow:
         fixed = kind == "open" and cfg["effect"] == i + 1
         off = kind == "open" and not sc.get("scene_auto", True)
         edge = wg.ACCENT if live else (wg.SEL if pending else (wg.HOVER_EDGE if hov else wg.BORDER))
-        ui.rect(s, wg.SURFACE2 if hov else wg.SURFACE, rect, border_radius=14)
-        ui.rect(s, edge, rect, width=2 if (live or pending or hov) else 1, border_radius=14)
+        ui.rect(s, wg.SURFACE2 if hov else wg.SURFACE, rect, border_radius=6)
+        ui.rect(s, edge, rect, width=2 if (live or pending or hov) else 1, border_radius=6)
         tw = rect.width - 8
         tr = pygame.Rect(rect.x + 4, rect.y + 4, tw, tw * 9 // 16)
         img = self._tsurface(sc)
         if sc.get("scene_visual", 1) == 0 and not LY.has_bg(sc):
-            ui.rect(s, wg.BG, tr, border_radius=10)
+            ui.rect(s, wg.BG, tr, border_radius=6)
             self._t(self.fs, "tela preta", (tr.centerx, tr.centery - 8), wg.DIM, "c")
         elif img is not None:
             s.blit(self._rounded(img, tr.size, 10), tr.topleft)
         else:
-            ui.rect(s, (6, 7, 11), tr, border_radius=10)
+            ui.rect(s, wg.BG, tr, border_radius=6)
             bad = self.thumbs is not None and not self.thumbs.ready and self.thumbs.error
             self._t(self.fs, "preview indisponível" if bad else "…", (tr.centerx, tr.centery - 8), wg.DIM, "c")
         if off:                                                           # out of the Auto: the picture is faded
             sh = self._masks.get(("off", tr.size))
             if sh is None:
                 sh = pygame.Surface(tr.size, pygame.SRCALPHA)
-                ui.rect(sh, (10, 9, 22, 150), (0, 0, tr.w, tr.h), border_radius=10)
+                ui.rect(sh, (10, 9, 22, 150), (0, 0, tr.w, tr.h), border_radius=6)
                 self._masks[("off", tr.size)] = sh
             s.blit(sh, tr.topleft)
-        ui.rect(s, wg.BORDER, tr, width=1, border_radius=10)
+        ui.rect(s, wg.BORDER, tr, width=1, border_radius=6)
         # state badge: what this scene is doing right now
         if kind == "open":
             if live:
@@ -1129,15 +1129,15 @@ class ControlWindow:
         a = self._menu_anchor
         w, rh = 156, 32
         pr = pygame.Rect(a.right - w, a.bottom + 4, w, rh * len(items) + 12)
-        ui.rect(s, (0, 0, 0, 110), pr.move(0, 3), border_radius=12)
-        ui.rect(s, wg.SURFACE2, pr, border_radius=12)
-        ui.rect(s, wg.BORDER, pr, width=1, border_radius=12)
+        ui.rect(s, (0, 0, 0, 110), pr.move(0, 3), border_radius=6)
+        ui.rect(s, wg.SURFACE2, pr, border_radius=6)
+        ui.rect(s, wg.BORDER, pr, width=1, border_radius=6)
         self.gal_hits.append((pr, "mi-bg", i))                    # clicks on the menu's own background do nothing (and do not close it)
         for k, (act, label, col) in enumerate(items):
             ir = pygame.Rect(pr.x + 6, pr.y + 6 + k * rh, w - 12, rh - 2)
             hv = self.gal_hover == ("mi", (i, act))
             if hv:
-                ui.rect(s, wg.DANGER if (act == "del") else wg.SURFACE2, ir, border_radius=8)
+                ui.rect(s, wg.DANGER if (act == "del") else wg.SURFACE2, ir, border_radius=6)
             self._t(self.fb if (act == "del" and armed) else self.fs, label, (ir.x + 12, ir.y + 6), wg.ON_LIGHT if (hv and act == "del") else col)
             self.gal_hits.append((ir, "mi", (i, act)))
 
@@ -1177,19 +1177,19 @@ class ControlWindow:
                 wg.pill(s, self.fb, r, lab, wg.SEL, wg.ON_SEL, dy=1)
             elif done:                                                               # a step already done: a tick, and a click goes back to it
                 hv = self.gal_hover == ("wz-step", k)
-                ui.rect(s, wg.HOVER_FILL if hv else wg.SURFACE2, r, border_radius=14)
-                ui.rect(s, wg.HOVER_EDGE if hv else wg.SEL, r, width=1, border_radius=14)
+                ui.rect(s, wg.HOVER_FILL if hv else wg.SURFACE2, r, border_radius=6)
+                ui.rect(s, wg.HOVER_EDGE if hv else wg.SEL, r, width=1, border_radius=6)
                 pygame.draw.lines(s, wg.SEL, False, [(r.x + 12, r.centery), (r.x + 16, r.centery + 4), (r.x + 23, r.centery - 4)], 2)
                 self._t(self.fb, nm, (r.x + 30, r.y + 5), wg.SEL)
                 self.gal_hits.append((r, "wz-step", k))
             else:                                                                    # a step to come: only a label, no edge (it is not a tab: Continuar goes there)
-                ui.rect(s, wg.SURFACE2, r, border_radius=14)
+                ui.rect(s, wg.SURFACE2, r, border_radius=6)
                 self._t(self.fs, lab, (r.centerx, r.y + 6), wg.DIM, "c")
             x += pw_ + 8
         cb = pygame.Rect(px + mw.W - 96, y + 6, 96, 28)
         hv = self.gal_hover == ("wz-cancel", 0)
-        ui.rect(s, wg.HOVER_FILL if hv else wg.SURFACE, cb, border_radius=14)
-        ui.rect(s, wg.HOVER_EDGE if hv else wg.BORDER, cb, width=1, border_radius=14)
+        ui.rect(s, wg.HOVER_FILL if hv else wg.SURFACE, cb, border_radius=6)
+        ui.rect(s, wg.HOVER_EDGE if hv else wg.BORDER, cb, width=1, border_radius=6)
         self._t(self.fs, "Cancelar", (cb.centerx, cb.y + 6), wg.TEXT if hv else wg.DIM, "c")
         self.gal_hits.append((cb, "wz-cancel", 0))
         self._t(self.fm, self.WZ_ASK[step], (px, y + 46), wg.TEXT)
@@ -1200,13 +1200,13 @@ class ControlWindow:
         pvw = min(420, int(mw.W * 0.36)) if wide else min(mw.W, 340)
         pvh = pvw * 9 // 16
         pr = pygame.Rect(px, y0, pvw, pvh)
-        ui.rect(s, wg.BG, pr, border_radius=12)
+        ui.rect(s, wg.BG, pr, border_radius=6)
         dimg = self._tsurface(w["draft"])
         if dimg is not None:
             s.blit(self._rounded(dimg, pr.size, 12), pr.topleft)
         else:
             self._t(self.fs, "preparando a imagem…", (pr.centerx, pr.centery - 8), wg.DIM, "c")
-        ui.rect(s, wg.BORDER, pr, width=1, border_radius=12)
+        ui.rect(s, wg.BORDER, pr, width=1, border_radius=6)
         self._pill(pygame.Rect(pr.x + 8, pr.y + 8, 92, 20), "SUA CENA", wg.ACCENT2, wg.ON_LIGHT)
         pals = mw.cfg.get("palettes") or []
         cname = pals[w["pal"] - 1]["name"] if 0 < w["pal"] <= len(pals) else "cores do visual"
@@ -1230,21 +1230,21 @@ class ControlWindow:
                 kind = "wz-pick" if real else "wz-blank"
                 hv = self.gal_hover == (kind, k if real else 0)
                 sel = real and k == w["pick"]
-                ui.rect(s, wg.SURFACE2 if hv else wg.SURFACE, r, border_radius=10)
+                ui.rect(s, wg.SURFACE2 if hv else wg.SURFACE, r, border_radius=6)
                 tr = pygame.Rect(r.x + 4, r.y + 4, tw - 8, th)
                 if real:
                     img = self._tsurface(items[k])
                     if img is not None:
                         s.blit(self._rounded(img, tr.size, 8), tr.topleft)
                     else:
-                        ui.rect(s, wg.BG, tr, border_radius=8)
+                        ui.rect(s, wg.BG, tr, border_radius=6)
                     label = items[k]["scene_name"]
                 else:
-                    ui.rect(s, wg.BG, tr, border_radius=8)
+                    ui.rect(s, wg.BG, tr, border_radius=6)
                     plus = self.fm.render("+", True, wg.ACCENT2)
                     s.blit(plus, (tr.centerx - plus.get_width() // 2, tr.centery - plus.get_height() // 2))
                     label = "Em branco"
-                ui.rect(s, wg.SEL if sel else (wg.HOVER_EDGE if hv else wg.BORDER), r, width=3 if sel else 1, border_radius=10)
+                ui.rect(s, wg.SEL if sel else (wg.HOVER_EDGE if hv else wg.BORDER), r, width=3 if sel else 1, border_radius=6)
                 self._t(self.fs, self._fit(self.fs, label, tw - 12), (r.x + 8, r.y + th + 9), wg.TEXT if sel else wg.DIM)
                 self.gal_hits.append((r, kind, k if real else 0))
             end = max(end, cy + ((n + ncol - 1) // ncol) * (rh + gap))
@@ -1254,8 +1254,8 @@ class ControlWindow:
                 allp = mw.cfg.get("palettes") or []
                 mname = allp[macro - 1]["name"] if macro <= len(allp) else "uma paleta"
                 nr = pygame.Rect(cx, cy, cwid, 62)
-                ui.rect(s, wg.SURFACE2, nr, border_radius=10)
-                ui.rect(s, wg.CTRL, nr, width=1, border_radius=10)
+                ui.rect(s, wg.SURFACE2, nr, border_radius=6)
+                ui.rect(s, wg.CTRL, nr, width=1, border_radius=6)
                 self._t(self.fs, self._fit(self.fs, f"As Cores do Palco estão em {mname} para todas as cenas.", nr.w - 196), (nr.x + 12, nr.y + 11), wg.TEXT)
                 self._t(self.fs, self._fit(self.fs, "Por isso a escolha abaixo não aparece na imagem.", nr.w - 196), (nr.x + 12, nr.y + 33), wg.DIM)
                 self._wz_button(pygame.Rect(nr.right - 176, nr.y + 14, 164, 34), "Usar as da cena", "wz-macro", 0)
@@ -1268,7 +1268,7 @@ class ControlWindow:
                 r = pygame.Rect(cx + (k % ncol) * (cw2 + gap), cy + (k // ncol) * (chh + gap), cw2, chh)
                 hv = self.gal_hover == ("wz-pal", k)
                 sel = k == w["pal"]
-                ui.rect(s, wg.SURFACE2 if hv else wg.SURFACE, r, border_radius=10)
+                ui.rect(s, wg.SURFACE2 if hv else wg.SURFACE, r, border_radius=6)
                 if p is None:
                     self._t(self.fb, "Da cena", (r.centerx, r.y + 12), wg.TEXT, "c")
                     self._t(self.fs, "as cores do visual", (r.centerx, r.y + 36), wg.DIM, "c")
@@ -1278,14 +1278,14 @@ class ControlWindow:
                     for j, col in enumerate(cols):
                         ui.rect(s, col, pygame.Rect(r.x + 8 + j * sw, r.y + 8, sw - 2 if j < len(cols) - 1 else sw, 28), border_radius=5)
                     self._t(self.fs, self._fit(self.fs, p["name"], r.w - 12), (r.centerx, r.y + 42), wg.TEXT if sel else wg.DIM, "c")
-                ui.rect(s, wg.SEL if sel else (wg.HOVER_EDGE if hv else wg.BORDER), r, width=3 if sel else 1, border_radius=10)
+                ui.rect(s, wg.SEL if sel else (wg.HOVER_EDGE if hv else wg.BORDER), r, width=3 if sel else 1, border_radius=6)
                 self.gal_hits.append((r, "wz-pal", k))
             end = max(end, cy + ((len(cards) + ncol - 1) // ncol) * (chh + gap))
         else:                                                                    # the name: the field is always the one that is typed into
             self._t(self.fs, "Nome da cena", (cx, cy), wg.DIM)
             fr = pygame.Rect(cx, cy + 22, min(cwid, 440), 52)
-            ui.rect(s, wg.SURFACE2, fr, border_radius=12)
-            ui.rect(s, wg.FOCUS, fr, width=2, border_radius=12)
+            ui.rect(s, wg.SURFACE2, fr, border_radius=6)
+            ui.rect(s, wg.FOCUS, fr, width=2, border_radius=6)
             txt = w["name"]
             fresh = bool(w.get("fresh"))
             caret = "" if fresh else ("|" if int(time.perf_counter() * 2) % 2 == 0 else " ")
@@ -1340,8 +1340,8 @@ class ControlWindow:
             self._t(self.fm, "Escolha o preset da mandala" if mw.scene_view == "preset" else "Escolha um modelo", (px, y + 8), wg.TEXT)
             br = pygame.Rect(px + mw.W - 110, y + 6, 110, 30)
             hv = self.gal_hover == ("cancel", 0)
-            ui.rect(s, wg.SURFACE2 if hv else wg.SURFACE, br, border_radius=10)
-            ui.rect(s, wg.HOVER_EDGE if hv else wg.BORDER, br, width=1, border_radius=10)
+            ui.rect(s, wg.SURFACE2 if hv else wg.SURFACE, br, border_radius=6)
+            ui.rect(s, wg.HOVER_EDGE if hv else wg.BORDER, br, width=1, border_radius=6)
             self._t(self.fb, "‹ Voltar" if mw.scene_view == "preset" else "Cancelar", (br.centerx, br.y + 5), wg.ACCENT2, "c")
             self.gal_hits.append((br, "cancel", 0))
             self._t(self.fs, "Os números do preset viram da cena: depois é só ajustar" if mw.scene_view == "preset" else "A cena entra na galeria e abre para você configurar", (px, y + 34), wg.DIM)
@@ -1355,8 +1355,8 @@ class ControlWindow:
                 fr_ = pygame.Rect(fx, y + 10, fw, 30)
                 on = int(cfg.get("sc_filter", 0)) == k_
                 hv = self.gal_hover == ("filter", k_)
-                ui.rect(s, wg.SEL if on else (wg.SURFACE2 if hv else wg.SURFACE), fr_, border_radius=8)
-                ui.rect(s, wg.SEL if on else (wg.HOVER_EDGE if hv else wg.BORDER), fr_, width=1, border_radius=8)
+                ui.rect(s, wg.SEL if on else (wg.SURFACE2 if hv else wg.SURFACE), fr_, border_radius=6)
+                ui.rect(s, wg.SEL if on else (wg.HOVER_EDGE if hv else wg.BORDER), fr_, width=1, border_radius=6)
                 self._t(self.fs, lab, (fr_.centerx, fr_.y + 6), wg.ON_SEL if on else wg.TEXT, "c")
                 self.gal_hits.append((fr_, "filter", k_))
                 fx -= 4
@@ -1380,8 +1380,8 @@ class ControlWindow:
                 self._draw_card(r, items[k], k, "pick" if picker else "open", status, (not picker) and k == live_i)
             else:
                 hv = self.gal_hover == ("new", 0)
-                ui.rect(s, wg.SURFACE2 if hv else wg.SURFACE, r, border_radius=12)
-                ui.rect(s, wg.HOVER_EDGE if hv else wg.BORDER, r, width=2 if hv else 1, border_radius=12)
+                ui.rect(s, wg.SURFACE2 if hv else wg.SURFACE, r, border_radius=6)
+                ui.rect(s, wg.HOVER_EDGE if hv else wg.BORDER, r, width=2 if hv else 1, border_radius=6)
                 self._t(self.fm, "+", (r.centerx, r.centery - 28), wg.ACCENT2, "c")
                 self._t(self.fb, "Nova cena", (r.centerx, r.centery + 4), wg.TEXT, "c")
                 self._t(self.fs, "em 3 passos", (r.centerx, r.centery + 26), wg.DIM, "c")
@@ -1394,15 +1394,15 @@ class ControlWindow:
             for k_, (lab, bw_, bx_) in enumerate((("Exportar", 112, 0), ("Importar", 112, 120))):          # share the scenes as a file
                 br_ = pygame.Rect(px + bx_, end + 4, bw_, 34)
                 hv_ = self.gal_hover == (lab.lower(), 0)
-                ui.rect(s, wg.SURFACE2 if hv_ else wg.SURFACE, br_, border_radius=10)
-                ui.rect(s, wg.HOVER_EDGE if hv_ else wg.BORDER, br_, width=1, border_radius=10)
+                ui.rect(s, wg.SURFACE2 if hv_ else wg.SURFACE, br_, border_radius=6)
+                ui.rect(s, wg.HOVER_EDGE if hv_ else wg.BORDER, br_, width=1, border_radius=6)
                 self._t(self.fs, lab, (br_.centerx, br_.y + 8), wg.TEXT if hv_ else wg.DIM, "c")
                 self.gal_hits.append((br_, "export" if k_ == 0 else "import", 0))
             fr = pygame.Rect(px + 240, end + 4, 250, 34)
             armed = self.gal_armed > self.now
             hv = self.gal_hover == ("factory", 0)
-            ui.rect(s, wg.DANGER if armed else (wg.SURFACE2 if hv else wg.SURFACE), fr, border_radius=10)
-            ui.rect(s, wg.DANGER if (armed or hv) else wg.BORDER, fr, width=1, border_radius=10)
+            ui.rect(s, wg.DANGER if armed else (wg.SURFACE2 if hv else wg.SURFACE), fr, border_radius=6)
+            ui.rect(s, wg.DANGER if (armed or hv) else wg.BORDER, fr, width=1, border_radius=6)
             self._t(self.fs, "Confirmar? Apaga suas cenas" if armed else "Restaurar cenas de fábrica", (fr.centerx, fr.y + 8), wg.ON_LIGHT if armed else wg.DIM, "c")
             self.gal_hits.append((fr, "factory", 0))
             end += 44
