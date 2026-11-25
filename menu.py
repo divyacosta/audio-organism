@@ -1546,6 +1546,11 @@ class Menu(WizardMixin):
             return self.undo_last()
         if cid == "hd_redo":
             return self.redo_last()
+        if cid == "hd_restore":                                  # Restaurar: the scene on the editor goes back to how it was saved (Descartar); nothing to do otherwise
+            if self.is_dirty():
+                return self.press("ed_discard")
+            self.say("Nada para restaurar: a cena está como foi salva")
+            return None
         if cid == "hd_agenda":
             self.tab = self.cfg["ui_tab"] = TAB_SYS
             self.cfg["sys_item"] = 2                                # the Automático page: the agenda's rules
@@ -2115,7 +2120,7 @@ class Menu(WizardMixin):
         hidden_n = 0 if self.cfg.get("advanced", False) else self.adv_hidden()          # how many settings the simple mode keeps out of sight
         adv_w = 172 if hidden_n else 118                               # room for the +N of the hidden options
         adv_r = pygame.Rect(W - adv_w, 0, adv_w, 36)
-        strip = [("hd_undo", "Desfazer", 84), ("hd_redo", "Refazer", 74), ("hd_before", "Antes", 62)] if W >= 900 else []     # the undo strip: Desfazer, Refazer, and Antes held
+        strip = [("hd_undo", "Desfazer", 84), ("hd_redo", "Refazer", 74), ("hd_before", "Antes", 62), ("hd_restore", "Restaurar", 86)] if W >= 900 else []     # the undo strip: Desfazer, Refazer, Antes held, and Restaurar (danger: back to the saved scene)
         strip_w = sum(w + 4 for _, _, w in strip)
         self.hdr_hits = []
         for i, (name, _) in enumerate(TABS):
@@ -2137,7 +2142,7 @@ class Menu(WizardMixin):
         sx = adv_r.x - strip_w
         for cid, label, w in strip:
             br = pygame.Rect(sx, 6, w, 24)
-            widgets.button(s, self.ftab, br, label, "quiet", hover=self.hover == cid, radius=6)
+            widgets.button(s, self.ftab, br, label, "danger" if cid == "hd_restore" else "quiet", hover=self.hover == cid, radius=6)
             self.hdr_hits.append((br, cid))
             if cid != "hd_before":
                 self.hits.append((br, cid, "btn", None))
@@ -2319,9 +2324,9 @@ class Menu(WizardMixin):
         cy = y + (self.ROW - 4) // 2
         tag = row["tag"]
         tw = self.f_sb.size(tag)[0] + 14
+        ui.rect(s, (*self.TAG_COLORS.get(row.get("group"), widgets.SURFACE2), 255), pygame.Rect(rowr.x + 3, rowr.y + 8, 2, rowr.h - 16))     # the category: a 2 px tick, as ScreenMaster's rows
         tr = pygame.Rect(18, cy - 10, tw, 20)
-        ui.rect(s, (*self.TAG_COLORS.get(row.get("group"), widgets.SURFACE2), 255), tr, border_radius=6)
-        self._txt(self.f_sb, tag, (tr.centerx, tr.y + 2), (255, 255, 255), "c")
+        self._txt(self.f_sb, tag, (tr.x + 8, tr.y + 2), DIM)
         nx = tr.right + 12
         tw_ = rowr.right - (44 + 58 if row.get("sw") else 44) - nx
         on_ = bool(c.get(row["sw"], True)) if row.get("sw") else True
@@ -2329,12 +2334,17 @@ class Menu(WizardMixin):
         self._txt(self.f_s, self._fit(self.f_s, row["help"], tw_), (nx, cy + 3), DIM)
         kx, ky = rowr.right - 20, cy
         pygame.draw.polygon(s, ACCENT2 if sel else DIM, [(kx - 5, ky - 3), (kx + 5, ky - 3), (kx, ky + 3)] if sel else [(kx - 3, ky - 5), (kx - 3, ky + 5), (kx + 3, ky)])
-        if row.get("sw"):                                                       # a layer of the stack: its switch, on the right of the row
+        if row.get("sw"):                                                       # a layer of the stack: an eye on the right of the row (open = on, closed = off)
             on = bool(c.get(row["sw"], True))
-            pill = pygame.Rect(rowr.right - 36 - 46, cy - 13, 46, 26)
-            ui.rect(s, (*(OK if on else widgets.FAINT), 255), pill, border_radius=13)
-            ui.circle(s, widgets.BG, (pill.right - 13 if on else pill.left + 13, pill.centery), 9)
-            self.hits.append((pill.inflate(8, 8), row["sw"], "toggle", None))
+            eye = pygame.Rect(rowr.right - 36 - 26, cy - 13, 26, 26)
+            ec, col = eye.center, (widgets.TEXT if on else widgets.FAINT)
+            if on:
+                pygame.draw.ellipse(s, col, (ec[0] - 9, ec[1] - 5, 18, 10), 2)
+                pygame.draw.circle(s, col, ec, 3)
+            else:
+                pygame.draw.arc(s, col, (ec[0] - 9, ec[1] - 6, 18, 12), math.pi * 0.1, math.pi * 0.9, 2)
+                pygame.draw.line(s, col, (ec[0] - 8, ec[1] + 2), (ec[0] + 8, ec[1] + 2), 1)
+            self.hits.append((eye.inflate(8, 8), row["sw"], "toggle", None))
 
     def _fit(self, font, text, w):
         return widgets.fit(font, text, w)
