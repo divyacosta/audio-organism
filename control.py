@@ -51,7 +51,7 @@ class ControlWindow:
             return
         mw = self.menu
         self.W, self.H = w, h
-        self.view_h = h - self.PAD * 2
+        self.view_h = h - self.PAD * 2 - 26                              # 26: the footer line at the foot
         mw.view_h = self.view_h
         mw.set_width(w - self.PAD * 2)
         self.surf = pygame.Surface((w, h))
@@ -84,7 +84,7 @@ class ControlWindow:
         self.W = self.PAD * 2 + menu.W
         self.view_h = min(menu.H, max(560, min(980, dh - 130)))          # as tall as the screen allows, the tab scrolls
         if size is not None:
-            self.view_h = size[1] - self.PAD * 2
+            self.view_h = size[1] - self.PAD * 2 - 26                      # 26: the footer line at the foot
         menu.view_h = self.view_h
         self.H = size[1] if size is not None else max(self.view_h, 600) + self.PAD * 2
         self.panel_pos = (self.PAD, self.PAD)

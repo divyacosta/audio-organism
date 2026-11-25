@@ -2292,8 +2292,8 @@ class Menu(WizardMixin):
         n = len(c.get("layers") or [])
         # the column's header (ScreenMaster's): a small caption, the big name of the layer, and the toolbar on the right
         self._txt(self.f_s, row.get("help", ""), (22, y + 2), DIM)
-        add_lbl = "+ Ajuste"
-        aw = max(96, self.fb.size(add_lbl)[0] + 26)
+        add_lbl = "+ Ajuste" if W >= 560 else "+"                          # a narrow column keeps only the plus, so the name keeps its room
+        aw = max(96 if W >= 560 else 44, self.fb.size(add_lbl)[0] + 26)
         tool_left = W - 22 - aw - 12 - 4 * 30                                  # where the toolbar starts: the name stops before it
         self._txt(widgets.font("lead", True), self._fit(widgets.font("lead", True), row.get("label", ""), max(60, tool_left - 22 - 12)), (22, y + 14), TEXT)
         x = W - 22
