@@ -826,7 +826,7 @@ def _item_text(cfg, k):
         return "Música", f"reação {cfg.get('react', 100)}%  ·  strobe " + ("desligado", "leve", "completo")[max(0, min(2, int(cfg.get("strobe", 2))))]
     if k == 12:
         n = len(cfg.get("mods") or {}) + len(cfg.get("cycles") or {})
-        return "Ligações", ("nada segue a música" if n == 0 else (f"{n} coisa segue a música" if n == 1 else f"{n} coisas seguem a música"))
+        return "Segue a música", ("nada segue a música" if n == 0 else (f"{n} coisa segue a música" if n == 1 else f"{n} coisas seguem a música"))
     if k == 6:
         pals = cfg.get("palettes") or []
         pi = int(cfg.get("scene_palette", 0))

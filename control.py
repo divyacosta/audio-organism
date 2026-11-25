@@ -34,7 +34,7 @@ class ControlWindow:
         """The preview under the tab bar: 296 px wide in a narrow window, bigger (up to 500 px) in a wide one; always 16:9."""
         pw = max(296, min(420, int(self.menu.W * 0.33)))
         if self.menu.pv_mode() == "draft":                        # editing: the picture is a reference, the tabs and the controls get the room
-            pw = max(240, min(300, int(self.menu.W * 0.24)))
+            pw = max(240, min(460, int(self.menu.W * 0.24)))
         if self.menu.pv_mode() == "live":                         # Sistema > Imagem: the picture is a check on the settings, not the star: the settings get the height
             pw = max(240, min(pw, 264))
         if self.menu.wide:                                        # in two columns the strip must leave room for them: at most ~30% of the window's height
@@ -173,6 +173,10 @@ class ControlWindow:
                 return None
             if e.key == pygame.K_z and getattr(e, "mod", 0) & pygame.KMOD_CTRL:
                 self.menu.undo_last()
+                return None
+            if e.key == pygame.K_s and getattr(e, "mod", 0) & pygame.KMOD_CTRL and self.menu.scene_view == "editor":
+                self.menu.save_scene()                                 # Ctrl+S saves the scene being edited
+                self.force = True
                 return None
             if e.key in (pygame.K_f, pygame.K_k) and getattr(e, "mod", 0) & pygame.KMOD_CTRL:
                 self.menu.open_search()

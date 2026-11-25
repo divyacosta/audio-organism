@@ -378,7 +378,7 @@ class Menu(WizardMixin):
             self._live_end()
         self.rebuild_scenes()
         self.touch()
-        self.say("Live ligado: o que você muda aparece na tela grande" if on else "Live desligado")
+        self.say("Ao vivo ligado: o que você muda aparece na tela grande" if on else "Ao vivo desligado")
 
     def is_dirty(self):
         """True when the draft differs from the scene as it is saved."""
@@ -485,7 +485,8 @@ class Menu(WizardMixin):
         if self.scene_view != "editor":
             self._eff_before = self.cfg["effect"]
         self.wizard = None                                  # opening a scene's editor leaves the steps of a new scene
-        self.cfg["ed_item"], self.cfg["ed_sub"], self.cfg["ed_page"] = 0, 0, False
+        it = int(self.cfg.get("ed_item", 0))
+        self.cfg["ed_item"], self.cfg["ed_sub"], self.cfg["ed_page"] = (it if 0 <= it < 12 else 0), 0, False       # the page you were on stays (never the empty Ligações), the first time it is the Forma
         self.draft = copy.deepcopy(scn[i])                  # the editor works on a copy: the picture keeps the saved scene until Salvar
         self.leave_armed = 0.0
         SC.apply_scene(self.cfg, self.draft)
@@ -517,7 +518,7 @@ class Menu(WizardMixin):
         now = time.perf_counter()
         if self.is_dirty() and not self.cfg.get("live") and now > self.leave_armed:
             self.leave_armed = now + 4.0
-            self.say("Alterações não salvas: Salvar, Descartar, ou toque de novo em Galeria")
+            self.say("Alterações não salvas: Salvar, Descartar, ou toque de novo em Galeria para descartar")
             self.need = True
             return None
         self.close_scene()
@@ -1221,6 +1222,12 @@ class Menu(WizardMixin):
         return self._extra.get(cid)
 
     def set_value(self, cid, value, announce=True):
+        if cid in ("safe_flash", "safe_motion") and int(value) < int(self.cfg[cid]):      # lowering a comfort limit: done at once, and the toast offers Desfazer
+            self.sys_push("limite de conforto", [cid])
+            self.cfg[cid] = value
+            self.touch()
+            self.say("Limite de conforto reduzido", undo=True)
+            return None
         if cid == "lang":                                                        # the language of the panel: everything is drawn again in it
             self.cfg["lang"] = value
             i18n.set_lang(value)
@@ -2033,7 +2040,7 @@ class Menu(WizardMixin):
         else:
             ui.circle(s, (*OK, 255), (26, cy - 8), 5)
             self._txt(self.fb, "Tudo salvo", (40, cy - 17), TEXT)
-            self._txt(self.f_s, "O que você mexer fica num rascunho", (40, cy + 3), DIM)
+            self._txt(self.f_s, "A tela grande segue o que você muda" if self.cfg.get("live") else "O que você mexer fica num rascunho até salvar", (40, cy + 3), DIM)
         x = W - 26
         for cid, label, on, primary in ((("scene_back", "‹ Galeria", True, False),) if not self.workspace() else ()) + (("ed_discard", "Voltar ao que era" if self.cfg.get("live") else "Descartar", dirty, False), ("ed_save", "Salvar", dirty, True)):
             w = max(78, self.fb.size(label)[0] + 26)

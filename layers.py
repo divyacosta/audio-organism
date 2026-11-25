@@ -29,7 +29,7 @@ MAX_BG = 4
 
 SLOTS = (("bg", "Fundo", "Cor ou gradiente atrás de tudo"), ("lights", "Luzes", "Luzes de fundo: aurora, feixes, lasers…"),
          ("form", "Forma principal", "O desenho do meio: mandala, túnel, fractal…"), ("parts", "Partículas e rastro", "Pontos de luz e o rastro da imagem"),
-         ("finish", "Acabamento", "Efeitos de lente, cor final e estilo da imagem"), ("over", "Sobreposição", "Um texto ou o seu logo por cima de tudo"))
+         ("finish", "Acabamento", "Efeitos de lente, cor final e estilo da imagem"), ("over", "Texto e logo", "Um texto ou o seu logo por cima de tudo"))
 SLOT_OF = {"grad": "bg", "lights": "lights", "part": "parts", "fb": "parts", "edge": "finish", "ca": "finish", "fl": "finish", "gr": "finish", "tone": "finish"}
 
 

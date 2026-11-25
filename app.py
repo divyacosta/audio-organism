@@ -147,6 +147,7 @@ def main():
 
     # ---------------------------------------------------------------- state
     fps, last, clock_t = 60.0, time.perf_counter(), 0.0
+    fl_raw, fl_edge, fl_ok = 0.0, -1.0, True                       # the flash before the comfort limit, when the last allowed flash began, and whether the one going on is allowed
     last_dev_check = 0.0
     last_motion, last_click = 0.0, -1.0
     cursor_hidden = False
@@ -458,6 +459,15 @@ def main():
         if not params.get("blank"):
             rend.bloom = live.get("bloom", cfg["bloom"]) / 100.0 * min(1.6, 0.6 + 0.4 * cfg.get("macro_energy", 100) / 100.0)
             rend.flash = min(1.0, max(max(vis.strobe, vis.burst_pulse) * strobe_on, vis.flash * strobe_on, vis.drop_flash * drop_gain)) * (1.0, 0.5, 0.12)[cfg["safe_flash"]]
+            raw = rend.flash
+            if cfg["safe_flash"]:                                                                # the comfort limit also keeps the rhythm: a new flash needs 1/3 s after the last one (WCAG 2.3.1: at most 3 a second)
+                if raw > 0.3 and fl_raw <= 0.3:
+                    fl_ok = clock_t - fl_edge >= 0.34
+                    if fl_ok:
+                        fl_edge = clock_t
+                if raw > 0.3 and not fl_ok:
+                    rend.flash = 0.0
+            fl_raw = raw
         skip = (cfg["rrate"] > 0 and frame % (cfg["rrate"] + 1) != 0) and not test       # render rate: 1 frame out of 2 or 3 (silence is no reason to draw less: the picture keeps going)
         rend.preview = (not test) and (menu.reserved > 0 or menu.tab == 0 or phone.wanted)        # the strip of the editor, the picture of the Palco, or a phone watching
         rend.preview_every = 3 if (menu.tab == 0 or phone.wanted) else 8                         # live: about 20 pictures a second

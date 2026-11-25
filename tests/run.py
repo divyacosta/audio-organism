@@ -1551,7 +1551,7 @@ def test_layers():
     cfg["advanced"] = False
     m.rebuild_scenes()
     stk = [r["label"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs if r["id"].startswith("stk_")]
-    check("the editor opens on the stack: Ajustes da cena, then Sobreposição, Acabamento, Partículas e rastro, Forma principal, Luzes, Fundo", stk == ["Ajustes da cena", "Ligações", "Sobreposição", "Acabamento", "Partículas e rastro", "Forma principal", "Luzes", "Fundo"] and cfg["ed_item"] == 0, stk)
+    check("the editor opens on the stack: Ajustes da cena, then Texto e logo, Acabamento, Partículas e rastro, Forma principal, Luzes, Fundo", stk == ["Ajustes da cena", "Segue a música", "Texto e logo", "Acabamento", "Partículas e rastro", "Forma principal", "Luzes", "Fundo"] and cfg["ed_item"] == 0, stk)
     m.set_value("ed_tab", 2)
     ids_ = [r["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs]
     check("... and Movimento shows the camera and the rhythm of the scene, with a sentence for each choice", "camera" in ids_ and "movement" in ids_ and settings.ed_tab_of(cfg) == 2)
@@ -2998,6 +2998,11 @@ def test_safety_undo():
     check("... e oferece Desfazer", m.toast[2] is True and cfg["fx_bloom"] != flip, m.toast)
     m.undo_last()
     check("Desfazer o perfil devolve os ajustes", cfg["fx_bloom"] == flip, cfg["fx_bloom"])
+    cfg["safe_flash"] = 2
+    m.set_value("safe_flash", 0)
+    check("baixar o limite de conforto oferece Desfazer", cfg["safe_flash"] == 0 and m.toast[2] is True, m.toast)
+    m.undo_last()
+    check("... e Desfazer devolve o limite", cfg["safe_flash"] == 2, cfg["safe_flash"])
 
 
 def test_navigation():
@@ -3015,6 +3020,12 @@ def test_navigation():
     cards = settings.search_cards(dict(cfg, search="osc"))
     ids = [r["id"] for _, rs in cards for r in rs]
     check("cada lugar achado tem um botão que vai até ele", "goto:sys:3" in ids, ids)
+    cfg["ed_item"] = 10
+    m.open_scene(0)
+    check("o editor reabre na página em que você estava", cfg["ed_item"] == 10, cfg["ed_item"])
+    cfg["ed_item"] = 12
+    m.open_scene(0)
+    check("... mas nunca na página vazia de Segue a música", cfg["ed_item"] == 0, cfg["ed_item"])
     check("o Avançado conta o que esconde", m.adv_hidden() > 0 and menu.Menu(dict(cfg, advanced=True)).adv_hidden() >= 0, m.adv_hidden())
 
 
