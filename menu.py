@@ -2392,7 +2392,7 @@ class Menu(WizardMixin):
         if cid == "ly_add":                                                     # the add menu of the effects: grouped, as ScreenMaster's
             return self._group_popup(row, box)
         opts = row["opts"]
-        ih = 34
+        ih = 28                                                                 # a row of a list: 28 px, as ScreenMaster's
         h = len(opts) * ih + 8
         below = (self.scroll2 if self.in_right_pane(box.x) else self.scroll) + max(300, min(self.view_h, 900)) - self.HEAD - self.reserved - box.bottom
         y0 = box.bottom + 4 if (below > h or box.y - h < 0) else box.y - h - 4
@@ -2738,8 +2738,8 @@ class Menu(WizardMixin):
             box = pygame.Rect(R - 220, cy - 17, 220, 34)
             hov = self.hover == cid and en
             opn = self.dd_open == cid
-            ui.rect(s, (*(HOVER_FILL if (hov or opn) else CTRL_FILL), 255), box, border_radius=9)
-            ui.rect(s, (*(SEL if opn else (HOVER_EDGE if hov else CTRL)), 255), box, width=2 if opn else 1, border_radius=9)
+            ui.rect(s, (*(HOVER_FILL if (hov or opn) else CTRL_FILL), 255), box, border_radius=6)
+            ui.rect(s, (*(SEL if opn else (HOVER_EDGE if hov else CTRL)), 255), box, width=2 if opn else 1, border_radius=6)
             cur = c.get(cid)
             lbl = next((l for l, v in row["opts"] if v == cur), row.get("placeholder", ""))
             self._txt(self.fb if cur in [v for _, v in row["opts"]] else self.f, lbl, (box.x + 14, box.y + 7), tc if en else dc)

@@ -172,7 +172,7 @@ def button_colors(kind="plain", hover=False, armed=False, enabled=True, tone=Non
         edge = tone if (hover or armed or tone_edge) else CTRL                  # tone_edge: the edge says it even at rest (what deletes)
         ink = ON_LIGHT if armed else tone
     else:
-        fill, edge, ink = (HOVER_FILL if hover else SURFACE2), (HOVER_EDGE if hover else CTRL), TEXT
+        fill, edge, ink = (HOVER_FILL if hover else SURFACE), (HOVER_EDGE if hover else CTRL), TEXT     # the secondary: an outline on the panel, no fill (ScreenMaster's)
     if not enabled:
         fill, ink = dimmed(fill, 0.6), dimmed(DIM, 0.74)
     return fill, edge, ink
@@ -182,7 +182,7 @@ def button(surf, fnt, rect, text, kind="plain", hover=False, armed=False, enable
     """A button: its shape, edge and text (and a small second line, `hint`). The caller keeps its hit and its hover. Returns the rectangle."""
     r = pygame.Rect(rect)
     fill, edge, ink = button_colors(kind, hover, armed, enabled, tone, tone_edge)
-    rad = radius if radius is not None else (12 if r.h >= 40 else 10 if r.h >= 28 else r.h // 2)
+    rad = radius if radius is not None else (8 if r.h >= 40 else 6 if r.h >= 24 else r.h // 2)     # the corners of the ScreenMaster's buttons: 6
     ui.rect(surf, fill, r, border_radius=rad)
     ui.rect(surf, edge, r, width=2 if armed else 1, border_radius=rad)
     img = fnt.render(fit(fnt, text, r.w - 2 * pad), True, ink)
