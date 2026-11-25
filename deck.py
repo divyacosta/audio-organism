@@ -28,24 +28,24 @@ import ui
 import widgets as wg
 
 W, H = 1180, 600
-LOW = (0, 79, 236)                      # graves: the blue 004FEC (outer layer of the wave)
-MID = (235, 8, 56)                      # médios: the red EB0838
-HIGH = (235, 235, 235)                  # agudos: the light EBEBEB (the core)
+LOW = wg.SEL                      # graves: the blue 004FEC (outer layer of the wave)
+MID = wg.ACCENT                      # médios: the red EB0838
+HIGH = wg.TEXT                  # agudos: the light EBEBEB (the core)
 BLUE, ORANGE, WHITE_W = LOW, MID, HIGH  # names used by the wide Deck window
-RED = (235, 8, 56)
+RED = wg.ACCENT
 YELLOW = (255, 110, 130)                # build-up: a lighter red
-CUE_COLORS = [(232, 48, 48), (60, 160, 255), (40, 200, 60), (140, 70, 240), (40, 200, 60), (240, 110, 30), (50, 80, 235), (240, 210, 30)]
+CUE_COLORS = [(232, 48, 48), (60, 160, 255), wg.OK, (140, 70, 240), wg.OK, (240, 110, 30), (50, 80, 235), (240, 210, 30)]
 KIND_COLOR = {"DROP": RED, "BREAK": (150, 156, 176), "BUILD": YELLOW}
 KIND_LABEL = {"DROP": "Drop", "BREAK": "Breakdown", "BUILD": "Build-up"}
 # the sections of the timeline: state -> (colour, name, tint of the band over the wave)
 def _ink(c):
     """Text colour for a bar filled with c: dark on light fills, light on dark ones."""
-    return (9, 10, 16) if (0.30 * c[0] + 0.59 * c[1] + 0.11 * c[2]) > 120 else (235, 235, 235)
+    return wg.BG if (0.30 * c[0] + 0.59 * c[1] + 0.11 * c[2]) > 120 else wg.TEXT
 
 
 STATE_SHORT = {"HIGH ENERGY": "Alta", "BREAKDOWN": "Break", "SILENCE": "Mudo", "GROOVE": "Gr."}
-STATE_STYLE = {"CALM": ((0, 79, 236), "Calmo", 22), "GROOVE": ((74, 134, 255), "Groove", 16), "HIGH ENERGY": ((235, 235, 235), "Energia alta", 16),
-               "BREAKDOWN": (KIND_COLOR["BREAK"], "Breakdown", 26), "DROP": (RED, "Drop", 30), "SILENCE": ((62, 66, 92), "Silêncio", 40)}
+STATE_STYLE = {"CALM": (wg.SEL, "Calmo", 22), "GROOVE": (wg.SEL, "Groove", 16), "HIGH ENERGY": (wg.TEXT, "Energia alta", 16),
+               "BREAKDOWN": (KIND_COLOR["BREAK"], "Breakdown", 26), "DROP": (RED, "Drop", 30), "SILENCE": (wg.BORDER, "Silêncio", 40)}
 PX_PER_SEC = 93.75                       # one pixel per analysis hop (512 samples at 48 kHz)
 HEAD_H = 66
 ZOOM_Y, ZOOM_H = 150, 260
@@ -136,19 +136,19 @@ class DeckWindow:
         # ---- header
         ui.rect(s, (22, 22, 24), (0, 0, W, HEAD_H))
         ui.rect(s, (112, 126, 160), (0, 0, 96, HEAD_H))
-        self._t("l", "AO", (48, 8), (10, 14, 24), "c")
-        self._t("xs", "AO VIVO", (48, 42), (10, 14, 24), "c")
+        self._t("l", "AO", (48, 8), wg.BG, "c")
+        self._t("xs", "AO VIVO", (48, 42), wg.BG, "c")
         title = "SEM ÁUDIO" if silent else an.state + (f"  ·  {genre}" if genre not in ("?", None, "") else "")
-        self._t("l", title, (112, 4), (235, 235, 235))
+        self._t("l", title, (112, 4), wg.TEXT)
         bpm = f"{an.bpm:5.1f}" if an.bpm > 0 else " --"
-        self._t("l", f"{self._fmt(an.track_time)}    {bpm}    {an.key_name}", (136, 34), (235, 235, 235))
+        self._t("l", f"{self._fmt(an.track_time)}    {bpm}    {an.key_name}", (136, 34), wg.TEXT)
         chips = (("ENERGIA", f"{an.level10}/10"), ("BATIDA", f"{an.beat_in_bar + 1} / {an.bpb}" if an.bpm > 0 else "--"),
                  ("FRASE", f"{an.phrase_pos + 1} / {an.phrase_len}" if an.bpm > 0 else "--"))
         for i, (a, b) in enumerate(chips):
             r = pygame.Rect(W - 3 * 128 + i * 128 + 6, 6, 118, HEAD_H - 12)
-            ui.rect(s, (46, 46, 50), r, border_radius=4)
+            ui.rect(s, wg.BORDER, r, border_radius=4)
             self._t("sb", a, (r.centerx, r.y + 6), (200, 200, 208), "c")
-            self._t("m", b, (r.centerx, r.y + 26), (235, 235, 235), "c")
+            self._t("m", b, (r.centerx, r.y + 26), wg.TEXT, "c")
 
         # ---- bars strip: phrase (orange) and bar (blue)
         x_a, x_b = 380, 1130
@@ -229,29 +229,29 @@ class DeckWindow:
                 self._t("xs", kind[0], (x, ZOOM_Y + 3), (0, 0, 0), "c")
         # playhead
         pygame.draw.line(s, (255, 255, 255), (PLAYHEAD_X, ZOOM_Y - 4), (PLAYHEAD_X, ZOOM_Y + ZOOM_H + 6), 3)
-        pygame.draw.polygon(s, (255, 130, 30), [(PLAYHEAD_X - 9, ZOOM_Y + ZOOM_H + 16), (PLAYHEAD_X + 9, ZOOM_Y + ZOOM_H + 16), (PLAYHEAD_X, ZOOM_Y + ZOOM_H + 4)])
+        pygame.draw.polygon(s, wg.TEXT, [(PLAYHEAD_X - 9, ZOOM_Y + ZOOM_H + 16), (PLAYHEAD_X + 9, ZOOM_Y + ZOOM_H + 16), (PLAYHEAD_X, ZOOM_Y + ZOOM_H + 4)])
         if silent:
-            self._t("l", "Toque uma música no computador", (W // 2, mid_y - 16), (255, 200, 90), "c")
+            self._t("l", "Toque uma música no computador", (W // 2, mid_y - 16), wg.TEXT, "c")
 
         # ---- info row
         iy = 430
         r = pygame.Rect(24, iy, 190, 78)
-        ui.rect(s, (255, 120, 30), r, width=2)
+        ui.rect(s, wg.TEXT, r, width=2)
         self._t("s", "BPM", (r.x + 8, r.y + 4), (255, 150, 60))
-        ui.rect(s, (255, 120, 30), (r.right - 62, r.y, 62, 20))
+        ui.rect(s, wg.TEXT, (r.right - 62, r.y, 62, 20))
         self._t("xs", "AUTO", (r.right - 31, r.y + 2), (10, 10, 10), "c")
         self._t("big", f"{an.bpm:5.1f}" if an.bpm > 0 else "--", (r.centerx, r.y + 14), (255, 130, 40), "c")
-        self._t("big", self._fmt(an.track_time, True), (300, iy - 4), (235, 235, 235))
-        self._t("s", f"CONFIANÇA {an.conf * 100:3.0f}%", (305, iy + 66), (170, 170, 180))
-        self._t("s", f"DROPS {sum(1 for _, k in an.marks if k == 'DROP')}", (470, iy + 66), (170, 170, 180))
-        self._t("s", f"VOLUME {an.lf:4.0f} dB", (580, iy + 66), (170, 170, 180))
+        self._t("big", self._fmt(an.track_time, True), (300, iy - 4), wg.TEXT)
+        self._t("s", f"CONFIANÇA {an.conf * 100:3.0f}%", (305, iy + 66), wg.DIM)
+        self._t("s", f"DROPS {sum(1 for _, k in an.marks if k == 'DROP')}", (470, iy + 66), wg.DIM)
+        self._t("s", f"VOLUME {an.lf:4.0f} dB", (580, iy + 66), wg.DIM)
         kx = 820
-        self._t("s", "ENERGIA", (kx, iy + 2), (170, 170, 180))
+        self._t("s", "ENERGIA", (kx, iy + 2), wg.DIM)
         for i in range(10):
             on = i < an.level10
-            ui.rect(s, (60, 200, 90) if on and i < 6 else ((240, 190, 40) if on and i < 8 else ((235, 60, 60) if on else (46, 46, 50))), (kx + i * 16, iy + 24, 12, 22))
-        self._t("s", "KEY", (W - 90, iy + 2), (170, 170, 180), "c")
-        self._t("xl", an.key_name, (W - 90, iy + 22), (235, 235, 235), "c")
+            ui.rect(s, (60, 200, 90) if on and i < 6 else ((240, 190, 40) if on and i < 8 else ((235, 60, 60) if on else wg.BORDER)), (kx + i * 16, iy + 24, 12, 22))
+        self._t("s", "KEY", (W - 90, iy + 2), wg.DIM, "c")
+        self._t("xl", an.key_name, (W - 90, iy + 22), wg.TEXT, "c")
 
         # ---- overview of the whole track
         oy, oh = 522, 52
@@ -291,7 +291,7 @@ class DeckWindow:
             pygame.draw.line(s, c, (x, oy - 2), (x, oy + oh), 1)
         xe = ox + cols
         pygame.draw.line(s, (255, 255, 255), (xe, oy - 2), (xe, oy + oh))
-        pygame.draw.polygon(s, (255, 130, 30), [(xe - 7, oy + oh + 12), (xe + 7, oy + oh + 12), (xe, oy + oh + 2)])
+        pygame.draw.polygon(s, wg.TEXT, [(xe - 7, oy + oh + 12), (xe + 7, oy + oh + 12), (xe, oy + oh + 2)])
         step = 30 if view <= 360 else 60
         for sec in range(0, int(view) + 1, step):
             x = ox + int(sec * pps)
@@ -317,7 +317,7 @@ class DeckWindow:
         lo / mi / hi are 0..1 per column, dim is the brightness per column (dimmer before the track started)."""
         cols = len(lo)
         rows = np.abs(np.arange(hpx) - hpx // 2)[:, None]
-        bg = np.array((6, 7, 11), float) / 255.0
+        bg = np.array(wg.BG, float) / 255.0
         img = np.broadcast_to(bg, (hpx, cols, 3)).copy()
         for h, col, al in zip((lo * half, mi * half * 0.85, hi * half * 0.6), (LOW, MID, HIGH), self.BLEND_ALPHA):
             m = (rows <= h[None, :])[..., None].astype(float)
@@ -493,7 +493,7 @@ class DeckWindow:
         if status is not None and not status.get("shader_ok", True):
             return "Erro no efeito visual: a imagem voltou ao efeito anterior", wg.DANGER, None
         if self._slow_since is not None and now - self._slow_since > 3.0:
-            return f"Imagem travando ({fps:.0f} FPS): a tela grande não está aguentando", (255, 200, 90), ("Melhorar sozinho", "fix:quality")
+            return f"Imagem travando ({fps:.0f} FPS): a tela grande não está aguentando", wg.TEXT, ("Melhorar sozinho", "fix:quality")
         return None
 
     def _banner(self, Wc, text, color, fix):
@@ -528,7 +528,7 @@ class DeckWindow:
         self._t("s", self._fit_text("s", src, w - 140), (x + 80, r.y + 91), wg.TEXT)
         self._t("xs", "ENTRADA", (x, r.y + 120), wg.TITLE)
         mr = pygame.Rect(x + 80, r.y + 122, w - 140, 8)
-        ui.rect(s, (38, 42, 58), mr, border_radius=4)
+        ui.rect(s, wg.SURFACE2, mr, border_radius=4)
         lv = max(0.0, min(1.0, float(getattr(an, "level", 0.0)) * 4.0))
         if lv > 0.01:
             ui.rect(s, wg.DIM, pygame.Rect(mr.x, mr.y, max(6, int(mr.w * lv)), mr.h), border_radius=4)
@@ -579,9 +579,9 @@ class DeckWindow:
             th = 126
             r = pygame.Rect(0, y, W, th + 24)
             ui.rect(s, wg.SURFACE, r, border_radius=12)
-            ui.rect(s, (245, 184, 74), r, width=2, border_radius=12)
+            ui.rect(s, wg.TEXT, r, width=2, border_radius=12)
             tr = pygame.Rect(12, y + 12, th * 16 // 9, th)
-            ui.rect(s, (6, 7, 11), tr, border_radius=8)
+            ui.rect(s, wg.BG, tr, border_radius=8)
             if self.next_cb is not None:
                 self.next_cb(s, tr, pend)
             x = tr.right + 16
@@ -612,7 +612,7 @@ class DeckWindow:
         s = self.surf
         t_end, txt, drop = self.predict(an)
         self._t("xs", "A MÚSICA  ·  FRASE", (0, y), wg.TITLE)
-        self._t("xs", txt, (W, y), (245, 184, 74) if drop else wg.DIM, "r")
+        self._t("xs", txt, (W, y), wg.TEXT if drop else wg.DIM, "r")
         y += 20
         n = max(1, int(an.phrase_len))
         gap = 4
@@ -620,10 +620,10 @@ class DeckWindow:
         cur = int(an.phrase_pos) if an.bpm > 0 else -1
         for i in range(n):
             r = pygame.Rect(int(i * (bw + gap)), y, max(2, int(bw)), 10)
-            col = wg.SEL if i < cur else (wg.TEXT if i == cur else (38, 42, 58))
+            col = wg.SEL if i < cur else (wg.TEXT if i == cur else wg.SURFACE2)
             if i == cur:
                 frac = max(0.0, min(1.0, (an.beat_in_bar + an.phase) / max(1, an.bpb)))
-                ui.rect(s, (38, 42, 58), r, border_radius=3)
+                ui.rect(s, wg.SURFACE2, r, border_radius=3)
                 col_r = pygame.Rect(r.x, r.y, max(2, int(r.w * frac)), r.h)
                 ui.rect(s, wg.TEXT, col_r, border_radius=3)
                 continue
@@ -680,7 +680,7 @@ class DeckWindow:
         for name, v in vals:
             self._t("xs", name, (14, y), wg.TEXT)
             br = pygame.Rect(84, y + 5, W - 84 - 14, 6)
-            ui.rect(s, (38, 42, 58), br, border_radius=3)
+            ui.rect(s, wg.SURFACE2, br, border_radius=3)
             v = 0.0 if silent else max(0.0, min(1.0, v))
             if v > 0.01:
                 ui.rect(s, wg.ACCENT, pygame.Rect(br.x, br.y, max(3, int(br.w * v)), br.h), border_radius=3)
@@ -799,7 +799,7 @@ class DeckWindow:
         pw = int(min(Wc * (0.50 if wide else 0.60), 760 if wide else 400))
         ph = pw * 9 // 16
         pr = pygame.Rect(0, 0, pw, ph)
-        ui.rect(s, (6, 7, 11), pr, border_radius=12)
+        ui.rect(s, wg.BG, pr, border_radius=12)
         if self.preview_cb is not None:
             self.preview_cb(s, pr)
         else:
@@ -816,11 +816,11 @@ class DeckWindow:
         if not ok:
             ht, hc = "Erro no efeito visual", wg.DANGER
         elif silent:
-            ht, hc = "Sem som: toque uma música", (255, 200, 90)
+            ht, hc = "Sem som: toque uma música", wg.TEXT
             if self._quiet_since is not None and now - self._quiet_since > 2.5:           # the music may be playing somewhere the program is not listening to
                 ht, fix = "Sem som", ("Escolher o som", "fix:sound")
         elif self._slow_since is not None and now - self._slow_since > 3.0:
-            ht, hc, fix = "Travando", (255, 200, 90), ("Melhorar sozinho", "fix:quality")
+            ht, hc, fix = "Travando", wg.TEXT, ("Melhorar sozinho", "fix:quality")
         elif learning:
             ht, hc = "Entendendo o ritmo da música…", wg.ACCENT2
         else:
@@ -939,7 +939,7 @@ class DeckWindow:
         if an.bpm > 0 and not silent:                                   # one dot per beat of the bar, the current one lit
             for i in range(an.bpb):
                 on = i == an.beat_in_bar
-                c = tuple(int(46 + ((wg.ACCENT if i == 0 else wg.ACCENT2)[j] - 46) * (0.35 + 0.65 * pulse)) for j in range(3)) if on else (36, 40, 58)
+                c = tuple(int(46 + ((wg.ACCENT if i == 0 else wg.ACCENT2)[j] - 46) * (0.35 + 0.65 * pulse)) for j in range(3)) if on else wg.SURFACE2
                 ui.circle(s, c, (62 + i * 16, 50), 5 if on else 4)
         pr = pygame.Rect(104, 4, 40, wg.MIN_H)                           # says what a click does: TAP (tap the beat), AUTO (give the tempo back to the program: lit while the tempo is by hand)
         phov = self.mouse is not None and pr.collidepoint(self.mouse)
@@ -956,7 +956,7 @@ class DeckWindow:
         # the energy of the music, big: ten segments (green, then yellow, then red) and the level as a number
         lvl = max(0, min(10, int(an.level10)))
         for i in range(10):
-            col = (wg.OK if i < 6 else (235, 235, 235) if i < 8 else wg.ACCENT) if i < lvl else (36, 40, 58)
+            col = (wg.OK if i < 6 else wg.TEXT if i < 8 else wg.ACCENT) if i < lvl else wg.SURFACE2
             ui.rect(s, col, (tx + i * 17, 34, 13, 20), border_radius=4)
         self._t("m", f"{lvl}", (tx + 10 * 17 + 8, 30), wg.TEXT)
         self._t("xs", "ENERGIA", (tx + 10 * 17 + 8 + self.fonts["m"].size(f"{lvl}")[0] + 8, 36), wg.DIM)
@@ -964,9 +964,9 @@ class DeckWindow:
         if not ok:
             ht, hc = "Erro no efeito visual", wg.DANGER
         elif silent:
-            ht, hc = "Sem áudio", (255, 200, 90)
+            ht, hc = "Sem áudio", wg.TEXT
         elif fps < 25:
-            ht, hc = f"Travando: {fps:.0f} quadros/s", (255, 200, 90)
+            ht, hc = f"Travando: {fps:.0f} quadros/s", wg.TEXT
         elif learning:
             ht, hc = (f"Aprendendo o ritmo {an.conf * 100:.0f}%" if an.bpm > 0 else "Aprendendo o ritmo…"), wg.ACCENT2
         else:
@@ -996,7 +996,7 @@ class DeckWindow:
         ph = int(ww * 0.68)
         mid_y = wy + wh // 2
         half = wh // 2 - 6
-        ui.rect(s, (6, 7, 11), (wx, wy, ww, wh), border_radius=8)
+        ui.rect(s, wg.BG, (wx, wy, ww, wh), border_radius=8)
         fut = pygame.Rect(wx + ph, wy, ww - ph, wh)
         ui.rect(s, (12, 13, 22), fut, border_top_right_radius=8, border_bottom_right_radius=8)
         n = an.deck_n if self.frozen is None else self.frozen
@@ -1028,7 +1028,7 @@ class DeckWindow:
                 if x > wx + ww - 2:
                     break
                 bib = (an.beat_in_bar + 1 + k) % an.bpb
-                c = (150, 30, 60) if bib == 0 else (62, 66, 92)
+                c = (150, 30, 60) if bib == 0 else wg.BORDER
                 pygame.draw.line(s, c, (x, wy + 2 + 18), (x, wy + 2 + (30 if bib == 0 else 26)))
                 k += 1
         # sections of the music: every state (calmo, groove, energia alta, breakdown, drop, silêncio) lasts until the next one, the last until the
@@ -1084,9 +1084,9 @@ class DeckWindow:
                 ui.rect(s, wg.DANGER, (lx, wy + wh - 44, lw, 17), border_radius=8)
                 s.blit(img, (lx + 7, wy + wh - 44 + 8 - img.get_height() // 2))
             cw_ = self.fonts["s"].size(said)[0] + 20
-            self._chip(max(wx + ph + 8, wx + ww - cw_ - 8), wy + 28, said, color=(255, 200, 90) if building else wg.TEXT, border=(255, 200, 90) if building else wg.BORDER)
+            self._chip(max(wx + ph + 8, wx + ww - cw_ - 8), wy + 28, said, color=wg.TEXT if building else wg.TEXT, border=wg.TEXT if building else wg.BORDER)
         # captions of the two halves
-        self._t("xs", "PREVISÃO", (wx + ww - 10, wy + wh - 15), (140, 146, 168), "r")
+        self._t("xs", "PREVISÃO", (wx + ww - 10, wy + wh - 15), wg.DIM, "r")
         ui.rect(s, (32, 35, 54), (wx, wy, ww, wh), width=1, border_radius=8)                  # the frame of the whole timeline
         # playhead: white line with a magenta marker
         beat = pulse if (an.bpm > 0 and not silent) else 0.0                       # the same flash as the dots: strongest on the beat, fading through it
@@ -1099,16 +1099,16 @@ class DeckWindow:
         tc_ = tuple(int(105 + (c - 105) * beat) if i else int(120 + (c - 120) * beat) for i, c in enumerate(wg.ACCENT))
         pygame.draw.polygon(s, tc_, [(wx + ph - 6, wy + wh + 11), (wx + ph + 6, wy + wh + 11), (wx + ph, wy + wh + 2)])
         if silent:
-            self._t("m", "Toque uma música no computador", (wx + ph // 2, mid_y - 12), (255, 200, 90), "c")
+            self._t("m", "Toque uma música no computador", (wx + ph // 2, mid_y - 12), wg.TEXT, "c")
         # phrase progress (one segment per bar) and the reading
         sy = wy + wh + 16
         seg_w = (ww - (an.phrase_len - 1) * 3) / an.phrase_len
         for i in range(an.phrase_len):
             rr = pygame.Rect(int(wx + i * (seg_w + 3)), sy, int(seg_w), 6)
-            ui.rect(s, (36, 40, 58), rr, border_radius=3)
+            ui.rect(s, wg.SURFACE2, rr, border_radius=3)
             if an.bpm > 0 and not silent:
                 if i < an.phrase_pos:
-                    ui.rect(s, (235, 235, 235), rr, border_radius=3)               # the bars of the phrase that are done stay light
+                    ui.rect(s, wg.TEXT, rr, border_radius=3)               # the bars of the phrase that are done stay light
                 elif i == an.phrase_pos:
                     ui.rect(s, wg.ACCENT, (rr.x, rr.y, max(3, int(rr.w * an.bar_phase)), rr.h), border_radius=3)
         if an.bpm > 0 and not silent:
@@ -1181,7 +1181,7 @@ class DeckWindow:
         view = max(T, 120.0)
         ppsv = (Wc - 4) / view
         colsn = int(T * ppsv)
-        ui.rect(s, (6, 7, 11), (0, oy, Wc - 4, oh), border_radius=6)
+        ui.rect(s, wg.BG, (0, oy, Wc - 4, oh), border_radius=6)
         if colsn > 2 and an.deck_n - an.trk_i0 > 4:
             key = (colsn, an.trk_i0, Wc)
             if now_t - self.ov_cache[0] > 0.5 or getattr(self, "ov_surf_c", None) is None or key != getattr(self, "ov_key_c", None):
@@ -1226,7 +1226,7 @@ class DeckWindow:
     def _status(self, fps, lat, vsync, status, y):
         """How the program itself is doing (the music is shown above). Always visible."""
         s = self.surf
-        dot = (74, 134, 255) if fps >= 55 else (255, 220, 100) if fps >= 40 else (255, 110, 110)
+        dot = wg.SEL if fps >= 55 else (255, 220, 100) if fps >= 40 else (255, 110, 110)
         ui.circle(s, dot, (7, y + 10), 5)
         self._t("m", f"{fps:4.0f} FPS", (20, y - 2), wg.TEXT)
         self._t("s", f"{'sem cortes na imagem' if vsync else 'VSync desligado'}  ·  atraso ~{lat:3.0f} ms", (20, y + 26), wg.DIM)
@@ -1335,7 +1335,7 @@ class DeckWindow:
                     col = (30, 42, 78)                                                    # the ghost of the bar before
                 if cur > 0:
                     k = 0.45 + 0.55 * cur
-                    base = (74, 134, 255) if row != 0 else (110, 160, 255)
+                    base = wg.SEL if row != 0 else (110, 160, 255)
                     col = tuple(int(c * k) for c in base)
                     if st == ear.grid_step:
                         col = wg.ACCENT
@@ -1344,10 +1344,10 @@ class DeckWindow:
         rt = pygame.Rect(px + gw + gap, y1, 150, 132)
         self._panel(rt, "ANDAMENTO")
         cx, cy = rt.centerx, rt.y + 86
-        pygame.draw.arc(s, (42, 46, 68), (cx - 52, cy - 52, 104, 104), math.radians(0), math.radians(180), 7)
+        pygame.draw.arc(s, wg.SURFACE2, (cx - 52, cy - 52, 104, 104), math.radians(0), math.radians(180), 7)
         stable = max(0.0, 1.0 - ear.tempo_spread / 8.0) if an.bpm > 0 else 0.0
         if stable > 0.02 and not silent:
-            pygame.draw.arc(s, wg.ACCENT2 if ear.tempo_spread < 1.5 else (255, 200, 90), (cx - 52, cy - 52, 104, 104), math.radians(180 - 180 * stable), math.radians(180), 7)
+            pygame.draw.arc(s, wg.ACCENT2 if ear.tempo_spread < 1.5 else wg.TEXT, (cx - 52, cy - 52, 104, 104), math.radians(180 - 180 * stable), math.radians(180), 7)
         self._t("l", f"{an.bpm:.0f}" if an.bpm > 0 and not silent else "--", (cx, cy - 34), wg.TEXT, "c")
         self._t("xs", ("estável" if ear.tempo_spread < 1.5 else "variando") + (f" ±{ear.tempo_spread / 2:.1f}" if an.bpm > 0 else ""), (cx, cy - 4), wg.DIM, "c")
         lab = "baixa" if ear.density < 3.0 else ("média" if ear.density < 7.0 else "alta")
@@ -1368,8 +1368,8 @@ class DeckWindow:
         fx = lambda f: ax + int(aw * max(0.0, min(1.0, math.log(max(f, 30.0) / 30.0) / math.log(fmax / 30.0))))
         self._alpha_rect(pygame.Rect(fx(30), ay, fx(200) - fx(30), ah), wg.ACCENT, 28)
         self._alpha_rect(pygame.Rect(fx(1000), ay, fx(3400) - fx(1000), ah), wg.ACCENT2, 30 if ear.vocal > 0.4 else 14)
-        self._t("xs", "graves", (fx(30) + 4, ay + 2), (255, 106, 134))
-        self._t("xs", "faixa vocal" + (" · voz" if ear.vocal > 0.4 else ""), (fx(1000) + 4, ay + 2), (127, 168, 255) if ear.vocal > 0.4 else wg.DIM)
+        self._t("xs", "graves", (fx(30) + 4, ay + 2), wg.DANGER)
+        self._t("xs", "faixa vocal" + (" · voz" if ear.vocal > 0.4 else ""), (fx(1000) + 4, ay + 2), wg.SEL if ear.vocal > 0.4 else wg.DIM)
         if not silent:
             top = [(ax + int(i * aw / (nb - 1)), ay + ah - int(float(an.bands[i]) * (ah - 14))) for i in range(nb)]
             pygame.draw.polygon(s, (27, 47, 102), top + [(ax + aw, ay + ah), (ax, ay + ah)])
@@ -1379,7 +1379,7 @@ class DeckWindow:
             if ear.cen > 0:
                 cxx = fx(ear.cen)
                 pygame.draw.line(s, wg.ACCENT, (cxx, ay + 14), (cxx, ay + ah), 2)
-                self._t("xs", f"brilho {ear.cen / 1000:.1f}k", (min(cxx + 4, ax + aw - 62), ay + 14), (255, 106, 134))
+                self._t("xs", f"brilho {ear.cen / 1000:.1f}k", (min(cxx + 4, ax + aw - 62), ay + 14), wg.DANGER)
             if ear.note != "--" and ear.note_hz > 0:
                 nx = fx(ear.note_hz)
                 i = max(0, min(nb - 1, int((nx - ax) * (nb - 1) / aw)))
@@ -1388,9 +1388,9 @@ class DeckWindow:
                 ui.circle(s, (255, 255, 255), (nx, ny), 4)
                 self._t("xs", ear.note, (nx, ay + ah - 15), (255, 255, 255), "c")
             if ear.riser > 0.35:
-                self._t("xs", "▲ riser", (ax + aw - 4, ay + 2), (255, 200, 90), "r")
+                self._t("xs", "▲ riser", (ax + aw - 4, ay + 2), wg.TEXT, "r")
         for f, lab in ((50, "50"), (100, "100"), (500, "500"), (1000, "1k"), (5000, "5k"), (10000, "10k")):
-            self._t("xs", lab, (fx(f), r.bottom - 18), (140, 146, 168), "c")
+            self._t("xs", lab, (fx(f), r.bottom - 18), wg.DIM, "c")
         if not harm_off:
             rh = pygame.Rect(px + sw + gap, y2, hw, 142)
             self._panel(rh, "HARMONIA", f"tom {an.key_name}" if an.key_name != "--" and not silent else "")
@@ -1405,17 +1405,17 @@ class DeckWindow:
             for i in range(12):
                 hgt = int(54 * float(ear.chroma[i]) / cmax) if not silent else 0
                 br = pygame.Rect(rh.x + 10 + int(i * bw), rh.y + 78 - hgt, max(4, int(bw) - 2), max(2, hgt))
-                ui.rect(s, wg.ACCENT2 if i in chord_notes else (42, 46, 68), br, border_radius=2)
+                ui.rect(s, wg.ACCENT2 if i in chord_notes else wg.SURFACE2, br, border_radius=2)
                 nm = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")[i]
                 if len(nm) == 1:                                                            # only the natural notes are named; the sharps are the narrow bars between them
-                    self._t("xs", nm, (rh.x + 10 + int(i * bw) + int(bw) // 2 - 3, rh.y + 82), wg.TEXT if i == key_root else (140, 146, 168))
+                    self._t("xs", nm, (rh.x + 10 + int(i * bw) + int(bw) // 2 - 3, rh.y + 82), wg.TEXT if i == key_root else wg.DIM)
                 elif i == key_root:
                     self._t("xs", "#", (rh.x + 10 + int(i * bw) + int(bw) // 2 - 3, rh.y + 82), wg.TEXT)
                 if i == key_root:
                     pygame.draw.line(s, wg.ACCENT, (br.x, rh.y + 96), (br.right, rh.y + 96), 2)
             self._t("l", ear.chord if ear.chord != "--" and not silent else "—", (rh.x + 10, rh.y + 98), wg.TEXT if ear.chord != "--" else wg.DIM)
             conf = pygame.Rect(rh.x + 90, rh.y + 106, hw - 100, 4)
-            ui.rect(s, (22, 25, 38), conf, border_radius=2)
+            ui.rect(s, wg.SURFACE2, conf, border_radius=2)
             if ear.chord != "--" and not silent:
                 ui.rect(s, wg.ACCENT, (conf.x, conf.y, max(3, int(conf.w * ear.chord_conf)), 4), border_radius=2)
             self._t("xs", self._fit_text("xs", " · ".join(ear.chord_seq[-4:]) or "ouvindo…", hw - 100), (rh.x + 90, rh.y + 114), wg.DIM)
@@ -1424,9 +1424,9 @@ class DeckWindow:
         h3 = 128
         rv = pygame.Rect(px, y3, 84, h3)
         self._panel(rv, "VOLUME")
-        for k, (val, col) in enumerate(((an.lf, wg.ACCENT2), (ear.lf_long, (127, 168, 255)))):
+        for k, (val, col) in enumerate(((an.lf, wg.ACCENT2), (ear.lf_long, wg.SEL))):
             bx = rv.x + 12 + k * 28
-            ui.rect(s, (22, 25, 38), (bx, rv.y + 24, 18, 78), border_radius=4)
+            ui.rect(s, wg.SURFACE2, (bx, rv.y + 24, 18, 78), border_radius=4)
             if not silent:
                 hh = int(78 * max(0.0, min(1.0, (val + 50.0) / 50.0)))
                 ui.rect(s, col, (bx, rv.y + 24 + 78 - hh, 18, max(2, hh)), border_radius=4)
@@ -1437,9 +1437,9 @@ class DeckWindow:
         rs = pygame.Rect(rv.right + gap, y3, 128, h3)
         self._panel(rs, "ESTÉREO")
         gcx, gcy, gr = rs.centerx, rs.y + 62, 34
-        ui.circle(s, (42, 46, 68), (gcx, gcy), gr, 1)
-        pygame.draw.line(s, (42, 46, 68), (gcx, gcy - gr), (gcx, gcy + gr), 1)
-        pygame.draw.line(s, (42, 46, 68), (gcx - gr, gcy), (gcx + gr, gcy), 1)
+        ui.circle(s, wg.SURFACE2, (gcx, gcy), gr, 1)
+        pygame.draw.line(s, wg.SURFACE2, (gcx, gcy - gr), (gcx, gcy + gr), 1)
+        pygame.draw.line(s, wg.SURFACE2, (gcx - gr, gcy), (gcx + gr, gcy), 1)
         if ear.lr is not None and not silent:
             lft, rgt = ear.lr
             n = min(len(lft), 160)
@@ -1449,12 +1449,12 @@ class DeckWindow:
             for i in range(0, n, 2):
                 pxx = int(gcx + max(-gr, min(gr, sid[i] * gain)))
                 pyy = int(gcy - max(-gr, min(gr, mid[i] * gain)))
-                s.set_at((pxx, pyy), (127, 168, 255))
-                s.set_at((pxx + 1, pyy), (127, 168, 255))
+                s.set_at((pxx, pyy), wg.SEL)
+                s.set_at((pxx + 1, pyy), wg.SEL)
         elif not silent:
             self._t("xs", "mono", (gcx, gcy - 6), wg.DIM, "c")
         cb = pygame.Rect(rs.x + 12, rs.bottom - 28, rs.w - 24, 4)
-        ui.rect(s, (22, 25, 38), cb, border_radius=2)
+        ui.rect(s, wg.SURFACE2, cb, border_radius=2)
         pygame.draw.line(s, (60, 66, 92), (cb.centerx, cb.y - 2), (cb.centerx, cb.bottom + 2), 1)
         if not silent:
             mx = cb.centerx + int((cb.w // 2) * max(-1.0, min(1.0, ear.corr)))
@@ -1464,7 +1464,7 @@ class DeckWindow:
         rtn = pygame.Rect(rs.right + gap, y3, rest // 2 - 4, h3)
         self._panel(rtn, "TENSÃO")
         tb = pygame.Rect(rtn.x + 10, rtn.y + 26, rtn.w - 20, 8)
-        ui.rect(s, (22, 25, 38), tb, border_radius=4)
+        ui.rect(s, wg.SURFACE2, tb, border_radius=4)
         if not silent:
             ui.rect(s, wg.ACCENT if an.tension > 0.5 else wg.ACCENT2, (tb.x, tb.y, max(4, int(tb.w * max(0.0, min(1.0, an.tension)))), 8), border_radius=4)
         self._spark(pygame.Rect(rtn.x + 10, rtn.y + 42, rtn.w - 20, 30), list(ear.hist["tens"]), wg.ACCENT, True)
@@ -1478,12 +1478,12 @@ class DeckWindow:
             ui.rect(s, wg.ACCENT if hot else (wg.ACCENT2 if on and not silent else wg.BORDER), (lx, rtn.bottom - 30, w_, 20), width=1, border_radius=10)
             if name == "RISER" and not silent and ear.riser > 0.02:                      # the level of the reading, so a weak riser shows before the lamp lights
                 ui.rect(s, (60, 66, 110), (lx + 3, rtn.bottom - 13, max(2, int((w_ - 6) * min(1.0, ear.riser / 0.35))), 2), border_radius=1)
-            self._t("xs", name, (lx + 7, rtn.bottom - 27), wg.TEXT if on and not silent else (140, 146, 168))
+            self._t("xs", name, (lx + 7, rtn.bottom - 27), wg.TEXT if on and not silent else wg.DIM)
             lx += w_ + 5
         rst = pygame.Rect(rtn.right + gap, y3, pw_all - (rtn.right + gap - px), h3)
         self._panel(rst, "ESTRUTURA", f"agora {ear.sect_now}" if ear.sect_now else "")
         sb = pygame.Rect(rst.x + 10, rst.y + 26, rst.w - 20, 28)
-        ui.rect(s, (22, 25, 38), sb, border_radius=5)
+        ui.rect(s, wg.SURFACE2, sb, border_radius=5)
         span = 120.0
         t_now = an.track_time
         for (t0, t1, lab) in ear.sect:
@@ -1496,12 +1496,12 @@ class DeckWindow:
             if x1 - x0 > 16:
                 self._t("xs", lab, (x0 + 6, sb.y + 6), (255, 255, 255))
         pygame.draw.line(s, (255, 255, 255), (sb.right - 1, sb.y - 2), (sb.right - 1, sb.bottom + 2), 2)
-        self._t("xs", "−2 min", (sb.x, sb.bottom + 4), (140, 146, 168))
-        self._t("xs", "agora", (sb.right, sb.bottom + 4), (140, 146, 168), "r")
+        self._t("xs", "−2 min", (sb.x, sb.bottom + 4), wg.DIM)
+        self._t("xs", "agora", (sb.right, sb.bottom + 4), wg.DIM, "r")
         txt = f"soa igual a {mmss_(ear.repeat_at)}" if ear.repeat_at is not None else ("parte nova" if ear.sect_now else "ouvindo…")
         self._t("s", txt, (rst.x + 10, rst.bottom - 30), wg.TEXT if ear.repeat_at is not None else wg.DIM)
         tip = pygame.Rect(rst.x + 10, rst.bottom - 12, rst.w - 20, 3)
-        ui.rect(s, (22, 25, 38), tip, border_radius=1)
+        ui.rect(s, wg.SURFACE2, tip, border_radius=1)
         if ear.repeat_at is not None:
             ui.rect(s, wg.ACCENT, (tip.x, tip.y, max(3, int(tip.w * max(0.0, min(1.0, ear.repeat_sim)))), 3), border_radius=1)
 
