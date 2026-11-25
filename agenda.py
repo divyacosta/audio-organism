@@ -89,3 +89,52 @@ def apply(agenda, op, i, scenes=1):
     elif op == "del":
         del agenda[i]
     return agenda
+
+
+# ---- faixas (lanes): a number of the scene follows the day. Each lane has points (minute of the day, value); between two points the
+# value is a straight line, before the first and after the last it holds. The agenda writes it once a minute (the page is the editor).
+LANE_KEYS = {"bloom": ("Brilho das luzes", 0, 200), "expo": ("Exposição", 50, 200)}
+
+
+def lane_value(points, minute):
+    """The value of a lane at a minute of the day, or None when the lane has no points."""
+    pts = sorted((int(m), float(v)) for m, v in points)
+    if not pts:
+        return None
+    if minute <= pts[0][0]:
+        return pts[0][1]
+    if minute >= pts[-1][0]:
+        return pts[-1][1]
+    for (m0, v0), (m1, v1) in zip(pts, pts[1:]):
+        if m0 <= minute <= m1:
+            return v0 if m1 == m0 else v0 + (v1 - v0) * (minute - m0) / (m1 - m0)
+    return pts[-1][1]
+
+
+def apply_lanes(cfg, now):
+    """Writes every lane's value at this minute into the settings it drives (clamped to the slider's range)."""
+    minute = now.tm_hour * 60 + now.tm_min
+    for lane in cfg.get("agenda_lanes") or []:
+        key = lane.get("key")
+        if key not in LANE_KEYS:
+            continue
+        v = lane_value(lane.get("points") or [], minute)
+        if v is None:
+            continue
+        _, lo, hi = LANE_KEYS[key]
+        cfg[key] = int(max(lo, min(hi, round(v))))
+
+
+class LaneTicker:
+    """Writes the lanes once per minute, not every frame: a slider the person moves is not fought every frame."""
+
+    def __init__(self):
+        self.last = None
+
+    def check(self, now=None):
+        now = now or time.localtime()
+        key = (now.tm_yday, now.tm_hour, now.tm_min)
+        if key == self.last:
+            return False
+        self.last = key
+        return True

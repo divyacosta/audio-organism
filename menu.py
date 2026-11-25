@@ -1324,6 +1324,14 @@ class Menu(WizardMixin):
         return self._extra.get(cid)
 
     def set_value(self, cid, value, announce=True):
+        if cid == "la_pick":                                                     # Faixas: the chosen number gets a lane (points come with clicks on the lane's row)
+            if value:
+                self.cfg.setdefault("agenda_lanes", []).append(dict(key=value, points=[]))
+                self.say("Faixa criada: clique em Gravar agora nos horários que quiser")
+            self.touch()
+            self.rebuild_scenes()
+            self.need = True
+            return None
         if cid == "ap_pick":                                                     # Regras por programa: the program chosen joins the rules, the picker goes back to its first line
             if value:
                 rules = self.cfg.setdefault("app_rules", [])
@@ -1666,6 +1674,28 @@ class Menu(WizardMixin):
             self.select_palette(0)
             self.touch()
             self.say("Paletas de fábrica restauradas")
+            return None
+        if cid.startswith("la_"):                                                # Faixas: a click grabs the value now, deletes a lane, or starts one
+            import agenda as AG3
+            op, _, idx = cid.partition(":")
+            lanes = self.cfg.setdefault("agenda_lanes", [])
+            if op == "la_new":
+                lanes.append(dict(key=idx, points=[]))
+            elif op == "la_val" and 0 <= int(idx) < len(lanes):
+                lane = lanes[int(idx)]
+                now = time.localtime()
+                minute = now.tm_hour * 60 + now.tm_min
+                key = lane.get("key")
+                if key in AG3.LANE_KEYS:
+                    pts = [p for p in lane.get("points") or [] if int(p[0]) != minute]          # one point per minute: a new click at the same minute replaces it
+                    pts.append([minute, int(self.cfg.get(key, AG3.LANE_KEYS[key][1]))])
+                    lane["points"] = sorted(pts)
+                    self.say(f"Ponto gravado às {now.tm_hour:02d}:{now.tm_min:02d}")
+            elif op == "la_del" and 0 <= int(idx) < len(lanes):
+                del lanes[int(idx)]
+            self.touch()
+            self.rebuild_scenes()
+            self.need = True
             return None
         if cid.startswith("ap_"):                                                # Regras por programa: a click changes one rule
             op, _, idx = cid.partition(":")

@@ -3037,6 +3037,23 @@ def test_master_switch():
     check("outro clique liga de novo", cfg["master_on"] is True, cfg["master_on"])
 
 
+def test_lanes():
+    section("Faixas da agenda: um número segue o dia entre os pontos, e é escrito uma vez por minuto")
+    import agenda as AG
+    check("entre dois pontos o valor é uma reta", abs(AG.lane_value([(0, 0), (120, 100)], 60) - 50) < 1e-6, AG.lane_value([(0, 0), (120, 100)], 60))
+    check("antes do primeiro e depois do último o valor segura", AG.lane_value([(600, 20), (900, 80)], 0) == 20 and AG.lane_value([(600, 20), (900, 80)], 1400) == 80)
+    check("sem pontos não há valor", AG.lane_value([], 500) is None)
+    cfg = {"bloom": 60, "agenda_lanes": [{"key": "bloom", "points": [[600, 20], [900, 180]]}]}
+    AG.apply_lanes(cfg, time.struct_time((2026, 11, 25, 12, 30, 0, 2, 329, -1)))
+    check("12:30 escreve o valor da faixa no brilho (entre 20 e 180 aos 10:00 e 15:00)", cfg["bloom"] == 100, cfg["bloom"])
+    m = menu.Menu(menu.fresh())
+    m.cfg["agenda_lanes"] = [{"key": "bloom", "points": []}]
+    m.cfg["bloom"] = 77
+    m.press("la_val:0")
+    pts = m.cfg["agenda_lanes"][0]["points"]
+    check("um clique grava o valor atual neste minuto", len(pts) == 1 and pts[0][1] == 77, pts)
+
+
 def test_safety_undo():
     section("Segurança e Desfazer: restaurar e perfis nunca baixam os limites de conforto, e o toast desfaz")
     cfg = menu.fresh()
@@ -3190,7 +3207,7 @@ def test_agenda():
 
 def main():
     exe = sys.argv[sys.argv.index("--exe") + 1] if "--exe" in sys.argv else None
-    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_agenda_week, test_master_switch, test_navigation, test_sticky_titles, test_report):
+    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_agenda_week, test_master_switch, test_lanes, test_navigation, test_sticky_titles, test_report):
         try:
             fn()
         except Exception as e:

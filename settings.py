@@ -552,7 +552,7 @@ def auto_sets_factory():
 
 
 _AS0 = auto_sets_factory()
-DEFAULTS.update(master_on=True, panel_fps=30, panel_fps_v=2, link_riser=False, link_vocal=False, remote_osc=False, remote_midi=False, phone_view=False, search="", ui_tab=0, agenda=[], app_rules=[], last_fg_app="", live=False, profile=1, ae_kind=0, ae_part=0, auto_sets=auto_sets_factory())
+DEFAULTS.update(master_on=True, agenda_lanes=[], panel_fps=30, panel_fps_v=2, link_riser=False, link_vocal=False, remote_osc=False, remote_midi=False, phone_view=False, search="", ui_tab=0, agenda=[], app_rules=[], last_fg_app="", live=False, profile=1, ae_kind=0, ae_part=0, auto_sets=auto_sets_factory())
 DEFAULTS.update(LY.LP_DEFAULTS)
 DEFAULTS["starter_v"] = 4
 DEFAULTS.update(ed_item=0, ed_sub=0, ed_page=False, ed_tab=0, sc_filter=0, lib=-1, pal_open=False, sys_item=0, ear_open=True, tour_done=False, tour_marks=0, osd=True, advanced=False, macro_energy=100, macro_speed=100, macro_pal=0, detail_open=False)                                                  # the item of the editor of a scene that is open, and the sub-section of the mandala                                                          # 2: the mandala presets come as scenes of the gallery
@@ -675,6 +675,13 @@ def agenda_rows(cfg):
         rows.append(dict(id=f"ap_scene:{i}", kind="action", label=f"Programa {rule.get('process', '?')}", btn=name[:18], help="Um clique troca a cena que ele usa, na ordem: sem cena, cada cena"))
         rows.append(dict(id=f"ap_pause:{i}", kind="action", label="Agenda neste programa", btn="Pausada" if rule.get("pause") else "Rodando", help="Pausada: a agenda não troca de cena enquanto o programa estiver na frente"))
         rows.append(dict(id=f"ap_del:{i}", kind="action", label="Apagar esta regra", btn="Apagar", danger=True, help="Tira a regra do programa"))
+    import agenda as AG2
+    for i, lane in enumerate(cfg.get("agenda_lanes") or []):                             # Faixas: a number that follows the day (points: a minute and a value)
+        label = AG2.LANE_KEYS.get(lane.get("key"), ("?", 0, 0))[0]
+        rows.append(dict(id=f"la_val:{i}", kind="action", label=f"Faixa: {label}", btn=f"{len(lane.get('points') or [])} pontos", help="Um clique grava o valor atual neste minuto da faixa"))
+        rows.append(dict(id=f"la_del:{i}", kind="action", label="Apagar esta faixa", btn="Apagar", danger=True, help="Tira a faixa da agenda"))
+    rows.append(dict(id="la_pick", kind="dd", label="Nova faixa", opts=[("Escolher", "")] + [(label, key) for key, (label, _, _) in AG2.LANE_KEYS.items()],
+                     help="Uma faixa que segue o dia: escolha o que ela controla"))
     import foreground as FG
     running = [e for e in FG.running_apps() if not any(r.get("process") == e for r in cfg.get("app_rules") or [])]
     rows.append(dict(id="ap_pick", kind="dd", label="Programa aberto", opts=[("Escolher um programa", "")] + [(e, e) for e in running],

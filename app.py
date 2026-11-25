@@ -132,6 +132,7 @@ def main():
     import agenda as _agenda
     agenda_tk = _agenda.Ticker()
     import foreground as _fg
+    lane_tk = _agenda.LaneTicker()                                              # Faixas: the lanes are written once a minute
     fg_watch, fg_next = _fg.Watch(), 0.0                                      # Regras por programa: the program in front, asked twice a second
     if os.environ.get("VIS_REPORT"):                                          # the performance report (report.py): Ultra, VSync and dynamic resolution off, then measure and quit
         import report
@@ -457,6 +458,8 @@ def main():
                         pass
         prof.mark("áudio/entrada (captura ou sinal de teste) e troca de dispositivo")
         menu.apply_taps(an)                                                       # tap tempo asked for since the last frame (TAP, the T key, a controller)
+        if lane_tk.check():
+            _agenda.apply_lanes(cfg, time.localtime())
         if time.perf_counter() >= fg_next:
             fg_next = time.perf_counter() + 0.5
             fg_watch.update(cfg, menu.play_scene)
