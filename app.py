@@ -135,10 +135,11 @@ def main():
         _settings.PATH = os.path.join(os.path.dirname(os.environ["VIS_REPORT"]), "settings.json")      # whatever the run saves goes next to the report, never over the person's settings
         recorder = report.Recorder(os.environ["VIS_REPORT"], profile=bool(os.environ.get("VIS_REPORT_PROF")))
         prof.ON = True
-        cfg["preset"], cfg["vsync"], cfg["dynres"] = len(PRESETS_N) - 1, False, False
+        want_preset = int(os.environ.get("VIS_REPORT_PRESET", len(PRESETS_N) - 1))                 # Ultra unless asked otherwise (to compare qualities)
+        cfg["preset"], cfg["vsync"], cfg["dynres"] = want_preset, False, False
         if os.environ.get("VIS_REPORT_FPS"):                                   # the FPS cap of the run (to see what the picture does with no cap in the way)
             cfg["fps_out"] = int(os.environ["VIS_REPORT_FPS"])
-        menu.set_value("preset", len(PRESETS_N) - 1, announce=False)
+        menu.set_value("preset", want_preset, announce=False)
     if cap is not None:                                                       # the pickers of Ajustes list what the system has
         menu.audio_devices = cap.devices()
         menu.monitors = rend.monitor_count()
