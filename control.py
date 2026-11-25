@@ -421,7 +421,19 @@ class ControlWindow:
             fy = self.H - 26                                                       # the foot of the window, inside it
             ui.rect(s, (*wg.BG, 255), (0, fy, self.W, 26))
             ui.rect(s, (*wg.BORDER, 255), (0, fy, self.W, 1))
-            self._t(self.fs, line, (16, fy + 5), wg.DIM)
+            parts = [q.strip() for q in line.split("   ·   ")]
+            x = 16
+            for k, part in enumerate(parts):
+                if k:
+                    x += self._t(self.fs, "·", (x + 4, fy + 5), wg.DIM) + 14
+                state = part.endswith(" ok") or part == "shaders ok"
+                if part.startswith(("áudio", "shaders")):                       # the modules: a dot in its state's colour (ok = blue, a problem = red)
+                    ui.circle(s, wg.OK if state else wg.DANGER, (x + 4, fy + 12), 4)
+                    x += 14
+                elif part.startswith("CPU") or part.startswith("imagem"):
+                    ui.circle(s, wg.SEL, (x + 4, fy + 12), 3)
+                    x += 12
+                x += self._t(self.fs, part, (x, fy + 5), wg.DIM)
         if mw.problems:
             txt = " · ".join(mw.problems.values())
             while len(txt) > 8 and self.fs.size(txt)[0] > mw.W - 40:
