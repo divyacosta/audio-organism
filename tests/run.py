@@ -1620,6 +1620,9 @@ def test_layers():
     box = next(r for r, cid, kind, arg in m.hits if cid == "ly_add" and kind == "dd")
     click(box.center)
     check("a click opens the dropdown", m.dd_open == "ly_add")
+    m.dd_groups = {"fx", "bg", "part"}                                          # the add menu: every group open for this check
+    m.need = True
+    m.render()
     opt = next(r for r, cid, kind, arg in m.hits if kind == "ddopt" and arg == "lights")
     n0 = len(cfg["layers"])
     click(opt.center)

@@ -1591,6 +1591,7 @@ class Menu(WizardMixin):
             return None
         if cid == "lbar_add":                                                    # "+ Ajuste": the list of kinds of effect opens (its row is the last of the list)
             self.dd_open, self.dd_hl = "ly_add", 0
+            self.dd_groups = {"fx"}                                           # the first group opens, the others fold
             self.need = True
             return None
         if cid.startswith("lbar_"):                                              # the toolbar over the list of effects: acts on the one selected
@@ -1918,6 +1919,10 @@ class Menu(WizardMixin):
                 return self.press(cid)
             if kind == "ddclose":
                 self.dd_open = None
+                return None
+            if kind == "ddgrp":                                                 # a group of the add menu opens or folds (the menu stays)
+                self.dd_groups ^= {arg}
+                self.need = True
                 return None
             if kind == "ddopt":
                 self.dd_open = None
@@ -2310,6 +2315,8 @@ class Menu(WizardMixin):
             self.dd_open = None
             return
         s, c = self.surf, self.cfg
+        if cid == "ly_add":                                                     # the add menu of the effects: grouped, as ScreenMaster's
+            return self._group_popup(row, box)
         opts = row["opts"]
         ih = 34
         h = len(opts) * ih + 8
@@ -2331,6 +2338,57 @@ class Menu(WizardMixin):
                 ui.rect(s, (*SEL, 255), pygame.Rect(r.x, r.y + 6, 3, r.h - 12), border_radius=2)
             self._txt(self.fb if cur == val and cid not in ("ly_add", "ly_tpl") else self.f, lbl, (r.x + 12, r.y + 6), TEXT)
             self.hits.append((r, cid, "ddopt", val))
+
+    GROUP_INFO = {"fx": ("Efeitos de lente e tom", "na imagem, depois do desenho"), "bg": ("Fundos", "a cor e o gradiente por trás"),
+                  "part": ("Partículas", "pontos que se movem com a música")}
+
+    def _group_popup(self, row, box):
+        """The add menu of the effects: the kinds grouped (fold/open), each with its count, what it is for, and what it runs on."""
+        from layers import TYPES
+        s = self.surf
+        groups = {}
+        for lbl, val in row["opts"]:
+            groups.setdefault(TYPES.get(val, {}).get("group", "fx"), []).append((lbl, val))
+        if not hasattr(self, "dd_groups"):
+            self.dd_groups = {"fx"}
+        pw = max(box.w, 340)
+        ui_h = 0
+        for g in groups:
+            ui_h += 40 + (len(groups[g]) * 30 if g in self.dd_groups else 0)
+        below = (self.scroll2 if self.in_right_pane(box.x) else self.scroll) + max(300, min(self.view_h, 900)) - self.HEAD - self.reserved - box.bottom
+        y = box.bottom + 4 if below > ui_h + 12 else box.y - ui_h - 16                # no room under the box: the menu opens above it
+        pr = pygame.Rect(box.x, y, pw, ui_h + 12)
+        self.popup_rect = pr.inflate(8, 8)
+        self.hits.append((pygame.Rect(0, 0, self.W, self.surf.get_height()), "ddclose", "ddclose", None))
+        ui.rect(s, (*widgets.SURFACE2, 255), pr.inflate(4, 4), border_radius=10)
+        ui.rect(s, (*widgets.CTRL, 255), pr.inflate(4, 4), width=1, border_radius=10)
+        yy = pr.y + 6
+        for g, items in groups.items():
+            name, desc = self.GROUP_INFO.get(g, (g, ""))
+            open_ = g in self.dd_groups
+            hr = pygame.Rect(pr.x + 4, yy, pr.w - 8, 36)
+            if self.hover == "ddgrp:" + g:
+                ui.rect(s, (*widgets.HOVER_FILL, 255), hr, border_radius=7)
+            cx, cy = hr.x + 12, hr.centery
+            pygame.draw.polygon(s, widgets.DIM, [(cx, cy - 4), (cx + 8, cy - 4), (cx + 4, cy + 3)] if open_ else [(cx, cy - 4), (cx, cy + 4), (cx + 6, cy)])
+            self._txt(self.fb, name, (hr.x + 26, hr.y + 6), widgets.TEXT)
+            self._txt(self.f_s, desc, (hr.x + 26, hr.y + 22), widgets.DIM)
+            self._txt(self.f_s, f"{len(items)}", (hr.right - 12, hr.y + 8), widgets.DIM, "r")
+            self.hits.append((hr, "ly_add", "ddgrp", g))
+            yy += 40
+            if open_:
+                for lbl, val in items:
+                    r = pygame.Rect(pr.x + 4, yy, pr.w - 8, 30)
+                    cur = self.cfg.get("ly_add") == val
+                    if self.hover == "ddopt:" + str(val):
+                        ui.rect(s, (*widgets.HOVER_FILL, 255), r, border_radius=7)
+                    self._txt(self.f, lbl, (r.x + 30, r.y + 6), widgets.TEXT)
+                    chip = self.f_s.size("GPU")[0] + 12
+                    ui.rect(s, (*widgets.SURFACE2, 255), pygame.Rect(r.right - chip - 8, r.y + 6, chip, 18), border_radius=5)
+                    self._txt(self.f_s, "GPU", (r.right - chip / 2 - 8, r.y + 7), widgets.DIM, "c")
+                    self.hits.append((r, "ly_add", "ddopt", val))
+                    yy += 30
+        self.dd_rects_popup = pr
 
     def _draw_card(self, title, rows, y, x0, wc, bg=True):
         """One card at (x0, y) of width wc. In a column the rows are drawn on a piece of the surface (so they all think the panel is wc wide) and the hits, the
