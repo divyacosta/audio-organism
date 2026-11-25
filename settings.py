@@ -551,7 +551,7 @@ def auto_sets_factory():
 
 
 _AS0 = auto_sets_factory()
-DEFAULTS.update(panel_fps=30, panel_fps_v=2, link_riser=False, link_vocal=False, remote_osc=False, remote_midi=False, phone_view=False, search="", ui_tab=0, live=False, profile=1, ae_kind=0, ae_part=0, auto_sets=auto_sets_factory())
+DEFAULTS.update(panel_fps=30, panel_fps_v=2, link_riser=False, link_vocal=False, remote_osc=False, remote_midi=False, phone_view=False, search="", ui_tab=0, web_ui=False, live=False, profile=1, ae_kind=0, ae_part=0, auto_sets=auto_sets_factory())
 DEFAULTS.update(LY.LP_DEFAULTS)
 DEFAULTS["starter_v"] = 4
 DEFAULTS.update(ed_item=0, ed_sub=0, ed_page=False, ed_tab=0, sc_filter=0, lib=-1, pal_open=False, sys_item=0, ear_open=True, tour_done=False, tour_marks=0, osd=True, advanced=False, macro_energy=100, macro_speed=100, macro_pal=0, detail_open=False)                                                  # the item of the editor of a scene that is open, and the sub-section of the mandala                                                          # 2: the mandala presets come as scenes of the gallery
@@ -699,7 +699,7 @@ def sys_cards(cfg, k, devices=(), monitors=1, menu=None):
         return [("PERFIS", perfis), ("VER NO CELULAR", celular)] + ([("CONTROLE EXTERNO", externo)] if adv else [])
     ver = lambda c: (m.info if m is not None and m.info else "Procura uma versão nova agora")
     lang = ("IDIOMA", [dict(id="lang", kind="seg", label="Idioma", opts=[(n, c) for n, c in i18n.LANGS], help="Começa pelo idioma do Windows")])
-    return [lang] + ([("MOTOR DE VÍDEO", [_ROWS["backend"], _ROWS["gpu"]])] if adv else []) + [
+    return [lang, ("PAINEL", [dict(id="web_ui", kind="toggle", label="Painel novo (teste)", help="Abre o painel no estilo novo numa janela do Edge, ao lado deste")])] + ([("MOTOR DE VÍDEO", [_ROWS["backend"], _ROWS["gpu"]])] if adv else []) + [
             ("ATUALIZAÇÃO", [_ROWS["auto_update"],
                               dict(id="update_check", kind="action", label="Verificar atualização", btn="Verificar", help=ver),
                               dict(id="update_apply", kind="action", label="Instalar a atualização", btn=lambda c: (m.upd_label if m is not None and m.upd_label else "Atualizar"),

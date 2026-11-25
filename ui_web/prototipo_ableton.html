@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio Organism - Painel (protótipo)</title>
+<style>
+:root{
+  /* the app's own tokens (widgets.py): BG, SURFACE, SURFACE2, slot, BORDER, CTRL, TEXT, DIM, SEL (blue = chosen / on), ACCENT (red = on the air), DANGER */
+  --bg:#090a10; --panel:#12141e; --raised:#1e212f; --field:#06070b; --line:#34384e; --line2:#646c90;
+  --text:#ebebeb; --dim:#a0a5b6; --on:#4a86ff; --on-ink:#0a0c16; --air:#eb0838; --ok:#4a86ff; --fill:#21407f; --danger:#ff6278;
+  --f:"Segoe UI",system-ui,sans-serif; --mono:"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font:12px/1.35 var(--f);overflow:hidden}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--raised);border:1px solid var(--line);padding:0 10px;height:24px;cursor:pointer;border-radius:2px}
+button:hover{border-color:var(--line2);background:#272b3c}
+:focus-visible{outline:2px solid var(--on);outline-offset:1px}
+.num{font-variant-numeric:tabular-nums}
+
+/* frame */
+#app{display:grid;grid-template-rows:34px 1fr 24px;height:100vh}
+#top{display:flex;align-items:stretch;border-bottom:1px solid var(--line);background:var(--panel)}
+#top .brand{display:flex;align-items:center;padding:0 14px;color:var(--dim);letter-spacing:.04em;border-right:1px solid var(--line)}
+.views{display:flex}
+.views button{height:auto;border:0;border-right:1px solid var(--line);border-radius:0;background:transparent;padding:0 22px;color:var(--dim)}
+.views button[aria-selected=true]{background:var(--bg);color:var(--text);box-shadow:inset 0 -2px 0 var(--on)}
+.views button:hover{background:var(--raised)}
+.views button[aria-selected=true]:hover{background:var(--bg)}
+#top .grow{flex:1}
+.ind{display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid var(--line);color:var(--dim)}
+.led{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.led.on{background:var(--ok)}
+.meter{width:70px;height:8px;background:var(--field);border:1px solid var(--line);position:relative}
+.meter i{position:absolute;inset:0 auto 0 0;background:var(--ok);width:38%}
+#main{display:grid;grid-template-columns:230px 1fr;min-height:0}
+#rail{display:grid;grid-template-rows:auto 1fr 96px;border-right:1px solid var(--line);background:var(--panel);min-height:0}
+#rail .search{padding:8px;border-bottom:1px solid var(--line)}
+#rail input{width:100%;height:24px;background:var(--field);border:1px solid var(--line);padding:0 8px;border-radius:2px}
+#rail input::placeholder{color:var(--dim)}
+#railList{overflow:auto;padding:4px 0}
+.ri{display:flex;align-items:center;gap:8px;width:100%;height:26px;border:0;border-radius:0;background:transparent;text-align:left;padding:0 12px}
+.ri:hover{background:var(--raised)}
+.ri[aria-current=true]{background:var(--raised);box-shadow:inset 3px 0 0 var(--on)}
+.ri .sw{width:8px;height:8px;border-radius:1px;flex:none}
+.ri .tag{margin-left:auto;font-size:10px;color:var(--air);letter-spacing:.05em}
+.rg{padding:10px 12px 4px;color:var(--dim);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+#info{border-top:1px solid var(--line);padding:8px 12px;color:var(--dim);overflow:hidden}
+#info b{display:block;color:var(--text);font-weight:600;margin-bottom:2px}
+#stage{min-width:0;min-height:0;overflow:auto}
+.view{height:100%}
+.view:not(.on){display:none!important}
+.view.on{display:block}
+
+/* common bits */
+.title{display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+.title h2{font-size:12px;font-weight:600}
+.title .sp{flex:1}
+.pill{font-size:10px;letter-spacing:.06em;padding:1px 6px;border-radius:2px;background:var(--air);color:#fff}
+.state{display:flex;align-items:center;gap:6px;color:var(--dim)}
+.state i{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.btn-on{background:var(--on);border-color:var(--on);color:var(--on-ink)}
+.btn-on:hover{background:#6a9bff}
+.act{width:14px;height:14px;border:1px solid var(--line2);background:var(--field);border-radius:2px;padding:0;flex:none}
+.act[aria-pressed=true]{background:var(--on);border-color:var(--on)}
+.seg{display:inline-flex}
+.seg button{border-radius:0;margin-left:-1px;height:22px;padding:0 9px}
+.seg button:first-child{border-radius:2px 0 0 2px;margin-left:0}.seg button:last-child{border-radius:0 2px 2px 0}
+.seg button[aria-pressed=true]{background:var(--on);border-color:var(--on);color:var(--on-ink);position:relative}
+.sel{height:22px;background:var(--field);border:1px solid var(--line);border-radius:2px;padding:0 6px}
+
+/* slider: a filled bar with the value inside, like a device parameter */
+.sl{position:relative;height:22px;background:var(--field);border:1px solid var(--line);cursor:ew-resize;touch-action:none;user-select:none}
+.sl i{position:absolute;inset:0 auto 0 0;background:var(--fill)}
+.sl.hot i{background:var(--on)}
+.sl span{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 7px;pointer-events:none}
+.sl span em{font-style:normal;color:var(--text)}
+.sl.hot span em{color:var(--on-ink)}
+.sl span b{font-weight:400}
+.sl.hot span b{color:var(--on-ink)}
+.sl:hover{border-color:var(--line2)}
+
+/* Palco */
+#palco{display:grid;grid-template-columns:1fr 300px;height:100%}
+#grid{padding:14px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;align-content:start}
+.clip{position:relative;height:74px;background:var(--raised);border:1px solid var(--line);text-align:left;padding:0;display:flex;flex-direction:column;justify-content:flex-end;border-radius:2px}
+.clip .band{position:absolute;inset:0 0 auto 0;height:5px}
+.clip .play{position:absolute;top:12px;left:10px;width:0;height:0;border-left:11px solid var(--text);border-top:7px solid transparent;border-bottom:7px solid transparent;opacity:.55}
+.clip b{display:block;padding:0 10px 6px;font-weight:600}
+.clip small{position:absolute;right:8px;top:12px;font-size:10px;letter-spacing:.06em;color:var(--dim)}
+.clip.air{border-color:var(--air);background:#26111a}
+.clip.air .play{border-left-color:var(--air);opacity:1}
+.clip.air small{color:var(--air)}
+.clip:hover{background:#272b3c}
+.clip.air:hover{background:#311723}
+#side{border-left:1px solid var(--line);background:var(--panel);overflow:auto}
+.pv{margin:12px;aspect-ratio:16/9;background:#0c0c0e;border:1px solid var(--line);display:grid;place-items:center;color:var(--dim);font-size:11px;position:relative;overflow:hidden}
+.pv canvas{position:absolute;inset:0;width:100%;height:100%}
+.pv .lbl{position:absolute;left:6px;top:5px;font-size:10px;letter-spacing:.06em;color:#fff;background:rgba(0,0,0,.55);padding:1px 5px}
+.sec{border-top:1px solid var(--line);padding:10px 12px}
+.sec h3{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600;margin-bottom:8px}
+.row{display:grid;grid-template-columns:96px 1fr;align-items:center;gap:8px;margin-bottom:6px}
+.row>label{color:var(--dim)}
+.bands{display:flex;gap:3px;height:36px;align-items:flex-end}
+.bands i{flex:1;background:var(--ok);opacity:.85}
+.kv{display:flex;justify-content:space-between;margin-bottom:4px;color:var(--dim)}
+.kv b{color:var(--text);font-weight:600;font-family:var(--mono)}
+
+/* Estúdio */
+#estudio{height:100%}
+#chain{overflow:auto;min-width:0}
+.dev{border-bottom:1px solid var(--line)}
+.dh{display:flex;align-items:center;gap:10px;height:30px;padding:0 12px;background:var(--panel);cursor:pointer}
+.dh:hover{background:var(--raised)}
+.dh .n{width:16px;color:var(--dim);font-family:var(--mono);font-size:10px;text-align:right}
+.dh .nm{font-weight:600}
+.dh .sum{color:var(--dim);flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dh .chev{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--dim);transition:transform .12s}
+.dev:not(.open) .chev{transform:rotate(-90deg)}
+.dev.off .nm,.dev.off .sum{color:var(--dim)}
+.db{display:none;padding:12px 12px 14px 38px;background:var(--bg);border-top:1px solid var(--line)}
+.dev.open .db{display:block}
+.pg{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 16px;max-width:820px}
+.p>label{display:block;color:var(--dim);margin-bottom:3px;font-size:11px}
+.fx{margin-bottom:12px;max-width:820px;border:1px solid var(--line)}
+.fxr{display:flex;align-items:center;gap:10px;height:28px;padding:0 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.fxr:last-child{border-bottom:0}
+.fxr:hover{background:var(--raised)}
+.fxr[aria-current=true]{background:var(--raised);box-shadow:inset 3px 0 0 var(--on)}
+.fxr .t{font-size:10px;letter-spacing:.05em;color:var(--dim);width:74px}
+.fxr .v{margin-left:auto;color:var(--dim)}
+.sub{margin:4px 0 10px;color:var(--dim);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.ph{padding:14px;position:sticky;top:0}
+
+/* Sistema */
+.pref{max-width:760px;padding:18px 24px}
+.pref h2{font-size:14px;margin-bottom:12px}
+.pref .grp{border-top:1px solid var(--line);padding:12px 0 4px}
+.pref .grp>h3{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:8px;font-weight:600}
+.pr{display:grid;grid-template-columns:240px 1fr;align-items:center;gap:12px;min-height:30px}
+.pr .sl{max-width:260px}
+.pr.dang button{border-color:var(--danger);color:var(--danger)}
+
+/* status bar */
+#bar{display:flex;align-items:center;gap:18px;padding:0 12px;border-top:1px solid var(--line);background:var(--panel);color:var(--dim);font-size:11px}
+#bar b{color:var(--text);font-weight:400}
+#bar .sp{flex:1}
+
+@media (max-width:1100px){
+  #palco{grid-template-columns:1fr}
+  #estudio>div{grid-template-columns:1fr!important}
+  #side,.ph{display:none}
+  #main{grid-template-columns:170px 1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="brand">AUDIO ORGANISM</div>
+    <nav class="views" role="tablist" aria-label="Vistas">
+      <button role="tab" data-view="palco" aria-selected="true">Palco</button>
+      <button role="tab" data-view="estudio" aria-selected="false">Estúdio</button>
+      <button role="tab" data-view="sistema" aria-selected="false">Sistema</button>
+    </nav>
+    <div class="grow"></div>
+    <div class="ind" title="Entrada de áudio">Entrada <div class="meter"><i></i></div></div>
+    <div class="ind"><span class="led on"></span>MIDI</div>
+    <div class="ind"><span class="led"></span>OSC</div>
+    <div class="ind"><span class="num"><b id="fps" style="font-weight:400;color:var(--text)">75</b> fps</span></div>
+    <div class="ind"><button id="adv" aria-pressed="false" class="act" aria-label="Avançado"></button>Avançado <span class="num" style="color:var(--on)">+37</span></div>
+  </header>
+
+  <div id="main">
+    <aside id="rail">
+      <div class="search"><input id="q" placeholder="Buscar  (Ctrl+K)" aria-label="Buscar"></div>
+      <div id="railList"></div>
+      <div id="info"><b>Info</b><span id="infoTxt">Passe o mouse sobre um controle para ver o que ele faz.</span></div>
+    </aside>
+    <main id="stage">
+
+      <section class="view on" id="palco">
+        <div id="grid"></div>
+        <aside id="side">
+          <div class="pv"><canvas id="cv"></canvas><span class="lbl">PRÉVIA · exemplo</span></div>
+          <div class="sec"><h3>Para todas as cenas</h3>
+            <div class="row"><label>Intensidade</label><div class="sl" data-v="100" data-min="0" data-max="200" data-unit="%" data-info="Quanto a imagem reage à música, somado ao ajuste de cada cena."></div></div>
+            <div class="row"><label>Velocidade</label><div class="sl" data-v="100" data-min="0" data-max="200" data-unit="%" data-info="Tudo que anda, voa ou gira."></div></div>
+            <div class="row"><label>Cores</label><select class="sel" data-info="Força uma paleta sobre todas as cenas."><option>Das cenas</option><option>Neon</option><option>Quente</option></select></div>
+            <button style="margin-top:2px">Voltar ao normal</button>
+          </div>
+          <div class="sec"><h3>A música agora</h3>
+            <div class="kv"><span>BPM</span><b>128.0</b></div>
+            <div class="bands" aria-hidden="true"><i style="height:90%"></i><i style="height:70%"></i><i style="height:40%"></i><i style="height:55%"></i><i style="height:30%"></i><i style="height:22%"></i></div>
+            <div class="row" style="margin-top:10px"><label>Troca automática</label><span class="seg" data-info="Quando ligada, o programa escolhe a próxima cena sozinho."><button aria-pressed="true">Ligada</button><button aria-pressed="false">Desligada</button></span></div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="view" id="estudio">
+        <div style="display:grid;grid-template-columns:1fr 360px;grid-template-rows:32px 1fr;height:100%">
+          <div class="title" style="grid-column:1/3">
+            <h2 id="edName">Facetas</h2><span class="pill">NO AR</span><span class="state"><i></i>Tudo salvo</span>
+            <span class="sp"></span>
+            <label style="display:flex;align-items:center;gap:6px;color:var(--dim)"><button class="act" id="live" aria-pressed="false" data-info="Ao vivo: a tela grande mostra o que você muda, na hora. Desligado, só aparece depois de Salvar."></button>Ao vivo</label>
+            <button disabled style="opacity:.45">Descartar</button><button class="btn-on">Salvar</button>
+          </div>
+          <div id="chain"></div>
+          <aside class="ph"><div class="pv" style="margin:0"><canvas id="cv2"></canvas><span class="lbl">RASCUNHO</span></div></aside>
+        </div>
+      </section>
+
+      <section class="view" id="sistema"><div class="pref" id="pref"></div></section>
+    </main>
+  </div>
+
+  <footer id="bar">
+    <span>Perfil <b>1</b></span><span>Render <b class="num">1280×720</b></span><span>Áudio <b>Saída padrão do Windows</b></span><span class="sp"></span><span>Limite de flashes <b>Normal</b></span>
+  </footer>
+</div>
+
+<script>
+const SCENES=[["Facetas",28],["Estrela",330],["Túnel",200],["Catedral",265],["Impacto",8],["Palco",48],["Vórtice",175],["Espectro",300],["Fractal",150],["Synthwave",285],["Fluido",190],["Galáxia",240]];
+const col=h=>"var(--line2)";           // scenes have no colour of their own in the app: neutral, and red only for the one on the air
+let live=0, edit=0, view="palco", page=0;
+
+/* ---------- sliders: drag, double click resets ---------- */
+function mkSlider(el){
+  const min=+el.dataset.min,max=+el.dataset.max,unit=el.dataset.unit||"",def=+el.dataset.v;let v=def;
+  el.setAttribute("role","slider");el.tabIndex=0;el.setAttribute("aria-valuemin",min);el.setAttribute("aria-valuemax",max);
+  el.innerHTML='<i></i><span><b></b><em></em></span>';
+  const bar=el.querySelector("i"),lab=el.querySelector("b"),val=el.querySelector("em");lab.textContent=el.dataset.label||"";
+  const set=n=>{v=Math.max(min,Math.min(max,Math.round(n)));bar.style.width=((v-min)/(max-min)*100)+"%";val.textContent=v+unit;el.setAttribute("aria-valuenow",v)};
+  set(v);
+  const at=e=>{const r=el.getBoundingClientRect();set(min+(e.clientX-r.left)/r.width*(max-min))};
+  el.addEventListener("pointerdown",e=>{el.setPointerCapture(e.pointerId);el.classList.add("hot");at(e)});
+  el.addEventListener("pointermove",e=>{if(el.hasPointerCapture(e.pointerId))at(e)});
+  el.addEventListener("pointerup",e=>{el.classList.remove("hot")});
+  el.addEventListener("dblclick",()=>set(def));
+  el.addEventListener("keydown",e=>{const s=(max-min)/50;if(e.key==="ArrowRight"||e.key==="ArrowUp"){set(v+s);e.preventDefault()}if(e.key==="ArrowLeft"||e.key==="ArrowDown"){set(v-s);e.preventDefault()}});
+}
+const slider=(label,v,min,max,unit,info)=>`<div class="p"><label>${label}</label><div class="sl" data-v="${v}" data-min="${min}" data-max="${max}" data-unit="${unit||""}" data-info="${info||""}"></div></div>`;
+const seg=(opts,sel)=>`<span class="seg">${opts.map((o,i)=>`<button aria-pressed="${i===sel}">${o}</button>`).join("")}</span>`;
+function wire(root){
+  root.querySelectorAll(".sl").forEach(mkSlider);
+  root.querySelectorAll(".seg").forEach(g=>g.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;g.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b))}));
+  root.querySelectorAll(".act").forEach(a=>{if(a.id==="adv")return;a.addEventListener("click",e=>{e.stopPropagation();a.setAttribute("aria-pressed",a.getAttribute("aria-pressed")!=="true")})});
+  root.querySelectorAll("[data-info]").forEach(n=>{n.addEventListener("mouseenter",()=>info(n.dataset.info));n.addEventListener("mouseleave",()=>info(""))});
+}
+function info(t){document.getElementById("infoTxt").textContent=t||"Passe o mouse sobre um controle para ver o que ele faz."}
+
+/* ---------- Palco ---------- */
+function drawGrid(){
+  const g=document.getElementById("grid");
+  g.innerHTML=SCENES.map((s,i)=>`<button class="clip ${i===live?"air":""}" data-i="${i}"><span class="band" style="background:${col(s[1])}"></span><span class="play"></span><small>${i===live?"NO AR":i+1}</small><b>${s[0]}</b></button>`).join("");
+  g.querySelectorAll(".clip").forEach(b=>b.addEventListener("click",()=>{live=+b.dataset.i;drawGrid();drawRail()}));
+}
+
+/* ---------- rail ---------- */
+const PAGES=[["Imagem","Resolução, brilho, medição"],["Áudio","De onde vem o som"],["Tela","Tela cheia, monitor"],["Automático","Quais cenas e quando trocam"],["Perfis e controle","Perfis, OSC e MIDI"],["Aplicativo","Motor de vídeo, atualização"]];
+function drawRail(){
+  const L=document.getElementById("railList");
+  if(view==="sistema"){
+    L.innerHTML='<div class="rg">Sistema</div>'+PAGES.map((p,i)=>`<button class="ri" aria-current="${i===page}" data-p="${i}" data-info="${p[1]}">${p[0]}</button>`).join("");
+    L.querySelectorAll(".ri").forEach(b=>{b.addEventListener("click",()=>{page=+b.dataset.p;drawRail();drawPref()});b.addEventListener("mouseenter",()=>info(b.dataset.info));b.addEventListener("mouseleave",()=>info(""))});
+  }else{
+    L.innerHTML='<div class="rg">Cenas</div>'+SCENES.map((s,i)=>`<button class="ri" aria-current="${view==="estudio"?i===edit:i===live}" data-i="${i}"><span class="sw" style="background:${col(s[1])}"></span>${s[0]}${i===live?'<span class="tag">NO AR</span>':""}</button>`).join("");
+    L.querySelectorAll(".ri").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.i;if(view==="estudio"){edit=i;document.getElementById("edName").textContent=SCENES[i][0];drawRail()}else{live=i;drawGrid();drawRail()}}));
+  }
+}
+
+/* ---------- Estúdio: the layers are devices in a chain; one page opens under its title ---------- */
+const DEVS=[
+ {n:"C",nm:"Ajustes da cena",sum:"cores do modelo · câmera fixa · ritmo padrão",sw:false,body:()=>`<div class="pg">${slider("Exposição",100,50,200,"%","Quanto a imagem clareia.")}${slider("Brilho do bloom",90,0,200,"%","O brilho ao redor das luzes.")}<div class="p"><label>Câmera</label>${seg(["Fixo","Cinema","Clipe","Hipnótico","Auto"],0)}</div><div class="p"><label>Ritmo</label>${seg(["Padrão","Lento","Rápido"],0)}</div></div>`},
+ {n:"L",nm:"Segue a música",sum:"nada segue a música",sw:false,body:()=>`<p style="color:var(--dim)">Nada segue a música ainda. Clique no número de qualquer controle e escolha a fonte (Graves, Médios, Agudos, Batida, Energia).</p>`},
+ {n:"6",nm:"Texto e logo",sum:"desligada",sw:true,on:false,body:()=>`<div class="pg">${slider("Tamanho",10,4,40,"%","Altura na tela.")}${slider("Opacidade",90,10,100,"%","Quanto aparece.")}<div class="p"><label>Onde</label>${seg(["Canto","Centro","Embaixo"],0)}</div></div>`},
+ {n:"5",nm:"Acabamento",sum:"Normal · Aberração cromática",sw:true,on:true,open:true,body:()=>`<div class="sub">Efeitos de lente e tom</div><div class="fx">
+   <div class="fxr" aria-current="true"><button class="act" aria-pressed="true" aria-label="ligada"></button><span class="t">ABERRAÇÃO</span>Aberração cromática<span class="v">15% · bumbo</span></div>
+   <div class="fxr"><button class="act" aria-pressed="true" aria-label="ligada"></button><span class="t">GRÃO</span>Grão de filme<span class="v">50%</span></div>
+   <div class="fxr"><button class="act" aria-pressed="true" aria-label="ligada"></button><span class="t">REFLEXO</span>Reflexo de lente<span class="v">50%</span></div></div>
+   <div class="sub">Aberração cromática</div><div class="pg">${slider("Opacidade",100,0,100,"%","Quanto desta camada entra na imagem.")}${slider("Intensidade",15,0,100,"%","Vermelho e azul se separam.")}${slider("Começa em",0,0,80,"%","Distância do centro onde o efeito começa.")}${slider("Desfoque",0,0,100,"%","Suaviza as franjas.")}<div class="p"><label>Direção</label>${seg(["Radial","Horizontal","Vertical"],0)}</div><div class="p"><label>Mistura</label><select class="sel"><option>Normal</option><option>Soma</option></select></div></div>`},
+ {n:"4",nm:"Partículas e rastro",sum:"vazia",sw:true,on:false,body:()=>`<p style="color:var(--dim)">Nada aqui ainda.</p>`},
+ {n:"3",nm:"Forma principal",sum:"Mandala · Facetas",sw:true,on:true,body:()=>`<div class="pg"><div class="p"><label>Tipo de imagem</label><select class="sel"><option>Mandala</option><option>Túnel</option></select></div><div class="p"><label>Seção</label>${seg(["Modelo","Estilo","Simetrias"],0)}</div></div>`},
+ {n:"2",nm:"Luzes",sum:"luzes de fundo",sw:true,on:true,body:()=>`<div class="pg">${slider("Intensidade",60,0,100,"%")}</div>`},
+ {n:"1",nm:"Fundo",sum:"fundo do estilo",sw:true,on:true,body:()=>`<div class="pg"><div class="p"><label>Cor do fundo</label>${seg(["Do estilo","Preto","Branco","Escolher"],0)}</div></div>`}
+];
+function drawChain(){
+  const c=document.getElementById("chain");
+  c.innerHTML=DEVS.map((d,i)=>`<section class="dev ${d.open?"open":""} ${d.sw&&!d.on?"off":""}" data-i="${i}">
+    <div class="dh" role="button" tabindex="0" aria-expanded="${!!d.open}"><span class="n">${d.n}</span>${d.sw?`<button class="act" aria-pressed="${!!d.on}" aria-label="Ligar ${d.nm}"></button>`:'<span style="width:14px"></span>'}<span class="nm">${d.nm}</span><span class="sum">${d.sum}</span><span class="chev"></span></div>
+    <div class="db">${d.body()}</div></section>`).join("");
+  c.querySelectorAll(".dev").forEach(el=>{
+    const d=DEVS[+el.dataset.i],h=el.querySelector(".dh");
+    const toggle=()=>{const was=d.open;DEVS.forEach(x=>x.open=false);d.open=!was;drawChain()};
+    h.addEventListener("click",e=>{if(e.target.closest(".act"))return;toggle()});
+    h.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle()}});
+    const a=h.querySelector(".act");if(a)a.addEventListener("click",e=>{e.stopPropagation();d.on=!d.on;drawChain()});
+  });
+  wire(c);
+}
+
+/* ---------- Sistema: label left, control right; the explanation goes to the Info panel ---------- */
+const PREF=[
+ [{t:"Atalho de qualidade",r:[["Qualidade gráfica",()=>seg(["Baixo","Médio","Alto","Ultra","Personalizado"],1),"Se travar, use Baixo ou Médio."]]},
+  {t:"Conforto",r:[["Limitar flashes",()=>seg(["Normal","Suave","Mínimo"],0),"Suave e Mínimo reduzem a intensidade dos flashes. Normal deixa como a cena pede."],["Limitar movimento da câmera",()=>seg(["Normal","Reduzido","Mínimo"],0),"Menos tremor, soco e giro."]]},
+  {t:"Acabamento",r:[["Estilo, cor final e vinheta",()=>'<button>Abrir no Estúdio</button>',"Ficam em cada cena: Estúdio > Acabamento."]]},
+  {t:"Desempenho",r:[["Medir o desempenho",()=>'<button>Medir (10 s)</button>',"Anda a imagem por 10 segundos e mostra o FPS médio."],["Restaurar a imagem",()=>'<button>Restaurar</button>',"Volta ao padrão esta página. Os limites de conforto não mudam."]]}],
+ [{t:"Entrada de áudio",r:[["Dispositivo",()=>'<select class="sel"><option>Padrão do Windows</option></select>',"O programa ouve o som do computador."],["Atraso",()=>`<div class="sl" data-v="0" data-min="0" data-max="200" data-unit=" ms"></div>`,"Ajuste fino da sincronia."]]}],
+ [{t:"Tela grande",r:[["Tela cheia",()=>'<button class="act" aria-pressed="false"></button>',"F alterna."],["Monitor da imagem",()=>seg(["Onde está","1","2"],0),"Move a janela de imagem."]]}],
+ [{t:"Troca automática",r:[["Quando troca",()=>seg(["Na hora","Compasso","Frase"],2),"Em que momento a próxima cena entra."],["A cada",()=>'<select class="sel"><option>30 s</option></select>',"Só no modo A cada N s."]]}],
+ [{t:"Perfis",r:[["Perfil",()=>seg(["1","2","3"],0),"Salvo."],["",()=>'<button>Salvar neste perfil</button> <button>Carregar</button>',"Guarda tudo o que está configurado."]]},{t:"Controle externo",r:[["Controle por OSC",()=>'<button class="act" aria-pressed="false"></button>',"Só neste computador · porta 9000."],["Controle por MIDI",()=>'<button class="act" aria-pressed="true"></button>',"Notas 60 a 68 tocam as cenas 1 a 9."]]}],
+ [{t:"Aplicativo",r:[["Idioma",()=>seg(["Português","English"],0),"Começa pelo idioma do Windows."],["Atualização",()=>'<button>Verificar</button>',"Procura uma versão nova agora."]]},{t:"Sessão",r:[["Sair do programa",()=>'<button>Sair</button>',"Toque duas vezes · tudo fica salvo."]]}]
+];
+function drawPref(){
+  const p=document.getElementById("pref");
+  p.innerHTML=`<h2>${PAGES[page][0]}</h2>`+PREF[page].map(g=>`<div class="grp"><h3>${g.t}</h3>${g.r.map(r=>`<div class="pr ${r[0]==="Sair do programa"?"dang":""}" data-info="${r[2]}"><label>${r[0]}</label><div>${r[1]()}</div></div>`).join("")}</div>`).join("");
+  wire(p);
+}
+
+/* ---------- views ---------- */
+function show(v){
+  view=v;
+  document.querySelectorAll(".views button").forEach(b=>b.setAttribute("aria-selected",b.dataset.view===v));
+  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id===v));
+  document.getElementById("q").placeholder=v==="sistema"?"Buscar nas configurações  (Ctrl+K)":"Buscar cena  (Ctrl+K)";
+  drawRail();
+}
+document.querySelectorAll(".views button").forEach(b=>b.addEventListener("click",()=>show(b.dataset.view)));
+document.getElementById("adv").addEventListener("click",e=>{const b=e.currentTarget;b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true")});
+addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();document.getElementById("q").focus()}});
+
+/* ---------- a small honest placeholder for the picture: slow mirrored shapes, labelled as an example ---------- */
+function paint(id){
+  const c=document.getElementById(id),x=c.getContext("2d");let t=0;
+  const rs=()=>{c.width=c.clientWidth*devicePixelRatio;c.height=c.clientHeight*devicePixelRatio};rs();new ResizeObserver(rs).observe(c);
+  const f=()=>{t+=.012;const w=c.width,h=c.height;x.fillStyle="#0c0c0e";x.fillRect(0,0,w,h);x.translate(w/2,h/2);
+    for(let i=0;i<7;i++){const a=i/7*Math.PI*2+t,r=h*(.18+.1*Math.sin(t*2+i));x.save();x.rotate(a);x.fillStyle=i%2?"hsla(348 92% 48% / .6)":"hsla(222 100% 62% / .6)";x.fillRect(r,-h*.04,h*.2,h*.08);x.restore()}
+    x.setTransform(1,0,0,1,0,0);if(!matchMedia("(prefers-reduced-motion:reduce)").matches)requestAnimationFrame(f)};f();
+}
+drawGrid();drawRail();drawChain();drawPref();wire(document.getElementById("side"));wire(document.getElementById("estudio"));paint("cv");paint("cv2");
+</script>
+</body>
+</html>

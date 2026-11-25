@@ -171,6 +171,8 @@ def main():
     remote = remote_mod.Remote()
     import stream as stream_mod
     phone = stream_mod.Stream()                                # "Ver no celular": the picture and a few buttons in a phone's browser
+    import webui
+    web, web_opened = webui.WebUI(), False                     # "Painel novo (teste)": the panel as a web page in a window of its own (webui.py)
     tm = {}                                                   # smoothed milliseconds of each stage of a frame (shown in the Status)
 
     def lap(k, t0):
@@ -390,6 +392,18 @@ def main():
         if err_s:
             menu.say(err_s)
             cfg["phone_view"] = False
+        err_w = web.configure(cfg.get("web_ui", False))
+        if err_w:
+            menu.say(err_w)
+            cfg["web_ui"] = False
+        if cfg.get("web_ui") and not web_opened:
+            webui.open_window(web.url)
+            web_opened = True
+        elif not cfg.get("web_ui"):
+            web_opened = False
+        for c_ in web.poll():                                                                # what was done on the page: the same as doing it on the panel
+            webui.apply(menu, c_)
+        web.publish(menu, dict(fps=round(fps)))
         for k_ in remote.poll() + phone.poll():                                              # a controller or another program: the same as pressing the key
             rend.events.append({"event_type": "key_down", "key": k_, "remote": True})         # (marked: a controller may be driving a projection, no words on the picture)
 
@@ -533,6 +547,7 @@ def main():
         save_cfg(cfg)
     remote.close()
     phone.close()
+    web.close()
     if thumbs is not None:
         thumbs.stop()
     ctl.destroy()
