@@ -236,6 +236,15 @@ class ControlWindow:
             return None
         ox, oy = self.panel_pos
         rel = e.pos[1] - oy
+        if e.type == pygame.MOUSEBUTTONDOWN and getattr(e, "button", 0) == 1 and rel < mw.HEAD and any(
+                cid == "hd_before" and r.collidepoint((e.pos[0] - ox, rel)) for r, cid in getattr(mw, "hdr_hits", [])):
+            mw.peek_begin()                                        # Antes: held down shows the scene before the last change
+            self.force = True
+            return None
+        if e.type == pygame.MOUSEBUTTONUP and getattr(e, "button", 0) == 1 and mw._peek is not None:
+            mw.peek_end()
+            self.force = True
+            return None
         if rel < mw.HEAD:
             surf_y = rel                                           # the tab bar: fixed
         elif rel < mw.HEAD + mw.reserved:
@@ -438,10 +447,10 @@ class ControlWindow:
             txt = " · ".join(mw.problems.values())
             while len(txt) > 8 and self.fs.size(txt)[0] > mw.W - 40:
                 txt = txt[:-2]
-            r = pygame.Rect(self.panel_pos[0] + 8, self.panel_pos[1] + mw.HEAD + mw.reserved - 28, mw.W - 16, 24)
-            ui.rect(s, wg.SURFACE2, r, border_radius=12)
-            ui.rect(s, wg.CTRL, r, width=1, border_radius=12)
-            self._t(self.fs, txt, (r.centerx, r.y + 4), wg.TEXT, "c")
+            r = pygame.Rect(self.panel_pos[0], self.panel_pos[1] + mw.HEAD + mw.reserved - 28, mw.W, 24)     # a full-width strip, as the ScreenMaster's warnings
+            ui.rect(s, wg.SURFACE2, r)
+            ui.rect(s, wg.BORDER, (r.x, r.y, r.w, 1))
+            self._t(self.fs, txt, (r.x + 12, r.y + 4), wg.TEXT)
         if mw.toast:                                                    # at the bottom, centred: at the top it covered the tabs
             txt = mw.toast[0]
             while len(txt) > 8 and self.fb.size(txt)[0] + 28 > self.W - 32:

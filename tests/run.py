@@ -2968,6 +2968,27 @@ def test_thumbs():
           (c_first, None if last is None else last[0], fd is not None))
 
 
+def test_undo_redo_before():
+    section("Desfazer, Refazer e Antes: o cabeçalho volta e vai, e Antes mostra a cena de antes enquanto é segurado")
+    cfg = menu.fresh()
+    m = menu.Menu(cfg)
+    key = next(k for k in SC.SCENE_KEYS if isinstance(cfg.get(k), bool))
+    v0 = cfg[key]
+    m._push()
+    cfg[key] = not v0
+    m.undo_last()
+    check("Desfazer volta a mudança", cfg[key] == v0, (cfg[key], v0))
+    m.redo_last()
+    check("Refazer põe a mudança de volta", cfg[key] == (not v0), (cfg[key], v0))
+    m._push()
+    v1 = cfg[key]
+    cfg[key] = not v1
+    m.peek_begin()
+    check("Antes, segurado, mostra a cena de antes da última mudança", cfg[key] == v1, (cfg[key], v1))
+    m.peek_end()
+    check("ao soltar, volta a cena como estava", cfg[key] == (not v1), (cfg[key], v1))
+
+
 def test_safety_undo():
     section("Segurança e Desfazer: restaurar e perfis nunca baixam os limites de conforto, e o toast desfaz")
     cfg = menu.fresh()
@@ -3121,7 +3142,7 @@ def test_agenda():
 
 def main():
     exe = sys.argv[sys.argv.index("--exe") + 1] if "--exe" in sys.argv else None
-    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_navigation, test_sticky_titles, test_report):
+    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_navigation, test_sticky_titles, test_report):
         try:
             fn()
         except Exception as e:

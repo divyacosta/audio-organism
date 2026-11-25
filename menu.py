@@ -73,6 +73,9 @@ class Menu(WizardMixin):
         self.preview_sym = None                                        # the symmetry the preview shows (the last one touched)
         self.dd_open, self.dd_hl, self.dd_rects = None, 0, {}          # the dropdown that is open, the option lit, and where each dropdown box is on the surface
         self.undo, self._undo_last = [], (None, 0.0)           # snapshots of the scenes, shaders and palettes (Ctrl+Z)
+        self.redo = []                                         # what Desfazer took back: Refazer puts it again
+        self._peek = None                                      # while the header's Antes is held: the scene as it was, to put back on release
+        self.hdr_hits = []                                     # the buttons of the header's undo strip: (rect, id), on the surface
         self._reveal = None                                    # the item just opened: the next frame scrolls its row to the top
         self.sys_undo = []                                     # (when, label, restore function) of the Sistema actions with no confirmation: the toast offers "Desfazer"
         self._push_t = 0.0                                     # when the last scene snapshot was taken (Ctrl+Z undoes the newest of the two stacks)
@@ -952,6 +955,7 @@ class Menu(WizardMixin):
         c = self.cfg
         self.undo.append(copy.deepcopy((c["scenes"], c["shaders"], c["palettes"], c["scene_edit"], self.draft)))
         del self.undo[:-40]
+        self.redo.clear()
         self._push_t = time.perf_counter()
 
     def sys_push(self, label, keys=None, restore=None):
@@ -1000,7 +1004,50 @@ class Menu(WizardMixin):
         if not self.undo:
             self.say("Nada para desfazer")
             return
-        sc, sh, pa, ed, dr = self.undo.pop()
+        self.redo.append(self._state())
+        del self.redo[:-40]
+        self._apply_state(self.undo.pop())
+        self.say("Desfeito")
+
+    def _state(self):
+        """The scenes, shaders, palettes and the draft as they are now (the same tuple the undo stack keeps)."""
+        self.store_scene()
+        c = self.cfg
+        return copy.deepcopy((c["scenes"], c["shaders"], c["palettes"], c["scene_edit"], self.draft))
+
+    def redo_last(self):
+        if not self.redo:
+            self.say("Nada para refazer")
+            return
+        self.undo.append(self._state())
+        del self.undo[:-40]
+        self._apply_state(self.redo.pop())
+        self.say("Refeito")
+
+    def peek_begin(self):
+        """Antes, held: shows the scene as it was before the last change (ScreenMaster's press-hold preview)."""
+        if not self.undo or self._peek is not None:
+            return
+        c = self.cfg
+        i = max(0, min(int(c["scene_edit"]), len(c["scenes"]) - 1))
+        self.store_scene()
+        self._peek = (i, copy.deepcopy(c["scenes"][i]))
+        before = self.undo[-1][0]
+        SC.apply_scene(c, before[min(i, len(before) - 1)])
+        self.need = True
+
+    def peek_end(self):
+        if self._peek is None:
+            return
+        i, now = self._peek
+        self._peek = None
+        c = self.cfg
+        c["scenes"][i] = now
+        SC.apply_scene(c, now)
+        self.need = True
+
+    def _apply_state(self, tup):
+        sc, sh, pa, ed, dr = tup
         c = self.cfg
         c["scenes"][:], c["shaders"][:], c["palettes"][:] = sc, sh, pa
         c["scene_edit"] = max(0, min(ed, len(sc) - 1))
@@ -1016,7 +1063,6 @@ class Menu(WizardMixin):
         self._undo_last = (None, 0.0)
         self.rebuild_scenes()
         self.touch()
-        self.say("Desfeito")
 
     def profile_save(self):
         self.store_scene()
@@ -1496,6 +1542,10 @@ class Menu(WizardMixin):
     def press(self, cid):
         """Activate a button; returns an action string for the caller."""
         now = time.perf_counter()
+        if cid == "hd_undo":
+            return self.undo_last()
+        if cid == "hd_redo":
+            return self.redo_last()
         if cid.startswith("tab"):
             if int(cid[3:]) == TAB_SCENES and self.tab == TAB_SCENES and self.scene_view != "gallery":
                 return self.back_to_gallery()                         # the Estúdio tab again: back to the gallery (in a narrow window)
@@ -2060,9 +2110,12 @@ class Menu(WizardMixin):
         hidden_n = 0 if self.cfg.get("advanced", False) else self.adv_hidden()          # how many settings the simple mode keeps out of sight
         adv_w = 172 if hidden_n else 118                               # room for the +N of the hidden options
         adv_r = pygame.Rect(W - adv_w, 0, adv_w, 36)
+        strip = [("hd_undo", "Desfazer", 84), ("hd_redo", "Refazer", 74), ("hd_before", "Antes", 62)] if W >= 900 else []     # the undo strip: Desfazer, Refazer, and Antes held
+        strip_w = sum(w + 4 for _, _, w in strip)
+        self.hdr_hits = []
         for i, (name, _) in enumerate(TABS):
             cid = f"tab{i}"
-            tw = min(220, (W - adv_w - brand_w - 6 - 6 * (len(TABS) - 1)) // len(TABS))          # the tabs do not stretch across a wide window
+            tw = min(220, (W - adv_w - brand_w - strip_w - 6 - 6 * (len(TABS) - 1)) // len(TABS))          # the tabs do not stretch across a wide window
             r = pygame.Rect(x, 0, tw, 36)
             sel, hov = i == self.tab, self.hover == cid
             if sel:                                                                     # the open tab: bright text and a lime line under it, no box (ScreenMaster)
@@ -2076,6 +2129,17 @@ class Menu(WizardMixin):
             self.order_val.append(None)
             self.frects[cid] = r
             x += tw + 6
+        sx = adv_r.x - strip_w
+        for cid, label, w in strip:
+            br = pygame.Rect(sx, 6, w, 24)
+            widgets.button(s, self.ftab, br, label, "quiet", hover=self.hover == cid, radius=6)
+            self.hdr_hits.append((br, cid))
+            if cid != "hd_before":
+                self.hits.append((br, cid, "btn", None))
+                self.order.append(cid)
+                self.order_val.append(None)
+                self.frects[cid] = br
+            sx += w + 4
         self._timeline(W, 44)
         on = bool(c.get("advanced", False))                                        # the switch of the advanced mode, on the right of the tab bar
         hv = self.hover == "advanced"
@@ -2189,7 +2253,7 @@ class Menu(WizardMixin):
         n = len(c.get("layers") or [])
         # the column's header (ScreenMaster's): a small caption, the big name of the layer, and the toolbar on the right
         self._txt(self.f_s, row.get("help", ""), (22, y + 2), DIM)
-        self._txt(widgets.font("lead", True), self._fit(widgets.font("lead", True), row.get("label", ""), W // 2), (22, y + 14), TEXT)
+        self._txt(widgets.font("lead", True), self._fit(widgets.font("lead", True), row.get("label", ""), max(80, W - 300)), (22, y + 14), TEXT)
         x = W - 22
         add_lbl = "+ Ajuste"
         aw = max(96, self.fb.size(add_lbl)[0] + 26)
@@ -2333,7 +2397,9 @@ class Menu(WizardMixin):
         hov = self.hover == cid
         ui.rect(s, (*((0x2E, 0x33, 0x24) if sel else (SURFACE2 if hov else widgets.SURFACE2)), 255), rowr, border_radius=10)
         ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
-        ui.rect(s, (*self.TAG_COLORS.get(info.get("group"), widgets.SURFACE2), 255), pygame.Rect(rowr.x + 3, rowr.y + 8, 3, rowr.h - 16), border_radius=2)
+        ui.rect(s, (*self.TAG_COLORS.get(info.get("group"), widgets.SURFACE2), 255), pygame.Rect(rowr.x + 3, rowr.y + 8, 2, rowr.h - 16))
+        if sel:
+            ui.rect(s, (*ACCENT, 255), pygame.Rect(rowr.x, rowr.y + 6, 3, rowr.h - 12))
         self.frects[cid] = rowr
         self.order.append(cid)
         self.order_val.append(None)
@@ -2351,8 +2417,7 @@ class Menu(WizardMixin):
         tag = info["tag"]
         tw = self.f_sb.size(tag)[0] + 14
         tr = pygame.Rect(56, cy - 10, tw, 20)
-        ui.rect(s, (*(self.TAG_COLORS.get(info["group"], widgets.SURFACE2) if on else widgets.SURFACE2), 255), tr, border_radius=6)
-        self._txt(self.f_sb, tag, (tr.centerx, tr.y + 2), (255, 255, 255) if on else DIM, "c")
+        self._txt(self.f_sb, tag, (tr.x, tr.y + 2), DIM)                       # the category as a small caption, the colour is the tick on the left
         nx = tr.right + 10
         detail = LY.detail_of(L)
         bm = LY.BLEND[int(L.get("bm", 0)) % 4][0] if info["group"] in ("fx", "bg") and L.get("t") != "tone" else ""
@@ -2496,7 +2561,7 @@ class Menu(WizardMixin):
             ui.rect(s, (*SURFACE, 255), (0, y, wc, ch))
             ui.rect(s, (*BORDER, 255), (0, y, wc, ch), width=1)
         if title:
-            self._txt(self.f_sb, title, (18, y + 14), TITLE)
+            self._txt(self.f_sb, title[:1] + title[1:].lower(), (18, y + 14), TITLE)
             self.card_marks.append((x0, y, ch, wc, title))
         ry = y + (40 if title else 8)
         i = 0
@@ -2604,9 +2669,9 @@ class Menu(WizardMixin):
     def _music_pill(self, r, text, on, cid, kind):
         s = self.surf
         hov = self.hover == cid
-        ui.rect(s, (*((90, 20, 50) if on else (HOVER_FILL if hov else CTRL_FILL)), 255), r, border_radius=r.h // 2)
+        ui.rect(s, (*(ACCENT if on else (HOVER_FILL if hov else CTRL_FILL)), 255), r, border_radius=r.h // 2)
         ui.rect(s, (*(ACCENT if on else CTRL), 255), r, width=1, border_radius=r.h // 2)
-        self._txt(self.f_s, self._fit(self.f_s, text, r.w - 10), (r.centerx, r.y + 5), (255, 200, 215) if on else TEXT, "c")
+        self._txt(self.f_s, self._fit(self.f_s, text, r.w - 10), (r.centerx, r.y + 5), ON_SEL if on else TEXT, "c")
         self.hits.append((r, cid, kind, None))
 
     def _row(self, row, y):
