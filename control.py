@@ -565,6 +565,8 @@ class ControlWindow:
             self._t(wg.font("small"), wg.fit(wg.font("small"), M.settings.scene_sub(cfg, sc), r.w - 24), (r.x + 12, r.y + 30), wg.DIM)
             if i == getattr(self, "live_scene", -1):
                 self._t(wg.font("small"), "agora", (r.right - 10, r.y + 8), wg.SEL, "r")
+            if any(rule.get("scene") == i for rule in (cfg.get("app_rules") or []) if rule.get("scene") is not None):
+                self._t(wg.font("small"), "programa", (r.right - 10, r.y + 30), wg.DIM, "r")       # a program's rule uses this scene (Regras por programa)
             if top <= r.y and r.bottom <= y + h - 110:
                 self.side_hits.append((r, i))
             yy += 62

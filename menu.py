@@ -2249,7 +2249,12 @@ class Menu(WizardMixin):
         sx = adv_r.x - strip_w + (104 if W >= 900 else 0)
         for cid, label, w in strip:
             br = pygame.Rect(sx, 6, w, 24)
-            widgets.button(s, self.ftab, br, label, "danger" if cid == "hd_restore" else "quiet", hover=self.hover == cid, radius=6)
+            if cid == "hd_restore":                                              # ScreenMaster's Restaurar: a quiet button with a red word, no outline
+                widgets.button(s, self.ftab, br, "", "quiet", hover=self.hover == cid, radius=6)
+                img = self.ftab.render(label, True, DANGER)
+                s.blit(img, (br.centerx - img.get_width() // 2, br.centery - img.get_height() // 2))
+            else:
+                widgets.button(s, self.ftab, br, label, "quiet", hover=self.hover == cid, radius=6)
             self.hdr_hits.append((br, cid))
             if cid != "hd_before":
                 self.hits.append((br, cid, "btn", None))
@@ -2414,7 +2419,12 @@ class Menu(WizardMixin):
             pygame.draw.rect(s, SEL if on else DIM, (mx - 3, y + 3, 6, 10), border_radius=2) if on else pygame.draw.rect(s, (*DIM, 255), (mx - 2, y + 4, 4, 8), 1)
         nx = x0 + int((x1 - x0) * (now.tm_hour * 60 + now.tm_min) / 1440)
         ui.rect(s, (*SEL, 255), (nx - 1, y + 1, 2, 16))
-        self._txt(self.f_s, time.strftime("%H:%M"), (x1, y + 1), SEL, "r")
+        clock_w = self._txt(self.f_s, time.strftime("%H:%M"), (x1, y + 1), SEL, "r")
+        scn = self.cfg.get("scenes") or []                                    # the now-line: the scene on the air, by its name, before the clock
+        if 0 <= self.live_i < len(scn) and x1 - x0 > 420:
+            name = self._fit(self.f_s, "no ar: " + str(scn[self.live_i].get("scene_name", "?")), 260)
+            nw = self.f_s.size(name)[0]
+            self._txt(self.f_s, name, (x1 - clock_w - 14 - nw, y + 1), TEXT)
         strip = pygame.Rect(x0, y - 2, x1 - x0, 26)                       # the strip is a button: a click opens the agenda (Sistema > Automático)
         self.hits.append((strip, "hd_agenda", "btn", None))
         self.order.append("hd_agenda")
