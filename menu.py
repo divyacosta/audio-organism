@@ -1324,6 +1324,16 @@ class Menu(WizardMixin):
         return self._extra.get(cid)
 
     def set_value(self, cid, value, announce=True):
+        if cid == "ap_pick":                                                     # Regras por programa: the program chosen joins the rules, the picker goes back to its first line
+            if value:
+                rules = self.cfg.setdefault("app_rules", [])
+                if not any(r.get("process") == value for r in rules):
+                    rules.append(dict(process=value, scene=None, pause=False))
+                self.say(f"Regra criada para {value}")
+            self.touch()
+            self.rebuild_scenes()
+            self.need = True
+            return None
         if cid in ("safe_flash", "safe_motion") and int(value) < int(self.cfg[cid]):      # lowering a comfort limit: done at once, and the toast offers Desfazer
             self.sys_push("limite de conforto", [cid])
             self.cfg[cid] = value

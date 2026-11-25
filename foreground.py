@@ -37,6 +37,37 @@ def current():
         return ""
 
 
+def running_apps():
+    """The programs with a window on the screen right now (exe names, lower case, sorted): what the rules page offers. Not this program."""
+    names = set()
+    try:
+        user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+        EnumProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+        def visit(hwnd, _):
+            if user32.IsWindowVisible(hwnd) and user32.GetWindowTextLengthW(hwnd) > 0:
+                pid = wintypes.DWORD(0)
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value and pid.value != os.getpid():
+                    h = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED, False, pid.value)
+                    if h:
+                        try:
+                            buf = ctypes.create_unicode_buffer(1024)
+                            size = wintypes.DWORD(1024)
+                            if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                                exe = os.path.basename(buf.value).lower()
+                                if exe not in OWN:
+                                    names.add(exe)
+                        finally:
+                            kernel32.CloseHandle(h)
+            return True
+
+        user32.EnumWindows(EnumProc(visit), 0)
+    except Exception:
+        return []
+    return sorted(names)
+
+
 class Watch:
     """Keeps the rules working: the program in front picks its scene (and may pause the agenda); when it leaves the front, the scene it
     replaced comes back. `last` is the last program in front that is not this one (what the Adicionar of the rules page adds)."""

@@ -736,7 +736,7 @@ def test_chips():
     m.render()
     w1 = next(r.w for r, cid, kind, arg in m.hits if cid == "sc_auto:1")
     check("a very long name gets a pill of at most 200 px (the name is cut with an ellipsis)", w1 <= 200, w1)
-    check("the page of the Automático stays short: the week grid (about 200 px) and the rules are the agenda", m.heights[menu.TAB_SYS] < 1100, m.heights[menu.TAB_SYS])
+    check("the page of the Automático stays under 1200 px: the week grid (about 200 px), the picker of programs and the rules are the agenda", m.heights[menu.TAB_SYS] < 1200, m.heights[menu.TAB_SYS])
 
 
 # ------------------------------------------------------------------ 6m. No idle demo
@@ -3005,6 +3005,10 @@ def test_program_rules():
         w.update(cfg, calls.append)
         check("ao sair, a cena de antes volta e a agenda volta a correr", calls == [1, 0] and w.paused is False, (calls, w.paused))
         check("o último programa da frente fica guardado para Adicionar", cfg.get("last_fg_app") == "other.exe", cfg.get("last_fg_app"))
+        m = menu.Menu(menu.fresh())
+        m.cfg["app_rules"] = []
+        m.set_value("ap_pick", "game.exe")
+        check("escolher um programa aberto cria a regra dele", any(r.get("process") == "game.exe" for r in m.cfg["app_rules"]), m.cfg["app_rules"])
     finally:
         FG.current = orig
 

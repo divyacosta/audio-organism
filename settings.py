@@ -675,8 +675,10 @@ def agenda_rows(cfg):
         rows.append(dict(id=f"ap_scene:{i}", kind="action", label=f"Programa {rule.get('process', '?')}", btn=name[:18], help="Um clique troca a cena que ele usa, na ordem: sem cena, cada cena"))
         rows.append(dict(id=f"ap_pause:{i}", kind="action", label="Agenda neste programa", btn="Pausada" if rule.get("pause") else "Rodando", help="Pausada: a agenda não troca de cena enquanto o programa estiver na frente"))
         rows.append(dict(id=f"ap_del:{i}", kind="action", label="Apagar esta regra", btn="Apagar", danger=True, help="Tira a regra do programa"))
-    if cfg.get("last_fg_app") or cfg.get("app_rules"):                                # the row to add a program shows once one has been in front (outside this panel)
-        rows.append(dict(id="ap_add", kind="action", label="Programa da frente", btn="+ Adicionar", help="Adiciona o último programa que esteve na frente (fora deste painel)"))
+    import foreground as FG
+    running = [e for e in FG.running_apps() if not any(r.get("process") == e for r in cfg.get("app_rules") or [])]
+    rows.append(dict(id="ap_pick", kind="dd", label="Programa aberto", opts=[("Escolher um programa", "")] + [(e, e) for e in running],
+                     help="Escolha um programa que está aberto: ele entra nas regras"))
     if not cfg.get("agenda"):
         rows.insert(0, dict(id="ag_none", kind="note", label="Nenhuma regra ainda", help="Adicione uma para trocar a cena no horário marcado"))
     return rows
