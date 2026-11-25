@@ -168,6 +168,17 @@ class ControlWindow:
     # ---------------------------------------------------------------- input
     def handle(self, e):
         """Route an event from the control window; returns an action string or None."""
+        mx = pygame.mouse.get_pos()[0]                                        # a wheel event has no position: where the pointer is decides
+        if e.type == pygame.MOUSEWHEEL and self.menu.side_on() and self.panel_pos[0] <= mx <= self.panel_pos[0] + self.menu.side_w():
+            self.side_scroll = max(0, getattr(self, "side_scroll", 0) - e.y * 40)
+            self.force = True
+            return None
+        if e.type == pygame.MOUSEBUTTONDOWN and getattr(e, "button", 0) == 1 and self.menu.side_on():
+            hit = next((i for r, i in getattr(self, "side_hits", []) if r.collidepoint(e.pos)), None)
+            if hit is not None:
+                self.menu.switch_scene(hit)                                # the list of scenes: open that scene (a scene with changes asks first)
+                self.force = True
+                return None
         if e.type == pygame.KEYDOWN:
             if self.menu.wizard is not None and self.menu.tab == M.TAB_SCENES and self.menu.wizard_key(e):       # the three steps of a new scene own the keyboard
                 self.force = True
@@ -326,8 +337,9 @@ class ControlWindow:
             ph = mw.pane_view_h()
             if fixed:
                 s.blit(mw.surf, (px, top), pygame.Rect(0, mw.HEAD, mw.W, fixed))
-            s.blit(mw.surf, (px, top + fixed), pygame.Rect(0, mw.HEAD + fixed + mw.scroll, wl, ph))
-            s.blit(mw.surf, (px + wl + gap, top + fixed), pygame.Rect(wl + gap, mw.HEAD + fixed + mw.scroll2, wr, ph))
+            sd = mw.side_w()
+            s.blit(mw.surf, (px + sd, top + fixed), pygame.Rect(sd, mw.HEAD + fixed + mw.scroll, wl, ph))
+            s.blit(mw.surf, (px + sd + wl + gap, top + fixed), pygame.Rect(sd + wl + gap, mw.HEAD + fixed + mw.scroll2, wr, ph))
         else:
             area = pygame.Rect(0, mw.HEAD + mw.scroll, mw.W, mw.content_h())
             s.blit(mw.surf, (px, py + mw.HEAD + mw.reserved), area)
@@ -355,7 +367,7 @@ class ControlWindow:
         if mw.panes():
             fixed, hl, hr = mw.pane_dims()
             wl, wr, gap = mw._col_widths()
-            for pane, (hh, sc, tx) in enumerate(((hl, mw.scroll, px + wl + 3), (hr, mw.scroll2, px + mw.W + 4))):
+            for pane, (hh, sc, tx) in enumerate(((hl, mw.scroll, px + mw.side_w() + wl + 3), (hr, mw.scroll2, px + mw.W + 4))):
                 if mw.max_scroll(pane) > 0:
                     top = py + mw.HEAD + mw.reserved + fixed
                     ch = mw.pane_view_h()
@@ -371,6 +383,7 @@ class ControlWindow:
             ty = top + int((ch - th) * mw.scroll / mw.max_scroll())
             ui.rect(s, (36, 40, 58), (tx, top, 5, ch), border_radius=3)
             ui.rect(s, wg.ACCENT2, (tx, ty, 5, th), border_radius=3)
+        self._draw_scene_bar(px, py + mw.HEAD + mw.reserved)
         if mw.problems:
             txt = " · ".join(mw.problems.values())
             while len(txt) > 8 and self.fs.size(txt)[0] > mw.W - 40:
@@ -425,6 +438,39 @@ class ControlWindow:
                     ui.rect(s, wg.BORDER, pygame.Rect(r.x, r.bottom - 2, r.w, 2))
                     self._t(mw.f_sb, title, (r.x + 17, r.y + 7), wg.TITLE)
                     break
+
+    def _draw_scene_bar(self, px, y):
+        """The list of scenes on the left of the wide editor: a fixed bar (it does not scroll with the page). A click opens that scene."""
+        mw = self.menu
+        self.side_hits = []
+        if not mw.side_on():
+            return
+        s, cfg = self.surf, mw.cfg
+        w, h = mw.side_w(), mw.content_h()
+        ui.rect(s, wg.SURFACE, (px, y, w, h))
+        ui.rect(s, wg.BORDER, (px + w - 1, y, 1, h))
+        self._t(wg.font("cap", True), "CENAS", (px + 12, y + 10), wg.TITLE)
+        top = y + 32
+        total = len(cfg.get("scenes") or []) * 62
+        self.side_scroll = max(0, min(getattr(self, "side_scroll", 0), total - (h - 32)))     # the list scrolls with the wheel over it
+        old_clip = s.get_clip()
+        s.set_clip(pygame.Rect(px, top, w, h - 32))
+        yy = top - self.side_scroll
+        for i, sc in enumerate(cfg.get("scenes") or []):
+            r = pygame.Rect(px + 8, yy, w - 16, 56)
+            cur = i == int(cfg.get("scene_edit", 0))
+            ui.rect(s, wg.ACCENT_DIM if cur else wg.SURFACE2, r, border_radius=8)
+            if cur:
+                ui.rect(s, wg.SEL, (r.x, r.y + 8, 3, r.h - 16), border_radius=2)
+            name = sc.get("scene_name", "?")
+            self._t(wg.font("label"), wg.fit(wg.font("label"), name, r.w - 70), (r.x + 12, r.y + 8), wg.TEXT if cur else wg.DIM)
+            self._t(wg.font("small"), wg.fit(wg.font("small"), M.settings.scene_sub(cfg, sc), r.w - 24), (r.x + 12, r.y + 30), wg.DIM)
+            if i == getattr(self, "live_scene", -1):
+                self._pill(pygame.Rect(r.right - 60, r.y + 8, 52, 18), "NO AR", wg.ACCENT, wg.ON_ACCENT)
+            if top <= r.y and r.bottom <= y + h:
+                self.side_hits.append((r, i))
+            yy += 62
+        s.set_clip(old_clip)
 
     def toast_rect(self, tw):
         """Where the confirmation toast goes: centred near the bottom of the window, never over the tabs."""

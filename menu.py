@@ -294,10 +294,20 @@ class Menu(WizardMixin):
         self.dd_open = None
         self.need = True
 
+    SIDE_W = 230                                                                   # the bar of the scenes, on the left of the wide editor (control.py draws it)
+
+    def side_on(self):
+        """The wide editor has the list of scenes on its left: a fixed bar, outside the two columns."""
+        return self.tab == TAB_SCENES and self.scene_view == "editor" and bool(getattr(self, "wide", False))
+
+    def side_w(self):
+        return self.SIDE_W if self.side_on() else 0
+
     def _col_widths(self):
         gap = 12
-        wl = max(300, min(440, int(self.W * 0.40)))
-        return wl, self.W - wl - gap, gap
+        avail = self.W - self.side_w()
+        wl = max(300, min(440, int(avail * 0.40)))
+        return wl, avail - wl - gap, gap
 
     @property
     def info(self):
@@ -1158,7 +1168,7 @@ class Menu(WizardMixin):
         self.scroll2 = max(0, min(self.scroll2, self.max_scroll(1))) if self.panes() else 0
 
     def in_right_pane(self, x):
-        return self.panes() and x >= self._col_widths()[0] + self._col_widths()[2] // 2
+        return self.panes() and x >= self.side_w() + self._col_widths()[0] + self._col_widths()[2] // 2
 
     def surf_y_at(self, x, y):
         """The y on the panel's surface of a point at (x, y), y counted from the top of the panel with the preview strip taken out (so the tab bar is HEAD high)."""
@@ -2001,7 +2011,7 @@ class Menu(WizardMixin):
         # tab bar
         x = 0
         hidden_n = 0 if self.cfg.get("advanced", False) else self.adv_hidden()          # how many settings the simple mode keeps out of sight
-        adv_w = 150 if hidden_n else 118
+        adv_w = 172 if hidden_n else 118                               # room for the +N of the hidden options
         adv_r = pygame.Rect(W - adv_w, 0, adv_w, 36)
         for i, (name, _) in enumerate(TABS):
             cid = f"tab{i}"
@@ -2041,9 +2051,9 @@ class Menu(WizardMixin):
                     y += self._draw_card(title, rows, y, 0, W) + self.GAP
                     yl = yr = y
                 elif col == "L":
-                    yl += self._draw_card(title, rows, yl, 0, wl) + self.GAP
+                    yl += self._draw_card(title, rows, yl, self.side_w(), wl) + self.GAP
                 else:
-                    yr += self._draw_card(title, rows, yr, wl + gap, wr) + self.GAP
+                    yr += self._draw_card(title, rows, yr, self.side_w() + wl + gap, wr) + self.GAP
             y = max(yl, yr)
         else:
             wc = self._single_w()
