@@ -131,6 +131,8 @@ def main():
     recorder = None
     import agenda as _agenda
     agenda_tk = _agenda.Ticker()
+    import foreground as _fg
+    fg_watch, fg_next = _fg.Watch(), 0.0                                      # Regras por programa: the program in front, asked twice a second
     if os.environ.get("VIS_REPORT"):                                          # the performance report (report.py): Ultra, VSync and dynamic resolution off, then measure and quit
         import report
         import settings as _settings
@@ -455,7 +457,12 @@ def main():
                         pass
         prof.mark("áudio/entrada (captura ou sinal de teste) e troca de dispositivo")
         menu.apply_taps(an)                                                       # tap tempo asked for since the last frame (TAP, the T key, a controller)
+        if time.perf_counter() >= fg_next:
+            fg_next = time.perf_counter() + 0.5
+            fg_watch.update(cfg, menu.play_scene)
         for rule in agenda_tk.check(cfg.get("agenda") or []):                       # the agenda: a rule of this minute brings its scene to the picture
+            if fg_watch.paused:                                                     # a program's rule pauses the agenda while it is in front
+                break
             scn_ = cfg.get("scenes") or []
             if 0 <= int(rule.get("scene", -1)) < len(scn_):
                 menu.play_scene(int(rule["scene"]))

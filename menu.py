@@ -1635,6 +1635,30 @@ class Menu(WizardMixin):
             self.touch()
             self.say("Paletas de fábrica restauradas")
             return None
+        if cid.startswith("ap_"):                                                # Regras por programa: a click changes one rule
+            op, _, idx = cid.partition(":")
+            rules = self.cfg.setdefault("app_rules", [])
+            if op == "ap_add":
+                exe = self.cfg.get("last_fg_app") or ""
+                if not exe:
+                    self.say("Ponha o programa na frente antes e depois clique aqui")
+                elif not any(r.get("process") == exe for r in rules):
+                    rules.append(dict(process=exe, scene=None, pause=False))
+            elif 0 <= int(idx or 0) < len(rules):
+                r = rules[int(idx)]
+                if op == "ap_scene":
+                    order = [None] + list(range(len(self.cfg.get("scenes") or [])))      # sem cena, cena 1, cena 2 ... e de volta
+                    cur = r.get("scene")
+                    pos = order.index(cur) if cur in order else 0
+                    r["scene"] = order[(pos + 1) % len(order)]
+                elif op == "ap_pause":
+                    r["pause"] = not r.get("pause")
+                elif op == "ap_del":
+                    del rules[int(idx)]
+            self.touch()
+            self.rebuild_scenes()
+            self.need = True
+            return None
         if cid.startswith("ag_"):                                                # the agenda: each click changes one rule (agenda.apply)
             import agenda as AG
             op, _, idx = cid.partition(":")

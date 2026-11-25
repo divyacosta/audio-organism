@@ -552,7 +552,7 @@ def auto_sets_factory():
 
 
 _AS0 = auto_sets_factory()
-DEFAULTS.update(panel_fps=30, panel_fps_v=2, link_riser=False, link_vocal=False, remote_osc=False, remote_midi=False, phone_view=False, search="", ui_tab=0, agenda=[], live=False, profile=1, ae_kind=0, ae_part=0, auto_sets=auto_sets_factory())
+DEFAULTS.update(panel_fps=30, panel_fps_v=2, link_riser=False, link_vocal=False, remote_osc=False, remote_midi=False, phone_view=False, search="", ui_tab=0, agenda=[], app_rules=[], last_fg_app="", live=False, profile=1, ae_kind=0, ae_part=0, auto_sets=auto_sets_factory())
 DEFAULTS.update(LY.LP_DEFAULTS)
 DEFAULTS["starter_v"] = 4
 DEFAULTS.update(ed_item=0, ed_sub=0, ed_page=False, ed_tab=0, sc_filter=0, lib=-1, pal_open=False, sys_item=0, ear_open=True, tour_done=False, tour_marks=0, osd=True, advanced=False, macro_energy=100, macro_speed=100, macro_pal=0, detail_open=False)                                                  # the item of the editor of a scene that is open, and the sub-section of the mandala                                                          # 2: the mandala presets come as scenes of the gallery
@@ -670,6 +670,13 @@ def agenda_rows(cfg):
         rows.append(dict(id=f"ag_on:{i}", kind="action", label="Regra", btn="Ligada" if rule.get("on", True) else "Desligada", help="Liga ou desliga esta regra"))
         rows.append(dict(id=f"ag_del:{i}", kind="action", label="Apagar esta regra", btn="Apagar", danger=True, help="Tira a regra da agenda"))
     rows.append(dict(id="ag_add", kind="action", label="Nova regra", btn="+ Adicionar", primary=True, help="A regra nova começa às 09:00, todos os dias, na cena 1"))
+    for i, rule in enumerate(cfg.get("app_rules") or []):                                  # Regras por programa: a program in front picks a scene, and may pause the agenda
+        name = scn[int(rule.get("scene") or 0)].get("scene_name", "?") if rule.get("scene") is not None and 0 <= int(rule.get("scene") or 0) < len(scn) else "Sem cena"
+        rows.append(dict(id=f"ap_scene:{i}", kind="action", label=f"Programa {rule.get('process', '?')}", btn=name[:18], help="Um clique troca a cena que ele usa, na ordem: sem cena, cada cena"))
+        rows.append(dict(id=f"ap_pause:{i}", kind="action", label="Agenda neste programa", btn="Pausada" if rule.get("pause") else "Rodando", help="Pausada: a agenda não troca de cena enquanto o programa estiver na frente"))
+        rows.append(dict(id=f"ap_del:{i}", kind="action", label="Apagar esta regra", btn="Apagar", danger=True, help="Tira a regra do programa"))
+    if cfg.get("last_fg_app") or cfg.get("app_rules"):                                # the row to add a program shows once one has been in front (outside this panel)
+        rows.append(dict(id="ap_add", kind="action", label="Programa da frente", btn="+ Adicionar", help="Adiciona o último programa que esteve na frente (fora deste painel)"))
     if not cfg.get("agenda"):
         rows.insert(0, dict(id="ag_none", kind="note", label="Nenhuma regra ainda", help="Adicione uma para trocar a cena no horário marcado"))
     return rows

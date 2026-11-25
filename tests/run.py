@@ -2989,6 +2989,26 @@ def test_undo_redo_before():
     check("ao soltar, volta a cena como estava", cfg[key] == (not v1), (cfg[key], v1))
 
 
+def test_program_rules():
+    section("Regras por programa: o programa da frente troca a cena e pode pausar a agenda; ao sair, a cena volta")
+    import foreground as FG
+    orig = FG.current
+    try:
+        cfg = {"app_rules": [{"process": "game.exe", "scene": 1, "pause": True}], "scene_edit": 0}
+        calls = []
+        w = FG.Watch()
+        FG.current = lambda: "game.exe"
+        w.update(cfg, calls.append)
+        check("o programa da regra na frente leva para a cena da regra", calls == [1], calls)
+        check("e pausa a agenda enquanto estiver lá", w.paused is True, w.paused)
+        FG.current = lambda: "other.exe"
+        w.update(cfg, calls.append)
+        check("ao sair, a cena de antes volta e a agenda volta a correr", calls == [1, 0] and w.paused is False, (calls, w.paused))
+        check("o último programa da frente fica guardado para Adicionar", cfg.get("last_fg_app") == "other.exe", cfg.get("last_fg_app"))
+    finally:
+        FG.current = orig
+
+
 def test_safety_undo():
     section("Segurança e Desfazer: restaurar e perfis nunca baixam os limites de conforto, e o toast desfaz")
     cfg = menu.fresh()
@@ -3142,7 +3162,7 @@ def test_agenda():
 
 def main():
     exe = sys.argv[sys.argv.index("--exe") + 1] if "--exe" in sys.argv else None
-    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_navigation, test_sticky_titles, test_report):
+    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_navigation, test_sticky_titles, test_report):
         try:
             fn()
         except Exception as e:
