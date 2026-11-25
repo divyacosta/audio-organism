@@ -561,11 +561,11 @@ def test_widgets():
     m.tab, m.need = menu.TAB_SCENES, True
     m.open_scene(0)
     cw.update(time.time(), an, 60.0, 10.0, False, st, force=True)
-    check("a scene just opened is EDITANDO, not RASCUNHO", "EDITANDO" in seen and "RASCUNHO" not in seen, seen)
+    check("a scene just opened says it is saved, not a draft", m.ed_status()[1] == "Tudo salvo", m.ed_status())
     del seen[:]
     m.set_value("scene_name", "Mudei")
     cw.update(time.time() + 1, an, 60.0, 10.0, False, st, force=True)
-    check("with a change it is a RASCUNHO", "RASCUNHO" in seen and "EDITANDO" not in seen, seen)
+    check("with a change it says it is only in the preview", m.ed_status()[1] == "Só na prévia", m.ed_status())
     # the Palco says one thing about the sound, and never cuts a word without an ellipsis
     cw2 = control.ControlWindow(menu.Menu(menu.fresh()), headless=True, size=(1113, 860))
     cw2.menu.tab, cw2.menu.need = menu.TAB_LIVE, True

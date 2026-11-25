@@ -30,6 +30,8 @@ class ControlWindow:
     LIVE_SURF_H = 2400                 # the surface the Palco is drawn on: tall enough for the strip of scenes (up to 48 of them) with the details open
     STRIP_MAX = 48                     # the scenes of the strip of the Palco (a new scene goes to the end: past this one it is only in the Estúdio and in Automático)
 
+    HEAD_ROW = 64                      # the one row over the editor: back, name, state and the buttons (it was a strip of 190 px)
+
     def pv_size(self):
         """The preview under the tab bar: 296 px wide in a narrow window, bigger (up to 500 px) in a wide one; always 16:9."""
         pw = max(296, min(420, int(self.menu.W * 0.33)))
@@ -306,7 +308,7 @@ class ControlWindow:
             mw.live_i, mw.pend_i = li, pi
             mw.need = True
         mw.live_scene = self.live_scene = li
-        mw.reserved = (self.pv_size()[1] + 18 if mw.pv_mode() else 0)
+        mw.reserved = (self.HEAD_ROW if mw.pv_mode() == "draft" else (self.pv_size()[1] + 18 if mw.pv_mode() else 0))
         mw.clamp_scroll()
         mw.render()
         px, py = self.panel_pos
@@ -326,6 +328,7 @@ class ControlWindow:
             area = pygame.Rect(0, mw.HEAD + mw.scroll, mw.W, mw.content_h())
             s.blit(mw.surf, (px, py + mw.HEAD + mw.reserved), area)
         self._draw_sticky(px, py)
+        self._draw_float_pic()
         if mw.tab == M.TAB_SYS and getattr(mw, "ear_slots", None):
             self._draw_ear(an)
         if mw.in_gallery():
@@ -448,6 +451,8 @@ class ControlWindow:
         """The strip under the tab bar: a small picture of what the output shows right now, and what is being set up."""
         s = self.surf
         mw = self.menu
+        if mw.pv_mode() == "draft":
+            return self._draw_editor_head(x, y, status)
         pw, ph = self.pv_size()
         r = pygame.Rect(x, y + 6, pw, ph)
         ui.rect(s, (6, 7, 11), r, border_radius=10)
@@ -485,24 +490,91 @@ class ControlWindow:
             self._t(self.fm, M.SYS_ITEMS[M.SYS_IMAGE][0], (tx, y + 78), wg.TEXT)
             self._t(self.fs, "vale para todas as cenas", (tx, y + 102), wg.DIM)
             return
-        self._t(self.fm, self._fit(self.fm, ed, x + mw.W - tx - 16), (tx, y + 8), wg.TEXT)           # editing: one name, the scene being edited
-        sx = tx
-        if cfg.get("scene_edit", -1) == live_i:
-            self._pill(pygame.Rect(tx, y + 38, 64, 22), "NO AR", wg.ACCENT, (255, 255, 255))
-            sx = tx + 76
-        col, txt = mw.ed_status()                                                   # saved / only in the preview / changing live
-        ui.circle(s, col, (sx + 5, y + 49), 5)
-        self._t(self.fb, txt, (sx + 16, y + 40), wg.TEXT)
-        bx, by, self.bar_hits = tx, y + 74, []                                      # the buttons of the editor: Ao vivo, Descartar, Salvar, Galeria
-        for cid, label, on, primary in mw.ed_buttons():
-            w = max(70, self.fb.size(label)[0] + 24)
-            if bx > tx and bx + w > x + mw.W - 12:
-                bx, by = tx, by + 36
-            br = pygame.Rect(bx, by, w, 30)
+
+    def _margin_pic(self):
+        """Where the big picture of the draft goes: in the free margin to the right of the editor, when the window is wide enough (else None)."""
+        mw = self.menu
+        px, py = self.panel_pos
+        free = (mw.W - mw.EDITOR_W) // 2
+        if free < 280:
+            return None
+        w = min(360, free - 24)
+        return pygame.Rect(px + (mw.W + mw.EDITOR_W) // 2 + 12, py + mw.HEAD + mw.reserved + 8, w, w * 9 // 16)
+
+    def _draft_pic(self, r, status, label=True):
+        """The picture of the DRAFT (what is being edited, not what is on the air) in rectangle r."""
+        s, mw = self.surf, self.menu
+        ui.rect(s, (6, 7, 11), r, border_radius=10)
+        if self.thumbs is not None:
+            self.thumbs.set_draft(mw.draft, extra=any(isinstance(x, dict) for _, x in mw.thumb_slots))          # the tiles of Modelo and Cores need their frames too
+            dimg = self._tsurface(mw.draft)
+            if dimg is not None:
+                s.blit(self._rounded(dimg, r.size, 10), r.topleft)
+                if mw.cfg.get("ed_page") and int(mw.cfg.get("ed_item", 0)) == 0 and int(mw.cfg.get("ed_sub", 0)) == 3 and mw.cfg.get("scene_visual", 1) == 1:
+                    self._fold_overlay(r)
+            else:
+                self._t(self.fs, "preparando o rascunho…", (r.centerx, r.centery - 8), wg.DIM, "c")
+        ui.rect(s, wg.BORDER, r, width=1, border_radius=10)
+        if label:
+            self._pill(pygame.Rect(r.x + 8, r.y + 8, 84, 20), "RASCUNHO" if mw.is_dirty() else "EDITANDO", wg.ACCENT2, wg.ON_LIGHT)
+
+    def _draw_float_pic(self):
+        """The big picture of the draft, pinned in the margin beside the editor (it stays in sight while the page scrolls)."""
+        mw = self.menu
+        r = self._margin_pic()
+        if r is not None and mw.pv_mode() == "draft":
+            self._draft_pic(r, None)
+
+    def _draw_editor_head(self, x, y, status):
+        """The ONE row over the editor: ‹ Galeria, the name, NO AR and the state on the left; Ao vivo, Descartar (only with changes) and Salvar on the right.
+        A small picture of the draft sits at its start when there is no margin for the big one."""
+        s, mw = self.surf, self.menu
+        cfg, info = mw.cfg, (status or {}).get("image") or {}
+        scn = cfg.get("scenes") or []
+        ed = scn[cfg["scene_edit"]]["scene_name"] if 0 <= cfg.get("scene_edit", 0) < len(scn) else "?"
+        cw_ = min(mw.W, mw.EDITOR_W)                                              # the row lines up with the column of the editor under it
+        row = pygame.Rect(x + (mw.W - cw_) // 2, y + 4, cw_, self.HEAD_ROW - 8)
+        cx = row.x
+        if self._margin_pic() is None:
+            tr = pygame.Rect(row.x, row.y, 96, 54)
+            self._draft_pic(tr, status, label=False)
+            cx = tr.right + 12
+        self.bar_hits = []
+        right = row.right - 4
+        dirty, live = mw.is_dirty(), bool(cfg.get("live"))
+        for cid, label, on, primary in (("ed_save", "Salvar", dirty, True), ("ed_discard", "Voltar ao que era" if live else "Descartar", dirty, False)):
+            if cid == "ed_discard" and not dirty:
+                continue                                                          # nothing to discard: the button is not there
+            w = max(74, self.fb.size(label)[0] + 26)
+            br = pygame.Rect(right - w, row.centery - 15, w, 30)
             wg.button(s, self.fb, br, label, "primary" if (primary and on) else "plain", hover=False, enabled=on, radius=9, dy=1)
             if on:
                 self.bar_hits.append((br, cid))
-            bx += w + 8
+            right = br.x - 8
+        pill = pygame.Rect(right - 46, row.centery - 13, 46, 26)                  # Ao vivo: a real switch with its name
+        ui.rect(s, wg.OK if live else (74, 80, 108), pill, border_radius=13)
+        ui.circle(s, (255, 255, 255), (pill.right - 13 if live else pill.left + 13, pill.centery), 9)
+        self._t(self.fs, "Ao vivo", (pill.x - 8, row.centery - 8), wg.OK if live else wg.DIM, "r")
+        hit = pygame.Rect(pill.x - 70, pill.y - 4, 70 + pill.w, pill.h + 8)
+        self.bar_hits.append((hit, "live_toggle"))
+        right = hit.x - 6
+        bw = max(64, self.fb.size("‹ Galeria")[0] + 22)                           # back is navigation, not an action: first, on the left
+        br = pygame.Rect(cx, row.centery - 15, bw, 30)
+        wg.button(s, self.fb, br, "‹ Galeria", "plain", hover=False, enabled=True, radius=9, dy=1)
+        self.bar_hits.append((br, "scene_back"))
+        nx = br.right + 14
+        col, txt = mw.ed_status()
+        sw = self.fb.size(txt)[0] + 18
+        live_here = cfg.get("scene_edit", -1) == int(info.get("scene_i", -1))
+        extra = (70 if live_here else 0) + sw + 12
+        self._t(self.fm, self._fit(self.fm, ed, max(60, right - nx - extra)), (nx, row.centery - 12), wg.TEXT)
+        nx += min(self.fm.size(ed)[0], max(60, right - nx - extra)) + 12
+        if live_here:
+            self._pill(pygame.Rect(nx, row.centery - 11, 58, 22), "NO AR", wg.ACCENT, (255, 255, 255))
+            nx += 70
+        if nx + sw < right:
+            ui.circle(s, col, (nx + 5, row.centery), 5)
+            self._t(self.fb, txt, (nx + 16, row.centery - 9), wg.DIM)
 
     def _draw_ear(self, an):
         """The analysis of the music in Sistema > Áudio: the card the Palco used to have, painted live over the slot the panel leaves for it."""

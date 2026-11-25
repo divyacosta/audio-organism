@@ -2003,7 +2003,7 @@ class Menu(WizardMixin):
         adv_r = pygame.Rect(W - adv_w, 0, adv_w, 36)
         for i, (name, _) in enumerate(TABS):
             cid = f"tab{i}"
-            tw = (W - adv_w - 6 - 6 * (len(TABS) - 1)) // len(TABS)
+            tw = min(220, (W - adv_w - 6 - 6 * (len(TABS) - 1)) // len(TABS))          # the tabs do not stretch across a wide window
             r = pygame.Rect(x, 0, tw, 36)
             sel, hov = i == self.tab, self.hover == cid
             ui.rect(s, (*(SEL if sel else (SURFACE2 if hov else SURFACE)), 255), r, border_radius=10)   # the chosen tab is blue like every choice: red is for what is on the air and for leaving
@@ -2092,13 +2092,6 @@ class Menu(WizardMixin):
         if self.is_dirty():
             return (ACCENT, "Mudando ao vivo") if self.cfg.get("live") else (ACCENT2, "Só na prévia")
         return OK, "Tudo salvo"
-
-    def ed_buttons(self):
-        """(id, label, enabled, primary) of the buttons of the editor, drawn in the strip over it: they stay in sight while the page scrolls."""
-        dirty, live = self.is_dirty(), bool(self.cfg.get("live"))
-        return [("live_toggle", "Ao vivo: " + ("ligado" if live else "desligado"), True, live),
-                ("ed_discard", "Voltar ao que era" if live else "Descartar", dirty, False), ("ed_save", "Salvar", dirty, True),
-                ("scene_back", "‹ Galeria", True, False)]
 
     def _item_row(self, row, y):
         """An item of the stack of the editor (the mandala, the camera ...): its tag, its name and how it is set; the selected one is lit."""
