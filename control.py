@@ -395,9 +395,10 @@ class ControlWindow:
             t = (status or {}).get("timing") or {}
             line = (f"{fps:.0f} fps   ·   imagem {t.get('GPU', 0):.1f} ms   ·   som {t.get('áudio', 0):.1f} ms   ·   cena {t.get('cena', 0):.1f} ms"
                     f"   ·   {'shaders ok' if (status or {}).get('shader_ok', True) else 'shaders com erro'}")
-            ui.rect(s, (*wg.BG, 255), (px, py + self.H - 24, self.W, 24))
-            ui.rect(s, (*wg.BORDER, 255), (px, py + self.H - 24, self.W, 1))
-            self._t(self.fs, line, (px + 14, py + self.H - 19), wg.DIM)
+            fy = self.H - 26                                                       # the foot of the window, inside it
+            ui.rect(s, (*wg.BG, 255), (0, fy, self.W, 26))
+            ui.rect(s, (*wg.BORDER, 255), (0, fy, self.W, 1))
+            self._t(self.fs, line, (16, fy + 5), wg.DIM)
         if mw.problems:
             txt = " · ".join(mw.problems.values())
             while len(txt) > 8 and self.fs.size(txt)[0] > mw.W - 40:

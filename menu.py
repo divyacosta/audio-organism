@@ -2362,6 +2362,12 @@ class Menu(WizardMixin):
             groups = {g: items for g, items in groups.items() if items}
             self.dd_groups = set(groups) if groups else set()
         pw = max(box.w, 340)
+        if self.panes():                                                       # the menu stays inside the column it was opened from (the page clips at its edges)
+            wl = self._col_widths()[0]
+            colL = self.side_w() if self.in_right_pane(box.x) is False else self.side_w() + wl + self._col_widths()[2]
+            colR = colL + (self._col_widths()[1] if self.in_right_pane(box.x) else wl)
+            pw = min(pw, colR - colL - 8)
+            box = pygame.Rect(max(colL + 4, min(box.x, colR - pw - 4)), box.y, box.w, box.h)
         ui_h = 44                                                              # the search field on the top line
         for g in groups:
             ui_h += 40 + (len(groups[g]) * 30 if g in self.dd_groups else 0)
