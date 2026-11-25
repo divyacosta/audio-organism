@@ -87,8 +87,9 @@ fn radialFold(p: vec2<f32>, mode: i32) -> vec2<f32> {
   return length(p) * vec2<f32>(cos(a), abs(sin(a)));
 }
 
-// Kaleidoscope cuts, one per universe: 0 mirror x+y, 1 lateral, 2/3/4 radial 6/8/5 sectors, 5 diagonal, 6 vertical mirror
+// Kaleidoscope cuts, one per universe: 8 none, 0 mirror x+y, 1 lateral, 2/3/4 radial 6/8/5 sectors, 5 diagonal, 6 vertical mirror
 fn fold2(p: vec2<f32>, mode: i32) -> vec2<f32> {
+  if (mode == 8) { return p; }                                  // no mirror at all
   if (mode == 1) { return vec2<f32>(abs(p.x), p.y); }
   if (mode == 6) { return vec2<f32>(p.x, abs(p.y)); }
   if ((mode >= 2 && mode <= 4) || mode == 7) { return radialFold(p, mode); }
@@ -338,6 +339,7 @@ fn mapFacetL(p0: vec3<f32>, lim: i32) -> vec3<f32> {
     let flip = select(1.0, -1.0, (i % 2) == 1);
     if (mode == 1) { off.y = off.y * flip; }
     if (mode == 6) { off.x = off.x * flip; }
+    if (mode == 8) { off.x = 0.0; off.y = 0.0; }                                                  // no mirror: the layers stay centred, nested, instead of sitting in one corner
     off.z = 0.40 + 0.25 * clamp(u.cam.w, 0.0, 1.0);                                              // each layer sits deeper (farther from the camera) than the previous one
     p = vec3<f32>(fold2(p.xy, mode), p.z) - off;
     let a = vec2<f32>(T4.x * p.x - T4.y * p.y, T4.y * p.x + T4.x * p.y);
@@ -583,7 +585,8 @@ fn facetFrag(uv: vec2<f32>) -> vec4<f32> {
 
 @fragment
 fn fs(in: VOut) -> @location(0) vec4<f32> {
-  let frag = vec2<f32>(in.pos.x, u.res.y - in.pos.y);
+  let jit = vec2<f32>(f32((u.flags >> 16u) & 255u), f32((u.flags >> 24u) & 255u)) / 255.0 - vec2<f32>(0.5);      // TAA: this frame's sub-pixel offset (0 when off)
+  let frag = vec2<f32>(in.pos.x, u.res.y - in.pos.y) + select(vec2<f32>(0.0), jit, (u.flags >> 16u) != 0u);
   let uv = (frag - 0.5 * u.res) / u.res.y;
   var f = facetFrag(uv);
   // MSAA equivalent: the picture is ray marched, there are no polygons to multisample, so the extra samples (2 / 4 / 8 per pixel) are taken

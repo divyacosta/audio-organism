@@ -12,8 +12,8 @@ A scene's shader is 0 (automatic) or the 1-based index of a preset in the list.
 KIND_NAMES = {1: "3D", 2: "Neon", 3: "Holograma", 4: "Raio X", 5: "Cromado", 6: "Aquarela", 7: "Duotom"}
 # label and help of the three numbers for each kind; None = the number does nothing for that kind
 PARAMS = {
-    1: (("Brilho", "Quanto de luz as faces recebem"), ("Contraste da luz", "Diferença entre o lado claro e o escuro"),
-        ("Opacidade das faces", "Abaixo de 100% as camadas de trás aparecem")),
+    1: (("Brilho", "Luz nas faces"), ("Contraste da luz", "Claro contra escuro"),
+        ("Opacidade das faces", "Abaixo de 100% vê-se o fundo")),
     2: (("Brilho do contorno", "Força do tubo de neon na borda"), ("Espessura do contorno", "Largura do brilho em cada faceta"),
         ("Opacidade das faces", "As faces são vidro escuro: quanto de cor ficam")),
     3: (("Brilho", "Luz geral do holograma"), ("Densidade das linhas", "Linhas finas que cruzam cada faceta"),

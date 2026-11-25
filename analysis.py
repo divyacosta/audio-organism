@@ -7,6 +7,8 @@ import threading
 
 import numpy as np
 
+from ear import Ear
+
 HOP = 512
 KEY_WIN = 8192          # window of the key (tom) estimate: 5.9 Hz per bin at 48 kHz
 DECK_CAP = 1 << 19      # hops of waveform history (about 90 minutes)
@@ -21,28 +23,47 @@ N_BANDS = 64
 class Capture:
     """WASAPI loopback capture into a ring buffer (mono float32)."""
 
-    def __init__(self):
+    def __init__(self, frames=1024, dev_name=""):
         import pyaudiowpatch as pyaudio
         self.pyaudio = pyaudio
         self.pa = pyaudio.PyAudio()
         self.ring = np.zeros(RING, np.float32)
         self.w = 0
+        self.width = 0.0
+        self.lr, self.corr = None, 0.0
         self.lock = threading.Lock()
         self.stream = None
         self.dev_index = None
         self.rate = 48000
-        self.frames = 1024
+        self.frames = int(frames)                          # frames per buffer of the capture: the buffer time (frames / rate)
+        self.dev_name = dev_name                           # "" = the default output of Windows, otherwise the name of a loopback device
         self.open()
 
     def open(self):
         pyaudio = self.pyaudio
         dev = self.pa.get_default_wasapi_loopback()
+        if self.dev_name:                                   # a device picked by name (falls back to the default one when it is gone)
+            for d in self.devices(full=True):
+                if d["name"] == self.dev_name:
+                    dev = d
+                    break
         self.dev_index = dev["index"]
         self.rate = int(dev["defaultSampleRate"])
         ch = dev["maxInputChannels"]
 
         def cb(data, frames, t, status):
-            x = np.frombuffer(data, dtype=np.float32).reshape(-1, ch).mean(axis=1)
+            raw = np.frombuffer(data, dtype=np.float32).reshape(-1, ch)
+            x = raw.mean(axis=1)
+            if ch >= 2 and len(x):
+                left, right = raw[:, 0], raw[:, 1]
+                self.lr = (left[-512:].copy(), right[-512:].copy())             # for the stereo drawing (goniometer)
+                den = float(np.sqrt(np.sum(left * left) * np.sum(right * right)))
+                if den > 1e-9:
+                    self.corr += (float(np.sum(left * right)) / den - self.corr) * 0.05                                # stereo width: side against mid, smoothed (see ear.py)
+                side = float(np.sqrt(np.mean(((raw[:, 0] - raw[:, 1]) * 0.5) ** 2)))
+                mid = float(np.sqrt(np.mean(((raw[:, 0] + raw[:, 1]) * 0.5) ** 2)))
+                if side + mid > 1e-5:
+                    self.width += (side / (side + mid) * 2.0 - self.width) * 0.05
             n = len(x)
             with self.lock:
                 i = self.w % RING
@@ -60,8 +81,21 @@ class Capture:
             input_device_index=dev["index"], frames_per_buffer=self.frames, stream_callback=cb,
         )
 
+    def devices(self, full=False):
+        """The loopback devices (what each output is playing), by name; full=True gives the device records."""
+        try:
+            lst = list(self.pa.get_loopback_device_info_generator())
+        except Exception:
+            lst = []
+        return lst if full else [d["name"] for d in lst]
+
     def default_changed(self):
         try:
+            if self.dev_name:                                                # a picked device that is gone: back to the default output
+                if self.dev_name not in self.devices():
+                    self.dev_name = ""
+                    return True
+                return False
             return self.pa.get_default_wasapi_loopback()["index"] != self.dev_index
         except Exception:
             return False
@@ -166,10 +200,15 @@ class Analyzer:
         for i in range(N_BANDS):
             a = int(np.searchsorted(freqs, edges[i]))
             self.edges.append((a, max(int(np.searchsorted(freqs, edges[i + 1])), a + 1)))
+        n_mag = len(freqs)
+        self._ea = np.array([min(a, n_mag - 1) for a, _ in self.edges])          # the same bands as start/end arrays: one vectorized mean per hop instead of a Python loop
+        self._eb = np.array([max(min(b, n_mag), min(a, n_mag - 1) + 1) for a, b in self.edges])
         hd = self.hop_dt
         self.b = {"kick": Band(hd, 0.14, 1.8), "bass": Band(hd, 0.1, 1.8), "body": Band(hd, 0.1, 1.5),
                   "mid": Band(hd, 0.1, 1.6), "snare": Band(hd, 0.07, 1.2), "high": Band(hd, 0.05, 0.9)}
         self.hits_t = collections.deque(maxlen=64)
+        self.riser_link = False
+        self.ear = Ear(rate, self.hop_dt)                 # chord, melody, brightness, risers, vocals, density, stereo, repeats, tempo (see ear.py)
         self.bands = np.zeros(N_BANDS)
         self.band_peak = 0.5
         # onset envelope for BPM
@@ -180,6 +219,8 @@ class Analyzer:
         self.pend_bpm = 0.0
         self.pend_n = 0
         self.phase = 0.0
+        self.manual_bpm = 0.0             # > 0: the tempo was set by tapping (tap()): the estimate leaves it alone until release_tap() or the next track
+        self.tap_ts = []                  # the taps of the series in progress (seconds, any clock)
         # per-frame outputs
         self.kick = self.snare = self.hat = 0.0
         self.kick_hit = self.snare_hit = self.hat_hit = 0.0
@@ -207,6 +248,7 @@ class Analyzer:
         self.drop_flash = 0.0
         self.beat_n = 0
         self.max_sub = 8
+        self.fl_len, self.fl_start, self.fl_roll = 1.0, 0.35, True       # flash length (x), tension where the strobe starts, flash on snare rolls
         self.bursts_enabled = True
         self.pp = 0.0
         self.burst_left = 0
@@ -230,6 +272,8 @@ class Analyzer:
         self.beat_event = self.bar_event = self.phrase_event = 0.0
         self.down_acc = np.zeros(4)                       # kick / bass weight at each of the 4 beat positions: the heaviest one is the downbeat
         self.down_off = 0
+        self._hk_raw = self.kick_raw = 0.0                # raw strength (kick + bass amplitude) of the kick of this frame: the accent of a beat, which the normalised hit loses
+        self._raw_ref, self._last_kick_t, self._anchor_t = 0.0, -99.0, -99.0     # a typical kick, when the last one was, when the one was last pinned to a kick
         self.mel_hit = 0.0                                # envelope of the melody notes
         self.mel_ev = 0.0
         self._hm = 0.0
@@ -276,6 +320,8 @@ class Analyzer:
     # ------------------------------------------------------------------ input
     def pump(self, cap, now):
         data, self.r = cap.take(self.r)
+        self.ear.width = getattr(cap, "width", 0.0)
+        self.ear.lr, self.ear.corr = getattr(cap, "lr", None), getattr(cap, "corr", 0.0)
         dtw = 0.0 if self.last_t is None else now - self.last_t
         self.last_t = now
         if len(data):
@@ -298,6 +344,7 @@ class Analyzer:
         self._rms_hop = float(np.sqrt(np.mean(chunk * chunk)))
         mag = np.abs(np.fft.rfft(self.buf * self.win)) * (4.0 / WIN)
         amp = {k: float(np.sqrt(np.mean(mag[a:b] ** 2))) for k, (a, b) in self.sl.items()}
+        self.ear.hop(mag)
         hk = self.b["kick"].push(amp["kick"])
         self.b["bass"].push(amp["bass"])
         hb = self.b["body"].push(amp["body"])
@@ -329,11 +376,14 @@ class Analyzer:
             self.deck[row, j] = max(0.0, min(1.0, (20.0 * math.log10(amp[name] + 1e-7) + off) / 60.0))
         self.deck_n += 1
         self._hk = max(self._hk, hk)
+        if hk:
+            self._hk_raw = max(self._hk_raw, amp["kick"] + amp["bass"])
         self._hs = max(self._hs, snare_hit)
         self._hh = max(self._hh, hh)
         self.ei = 0.5 * self.b["bass"].norm + 0.3 * self.b["mid"].norm + 0.2 * self.b["high"].norm
         # log spectrum bands for the GPU
-        raw = np.log1p(np.array([mag[a:b].mean() for a, b in self.edges]) * 200.0)
+        cs = np.concatenate(((0.0,), np.cumsum(mag)))
+        raw = np.log1p((cs[self._eb] - cs[self._ea]) / (self._eb - self._ea) * 200.0)
         self.band_peak = max(raw.max(), self.band_peak * math.exp(-self.hop_dt / 15.0), 0.4)
         nb = np.clip(raw / self.band_peak, 0, 1) ** 1.6
         self.bands = np.where(nb > self.bands, nb, self.bands * math.exp(-self.hop_dt / 0.12) + nb * 0.0)
@@ -355,7 +405,32 @@ class Analyzer:
             if abs(err) < 0.25:
                 self.phase -= err * 0.35
 
+    def tap(self, now):
+        """Tap tempo: every tap is a beat. Taps less than 2 s after the one before are one series; from the second tap on the tempo is the median interval of the
+        last eight (the mean while there are few: one fumbled tap does not drag it), kept between 40 and 240, and each tap puts the beat grid on the tap. The
+        tempo stays until release_tap() or the next track. Returns the tempo set (0.0 while there is only the first tap)."""
+        if self.tap_ts and now - self.tap_ts[-1] > 2.0:
+            self.tap_ts = []                                   # too long since the last one: a new series
+        self.tap_ts = (self.tap_ts + [float(now)])[-9:]
+        self.phase = 0.0                                       # the tap is the beat
+        if len(self.tap_ts) < 2:
+            return 0.0
+        iv = np.diff(self.tap_ts)
+        mean = float(np.median(iv)) if len(iv) >= 4 else float(np.mean(iv))
+        self.manual_bpm = self.bpm = max(40.0, min(240.0, 60.0 / max(mean, 1e-3)))
+        self.conf = max(self.conf, 0.95)
+        self.pend_n = 0
+        return self.bpm
+
+    def release_tap(self):
+        """Back to the tempo the program hears by itself (it starts again from the one that was tapped)."""
+        self.manual_bpm = 0.0
+        self.tap_ts = []
+
     def _estimate_bpm(self):
+        if self.manual_bpm > 0:                                # the person set it: it stays
+            self.bpm, self.conf = self.manual_bpm, max(self.conf, 0.95)
+            return
         n = len(self.env)
         if n < 4 * self.hop_rate:
             return
@@ -412,6 +487,7 @@ class Analyzer:
         k = lambda tau: 1.0 - math.exp(-dt / tau)
         # transient envelopes
         self.kick_hit, self.snare_hit, self.hat_hit = self._hk, self._hs, self._hh
+        self.kick_raw, self._hk_raw = self._hk_raw, 0.0
         self._hk = self._hs = self._hh = 0.0
         self.kick = max(self.kick * math.exp(-dt / 0.16), self.kick_hit)
         self.snare = max(self.snare * math.exp(-dt / 0.12), self.snare_hit)
@@ -471,6 +547,7 @@ class Analyzer:
             self.last_change_bar, self.phrase_learned = None, False
             self.chroma *= 0.2
             self.bpb = 4
+            self.manual_bpm, self.tap_ts = 0.0, []                                   # the tempo that was tapped belonged to the last track
             self.e_long = self.e_slow = self.energy
         else:
             self.active_t += dt
@@ -524,20 +601,22 @@ class Analyzer:
             self.tension = 0.0
         if not warm:
             build = 0.0
+        if self.riser_link and self.ear.riser > 0.35 and warm:                 # a riser is a build-up: the tension rises with it (opt-in, see Ajustes)
+            build = max(build, min(1.0, 0.35 + self.ear.riser * 0.6))
         self.tension += (build - self.tension) * k(1.5)
         # background lighting: BPM-synced strobe that accelerates with the build-up, flashes on rolls and drops
-        act = self.tension > 0.35 and self.drop < 0.3 and self.silence < 0.5
-        amp_t = max(0.0, min(1.0, (self.tension - 0.3) / 0.5)) if act else 0.0
+        act = self.tension > self.fl_start and self.drop < 0.3 and self.silence < 0.5
+        amp_t = max(0.0, min(1.0, (self.tension - (self.fl_start - 0.05)) / 0.5)) if act else 0.0
         self.strobe_amp += (amp_t - self.strobe_amp) * k(0.15)
         t_ = self.tension
         sub = min(self.max_sub, 1 if t_ < 0.5 else 2 if t_ < 0.7 else 4 if t_ < 0.85 else 8)
         rate = (self.bpm / 60.0 if self.bpm > 0 else 2.0) * sub
         self.strobe_phase = (self.strobe_phase + dt * rate) % 1.0
         self.strobe = math.exp(-self.strobe_phase * 7.0) * self.strobe_amp
-        self.flash *= math.exp(-dt / 0.08)
-        if self.snare_hit and self.roll > 0.3:
+        self.flash *= math.exp(-dt / (0.08 * self.fl_len))
+        if self.fl_roll and self.snare_hit and self.roll > 0.3:
             self.flash = max(self.flash, 0.5 + 0.5 * self.roll)
-        self.drop_flash *= math.exp(-dt / 0.35)
+        self.drop_flash *= math.exp(-dt / (0.35 * self.fl_len))
         if self.drop_event:
             self.drop_flash = 1.0
         # occasional 1/4-beat (16th-note) stutter bursts, aligned to the tracked beat phase
@@ -555,6 +634,7 @@ class Analyzer:
                 self.burst_event = 1.0
         self._rhythm(dt)
         self._key(dt)
+        self.ear.tick(dt, self)
         self.pp = self.phase
         self.burst_amp += ((1.0 if self.burst_left > 0 else 0.0) - self.burst_amp) * k(0.03)
         self.burst_pulse = math.exp(-((self.phase * 4.0) % 1.0) * 6.0) * self.burst_amp * 0.75
@@ -602,6 +682,7 @@ class Analyzer:
             return
         dt, self._key_acc = self._key_acc, 0.0
         mag = np.abs(np.fft.rfft(self.sbuf * self.swin)) * (4.0 / KEY_WIN)
+        self.ear.key_frame(mag, self.sfreqs, self.pc_idx, self.pc_mask, self.silence >= 0.5)
         ch = np.bincount(self.pc_idx, weights=mag[self.pc_mask] ** 0.8, minlength=12)
         ch = ch / (ch.sum() + 1e-9)
         if self.silence < 0.5:
@@ -668,6 +749,14 @@ class Analyzer:
             if self._m3 >= 2:
                 self.bpb, self.bar_n, self._m3, self.down_acc[:] = 4, -1, 0, 0.0
 
+    def _pin_one(self, nb):
+        """The beat nb is the one of the bar: the votes start over from it and the phrase counts from here."""
+        self.down_off = nb % self.bpb
+        self.down_acc[:] = 0.0
+        self.down_acc[self.down_off] = 3.0
+        self.bar_n = -1
+        self._anchor_t = self.now_t
+
     def _rhythm(self, dt):
         """Beat / bar / phrase counter and the 16-step rhythm of kick and melody. Runs once per frame, after the beat phase advanced."""
         self.beat_event = self.bar_event = self.phrase_event = 0.0
@@ -675,19 +764,23 @@ class Analyzer:
         # which of the 4 beat positions carries the kick: the downbeat
         nb = self.beat_n + (1 if self.phase > 0.5 else 0)    # the beat a hit belongs to (the nearest one)
         if self.kick_hit and self.conf > 0.3:
-            self.down_acc[nb % self.bpb] += 0.6 + self.bass
+            raw = self.kick_raw
+            self._raw_ref = raw if self._raw_ref <= 0.0 else self._raw_ref + (raw - self._raw_ref) * 0.05
+            gap = self.now_t - self._last_kick_t
+            self._last_kick_t = self.now_t
+            if self.bpm > 0 and self._last_kick_t - gap > 0 and gap > 8.0 * 60.0 / self.bpm:        # the first kick after two bars without one (a breakdown): a drop lands on the one
+                self._pin_one(nb)
+            else:                                                 # a vote for this position, as heavy as the kick is against a typical one
+                self.down_acc[nb % self.bpb] += 0.3 + 0.7 * raw / max(1e-6, self._raw_ref)
         if wrapped:
             self.down_acc *= 0.97
             best = int(np.argmax(self.down_acc[:self.bpb]))
-            if best != self.down_off and self.down_acc[best] > 1.35 * self.down_acc[self.down_off] + 0.8:      # hysteresis: do not flip-flop
+            if best != self.down_off and self.down_acc[best] > 1.2 * self.down_acc[self.down_off] + 0.3:      # hysteresis: do not flip-flop
                 self.down_off = best
         if self.drop_event:
             self.mark("DROP")
-        if self.drop_event and self.bpm > 0:                 # a drop lands on the one
-            self.down_off = nb % self.bpb
-            self.down_acc[:] = 0.0
-            self.down_acc[self.down_off] = 3.0
-            self.bar_n = -1
+        if self.drop_event and self.bpm > 0 and self.now_t - self._anchor_t > 3.0:        # a drop lands on the one (unless the first kick of it already pinned it)
+            self._pin_one(nb)
         if self.kick_hit and self.conf > 0.3:
             self._beat_acc += 0.6 + self.bass
         if wrapped and self.bpm > 0 and self.silence < 0.5:

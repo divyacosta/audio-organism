@@ -4,7 +4,7 @@
 pygame.draw has no anti-aliasing, which is why rounded corners and circles looked jagged. Here only the corners (and circles) are AA: they are
 rendered once at 8x, scaled down and cached; the straight parts are plain rectangles, so a big card costs the same as a small one.
 
-Design tokens (radii, spacing) live here too, next to the colour tokens of menu.py, so the whole interface can be tuned in one place.
+Design tokens (radii, spacing) live here too, next to the colour tokens of widgets.py, so the whole interface can be tuned in one place.
 """
 import pygame
 

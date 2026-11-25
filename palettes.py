@@ -12,6 +12,9 @@ def _rgb(t):
     return [int(round(v * 255)) for v in t]
 
 
+RENAMED = {"Cinza e destaque": "Cinza", "Vermelho, azul e branco": "Tricolor"}          # the two long names of the first versions (they were cut on the Palco)
+
+
 def factory():
     return [
         dict(name="Neon", colors=[_rgb(c) for c in ((0.30, 1.0, 0.25), (0.55, 0.22, 1.0), (0.85, 1.0, 0.92), (0.10, 0.90, 1.0), (1.0, 0.20, 0.85),
@@ -23,9 +26,9 @@ def factory():
              bgs=[_rgb((0.0, 0.0, 0.0)), _rgb((0.95, 0.95, 0.96))]),
         dict(name="Pastel", colors=[_rgb(c) for c in ((1.0, 0.42, 0.72), (0.25, 0.88, 1.0), (1.0, 0.88, 0.35), (0.70, 0.52, 1.0), (0.45, 1.0, 0.78), (1.0, 0.48, 0.42))],
              bgs=[_rgb((0.97, 0.96, 0.98)), _rgb((0.07, 0.04, 0.14))]),
-        dict(name="Cinza e destaque", colors=[_rgb(c) for c in ((0.17, 0.18, 0.21), (0.05, 0.05, 0.07), (1.0, 0.05, 0.18), (0.0, 0.85, 1.0), (1.0, 1.0, 1.0))],
+        dict(name="Cinza", colors=[_rgb(c) for c in ((0.17, 0.18, 0.21), (0.05, 0.05, 0.07), (1.0, 0.05, 0.18), (0.0, 0.85, 1.0), (1.0, 1.0, 1.0))],
              bgs=[_rgb((0.0, 0.0, 0.0))]),
-        dict(name="Vermelho, azul e branco", colors=[_rgb(c) for c in ((1.0, 0.03, 0.24), (0.05, 0.25, 1.0), (1.0, 1.0, 1.0), (0.0, 0.0, 0.0))],
+        dict(name="Tricolor", colors=[_rgb(c) for c in ((1.0, 0.03, 0.24), (0.05, 0.25, 1.0), (1.0, 1.0, 1.0), (0.0, 0.0, 0.0))],
              bgs=[_rgb((0.0, 0.0, 0.0)), _rgb((0.92, 0.03, 0.22)), _rgb((0.05, 0.23, 0.92)), _rgb((0.92, 0.92, 0.92))]),
     ]
 

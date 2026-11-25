@@ -17,6 +17,8 @@ import pygame
 
 from menu import Menu, fresh, load_cfg, save_cfg, PRESETS
 import look
+import scenes as SC
+import widgets
 from updater import Updater, can_self_update, apply as apply_update
 from version import REPO, VERSION
 
@@ -48,7 +50,7 @@ def make_splash():
                 return
             from pygame._sdl2 import video
             win = video.Window("Audio Organism", (500, 150))
-            state["win"] = (win, video.Renderer(win), None, pygame.Surface((500, 150)), pygame.font.SysFont("segoeui", 20, bold=True), pygame.font.SysFont("segoeui", 14))
+            state["win"] = (win, video.Renderer(win), None, pygame.Surface((500, 150)), widgets.font("head", True), widgets.font("label"))
             state["win"] = state["win"][:2] + (video.Texture(state["win"][1], (500, 150), streaming=True),) + state["win"][3:]
         win, ren, tex, surf, f1, f2 = state["win"]
         surf.fill((10, 9, 22))
@@ -88,7 +90,9 @@ def main():
 
     from analysis import HOP, Analyzer, Capture, Synth
     from control import ControlWindow
+    from osd import Osd, HINT
     from neon_director import NeonDirector
+    from demo import Silence
     from renderer import Renderer
 
     splash = make_splash()
@@ -103,27 +107,35 @@ def main():
         notice = f"Backend {forced} indisponível: usando automático"
         rend = Renderer(headless=test, size=(1280, 720), power=power, on_wait=None if test else splash[0])
     splash[1]()
+    rend.preview_size = (512, 288)                          # the picture of the Palco is big: rows of 2048 bytes (a multiple of 256, as the GPU wants)
     print(f"GPU: {rend.gpu_name} | backend: {rend.backend}", flush=True)
 
     # ---------------------------------------------------------------- audio
-    cap, syn, rate = None, None, 48000
+    cap, syn, rate, audio_err = None, None, 48000, None
     if test:
         syn = Synth(rate)
+    elif os.environ.get("VIS_SILENT"):                                          # VIS_SILENT=1: the audio input is replaced by silence (tests and pictures of the first screen)
+        syn = Silence()
     else:
         try:
-            cap = Capture()
+            cap = Capture(cfg.get("abuf", 1024), cfg.get("adev", ""))
             rate = cap.rate
-        except Exception as e:
-            import ctypes
-            ctypes.windll.user32.MessageBoxW(0, f"Nao foi possivel capturar o audio do sistema:\n{e}", "Audio Organism", 0x10)
-            sys.exit(1)
+        except Exception as e:                                                  # no modal box: the program opens with the test signal and says so
+            syn, audio_err = Synth(rate), f"Sem captura de áudio ({str(e)[:50]}): usando sinal de teste"
     an = Analyzer(rate)
 
     menu = Menu(cfg)
+    if cap is not None:                                                       # the pickers of Ajustes list what the system has
+        menu.audio_devices = cap.devices()
+        menu.monitors = rend.monitor_count()
+        menu.rebuild_scenes()
     if notice:
         menu.say(notice)
+    if audio_err:
+        menu.problem("audio", audio_err)
     dw, dh = pygame.display.get_desktop_sizes()[0]
-    ctl = ControlWindow(menu, pos=(max(40, min(dw - 1000, 1330)), 40), headless=test)
+    cw0, _ = ControlWindow.default_size(dw, dh)
+    ctl = ControlWindow(menu, pos=(max(20, min(dw - cw0 - 20, 1330)), 30), headless=test)
     thumbs = None
     if not test:
         from thumbs import Thumbs                         # the live thumbnails of the scene gallery (their own small renderer, in a thread)
@@ -131,6 +143,7 @@ def main():
         ctl.thumbs = thumbs
     rend.place_window(30, 40)
     ndir = NeonDirector()
+    osd, fs_prev = Osd(), False                       # the words on the picture window in full screen (osd.py)
 
     # ---------------------------------------------------------------- state
     fps, last, clock_t = 60.0, time.perf_counter(), 0.0
@@ -140,7 +153,6 @@ def main():
     frame = 0
     shots = {int(t * 60): n for t, n in ((4, "calm"), (10, "groove"), (15.5, "build"), (16.8, "peak"), (17.3, "drop"), (24, "high"))}
     pv_n = 0                                                    # thumbnails already handed to the control window
-    sil_t = 0.0                                                 # seconds of deep silence in a row
     dyn, dyn_t = 1.0, 0.0                                       # dynamic resolution: scale factor and last adjustment time
     bench = None
     upd = Updater()
@@ -149,9 +161,24 @@ def main():
         upd.start_check()
     menu.info = f"versão {VERSION}"
 
-    auto = autotest_load()                                         # VIS_AUTOTEST=<script.json>: a self-driving test of the real program (see autotest_step)
+    auto = None
+    if os.environ.get("VIS_AUTOTEST"):                              # VIS_AUTOTEST=<script.json>: a self-driving test of the real program (see autotest.py)
+        from autotest import autotest_load, autotest_step
+        auto = autotest_load()
+        auto["rend"], auto["ndir"] = rend, ndir
     running = True
+    import remote as remote_mod
+    remote = remote_mod.Remote()
+    import stream as stream_mod
+    phone = stream_mod.Stream()                                # "Ver no celular": the picture and a few buttons in a phone's browser
+    tm = {}                                                   # smoothed milliseconds of each stage of a frame (shown in the Status)
+
+    def lap(k, t0):
+        tm[k] = tm.get(k, 0.0) * 0.92 + (time.perf_counter() - t0) * 1000.0 * 0.08
+
     while running:
+        if auto is not None:
+            auto["an"] = an
         if auto is not None and autotest_step(auto, ctl, menu):
             running = False
         t_start = time.perf_counter()
@@ -167,11 +194,15 @@ def main():
             wid = ew.id if ew is not None else None
             if os.environ.get("VIS_DEBUG") and e.type in (pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN, pygame.WINDOWFOCUSGAINED):
                 print(f"[dbg] pygame event {pygame.event.event_name(e.type)} window={wid} ctl={getattr(ctl, 'id', None)}", flush=True)
+            if auto is not None and e.type in (pygame.KEYDOWN, pygame.KEYUP, pygame.TEXTINPUT, pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEWHEEL):
+                continue                                                       # a self-driving test (VIS_AUTOTEST) takes no real keys or clicks: its own go straight to the window code, so a person at the machine cannot change the run
             if e.type == pygame.QUIT or e.type == pygame.WINDOWCLOSE:
                 running = False
             elif not test and wid == getattr(ctl, "id", None):
                 act = ctl.handle(e)
-                if act == "quit":
+                if isinstance(act, str) and act.startswith("key:"):                    # a shortcut button of the Ao vivo tab: the same as pressing the key on the picture
+                    rend.events.append({"event_type": "key_down", "key": act[4:]})
+                elif act == "quit":
                     running = False
                 elif act == "update_check":
                     if not REPO:
@@ -202,19 +233,26 @@ def main():
                 if k == "Escape":
                     if cfg["fullscreen"]:
                         menu.set_value("fullscreen", False)
+                    stage_mode(False)
+                elif k.lower() == "p":                                                 # stage mode: full screen and the control window out of the way
+                    on = not stage[0]
+                    stage_mode(on)
+                    menu.set_value("fullscreen", on)
                 elif k.lower() == "f":
                     menu.set_value("fullscreen", not cfg["fullscreen"])
                 elif k.lower() == "v":
                     menu.set_value("vsync", not cfg["vsync"])
                 elif k.lower() == "s":
                     new = 0 if ndir.cur.get("strobe", cfg["strobe"]) else 2          # the key acts on the scene that is on screen
-                    ndir.cur["strobe"] = new
-                    if ndir.cur is menu.cfg["scenes"][menu.cfg["scene_edit"]]:
+                    ndir.base["strobe"] = new
+                    if ndir.base is menu.cfg["scenes"][menu.cfg["scene_edit"]]:
                         cfg["strobe"] = new
                     menu.touch()
                     menu.say("Flashes: " + ("completo" if new else "desligado"))
                 elif k.lower() == "d":
                     manual_drop = True
+                elif len(k) == 1 and menu.shortcut(k, ndir.scene, osd=not ev.get("remote")):    # 1..9 play a scene, A turns the automatic change on or off
+                    pass
         if rend.closed():
             running = False
 
@@ -223,21 +261,41 @@ def main():
             if not rend.set_vsync(cfg["vsync"]):
                 cfg["vsync"] = rend.vsync
                 menu.say("VSync indisponível neste backend")
+        if cfg.get("monitor", 0) != rend.monitor_pick:                   # the monitor of the picture was changed in Ajustes
+            rend.monitor_pick = cfg.get("monitor", 0)
+            rend.move_to_monitor(rend.monitor_pick)
         if cfg["fullscreen"] != rend.fullscreen:
             rend.set_fullscreen(cfg["fullscreen"])
-        # graphics options (aba Gráficos)
+        # the words on the picture (full screen only): the keys when it has just gone full screen, then the name of each scene the person brings to the screen
+        osd_on = bool(cfg.get("osd", True))                                       # Sistema > Tela e áudio > "Dicas na tela cheia"
+        if rend.fullscreen and not fs_prev and osd_on:
+            osd.show(ndir.scene_name(ndir.scene), HINT, dur=4.5)
+        elif rend.fullscreen and osd_on and not stage[0] and menu.osd_name is not None:          # (never in stage mode: that one faces an audience)
+            osd.show(menu.osd_name[0], "", dur=2.4)
+        menu.osd_name = None
+        fs_prev = rend.fullscreen
+        rend.osd_a = osd.alpha() if (rend.fullscreen and osd_on) else 0.0
+        if rend.osd_a > 0.003:
+            rend.set_osd(*osd.image(rend.size[1] or 720))
+        # graphics options (Sistema > Imagem e qualidade)
         rend.steps, rend.bounces = max(24, int(cfg["steps"] * (0.55 + 0.45 * dyn))), 1          # dynamic quality: fewer ray steps too when the FPS is short
         rend.shadow_q, rend.ao_q, rend.refl_q = 1, 1, 1                      # (only used by the ray-traced lighting, which is off for now)
         am = cfg["aa_mode"]                                                       # 0 off, 1 edges, 2 FXAA, 3..5 MSAA 2x / 4x / 8x
-        rend.aa, rend.fxaa, rend.msaa = (am == 1), (am == 2), {3: 1, 4: 2, 5: 3}.get(am, 0)
-        rend.bloom_levels, rend.rt = cfg["bloomq"], False                  # ray tracing is switched off for now
+        rend.aa, rend.fxaa, rend.msaa = (am in (1, 6)), (am == 2), {3: 1, 4: 2, 5: 3}.get(am, 0)
+        rend.taa = am == 6
+        rend.bloom_levels, rend.rt = (cfg["bloomq"] if cfg["fx_bloom"] else 0), False                  # ray tracing is switched off for now
         rend.sharp = (0.0, 0.35, 0.7, 1.2)[cfg["sharp"]]
         rend.bloom_shift = 1 + cfg["bloomres"]
+        ac = {k: (ndir.cur.get(k, cfg[k]) if ndir.cur.get("ly_finish", True) else SC.LAYER_DEFAULTS[k]) for k in SC.ACAB_KEYS}     # the Acabamento of the scene on the air (off: neutral)
+        rend.fin = (ac["fin_bright"] / 100.0, ac["fin_contrast"] / 100.0, ac["fin_sat"] / 100.0, ac["fin_gamma"] / 100.0, (ac["fin_temp"] - 2) / 2.0,
+                    ac["scr_vig"] / 100.0, 1.0 if ac["fin_dither"] else 0.0, float(cfg["scr_mirror"]), cfg["scr_zoom"] / 100.0,
+                    (0.0, 16 / 9, 21 / 9, 4 / 3, 1.0, 9 / 16)[cfg["scr_aspect"]], float(ac["img_style"]), float(ac["img_pix"]))
         rend.dist = (5.0, 9.0, 14.0)[cfg["dist"]]
         dyn_floor = max(0.1, min(1.0, cfg["dynmin"] / max(cfg["res"], 1)))
-        ctl.interval = 0.0                                                    # the panel is redrawn with every output frame
+        ctl.interval = 1.0 / cfg["panel_fps"] if cfg.get("panel_fps", 0) > 0 else 0.0           # 0: the panel is redrawn with every output frame
         ctl.view = cfg["panel_view"]
-        rend.mblur, rend.mblur_fps, rend.dt = cfg["mblur"], cfg["mblur_fps"], dt
+        rend.mblur, rend.mblur_fps, rend.dt = (cfg["mblur"] if cfg["fx_mblur"] else 0), cfg["mblur_fps"], dt
+        rend.fx_trail, rend.fx_parts = cfg["fx_trail"], cfg["fx_parts"]
         if cfg["dynres"] and not test and bench is None:
             if clock_t - dyn_t > 0.6:                           # trade resolution for FPS: down fast, up slowly
                 dyn_t = clock_t
@@ -277,9 +335,19 @@ def main():
         live = ndir.cur                                                      # the scene on screen decides how it answers the music
         l_strobe, l_react = int(live.get("strobe", cfg["strobe"])), live.get("react", cfg["react"])
         strobe_on = (0.0, 0.45, 1.0)[max(0, min(2, l_strobe))]
+        an.riser_link = bool(cfg.get("link_riser", False))
+        if cfg.get("link_vocal", False) and an.ear.vocal > 0.4:                      # a voice: the flashes calm down
+            strobe_on *= 0.35
         an.max_sub = 1 if l_strobe < 2 else 8
+        an.fl_len = (0.5, 1.0, 2.0)[max(0, min(2, int(live.get("fl_len", 1))))]
+        an.fl_start = (0.25, 0.35, 0.5)[max(0, min(2, int(live.get("fl_start", 1))))]
+        an.fl_roll = bool(live.get("fl_roll", True))
+        drop_gain = (0.0, 0.6, 1.1)[max(0, min(2, int(live.get("fl_drop", 2))))]
+        rend.flash_mode = int(live.get("fl_mode", 0))
         an.bursts_enabled = bool(live.get("bursts", cfg["bursts"])) and l_strobe == 2
-        rk = l_react / 100.0
+        if cfg.get("link_vocal", False) and an.ear.vocal > 0.4:
+            an.bursts_enabled = False
+        rk = l_react / 100.0 * cfg.get("macro_energy", 100) / 100.0               # the Intensidade of the Palco on top of the scene's own
         if thumbs is not None:
             thumbs.feed(an, cfg, rk)
         want_hide = rend.fullscreen and clock_t - last_motion > 2.0
@@ -294,8 +362,9 @@ def main():
             if upd.state == "available":
                 menu.upd_label = f"Atualizar para {upd.info['version']}"
                 menu.info = f"versão {VERSION}  ·  nova: {upd.info['version']}"
+                menu.notes = " ".join(str(upd.info.get("notes") or "").split())[:160]
                 if key.endswith(":0"):
-                    menu.say(f"Nova versão {upd.info['version']} disponível (aba Ajustes)")
+                    menu.say(f"Nova versão {upd.info['version']} disponível (Sistema > Aplicativo)")
             elif upd.state == "uptodate":
                 menu.upd_label = ""
                 menu.info = f"versão {VERSION}  ·  atualizado"
@@ -314,51 +383,99 @@ def main():
             running = False
             upd.state = "idle"
 
+        err_r = remote.configure(cfg.get("remote_osc", False), cfg.get("remote_midi", False))
+        if err_r:
+            menu.say(err_r)
+        err_s = phone.configure(cfg.get("phone_view", False))
+        if err_s:
+            menu.say(err_s)
+            cfg["phone_view"] = False
+        for k_ in remote.poll() + phone.poll():                                              # a controller or another program: the same as pressing the key
+            rend.events.append({"event_type": "key_down", "key": k_, "remote": True})         # (marked: a controller may be driving a projection, no words on the picture)
+
         # hot reload of shaders
         for name in rend.poll_shaders():
             menu.say(f"Shader recarregado: {name}")
 
         # ------------------------------------------------------------ audio
-        if test:
+        t_st = time.perf_counter()
+        if syn is not None:
             an.feed(syn.chunk(int(rate * dt)))
         else:
             an.pump(cap, time.perf_counter())
+            if cap.dev_name != cfg.get("adev", ""):                           # another audio device was picked in Ajustes
+                try:
+                    cap.dev_name = cfg.get("adev", "")
+                    cap.reopen()
+                    if cap.rate != an.rate:
+                        an = Analyzer(cap.rate)
+                    menu.say("Áudio: " + (cap.dev_name or "padrão do Windows"))
+                except Exception:
+                    pass
+            if cap.frames != cfg["abuf"]:                                   # the buffer time was changed in Ajustes
+                try:
+                    cap.frames = int(cfg["abuf"])
+                    cap.reopen()
+                    menu.say(f"Buffer de áudio: {cap.frames / cap.rate * 1000:.0f} ms")
+                except Exception:
+                    pass
             if clock_t - last_dev_check > 2.0:
                 last_dev_check = clock_t
                 if cap.default_changed():
                     try:
+                        if not cap.dev_name and cfg.get("adev"):                          # the picked device was unplugged
+                            cfg["adev"] = ""
+                            menu.touch()
+                            menu.say("A entrada de áudio sumiu: voltei ao padrão do Windows")
                         cap.reopen()
                         if cap.rate != an.rate:
                             an = Analyzer(cap.rate)
                     except Exception:
                         pass
+        menu.apply_taps(an)                                                       # tap tempo asked for since the last frame (TAP, the T key, a controller)
         an.update(dt)
+        vis = an                                             # what the picture follows: the real analyzer, always
+        lap("áudio", t_st)
         if manual_drop:
-            an.drop = an.drop_b = an.drop_event = 1.0
-            an.drop_flash = 1.0
+            for a_ in (an, vis):
+                a_.drop = a_.drop_b = a_.drop_event = 1.0
+                a_.drop_flash = 1.0
         if ndir.log and menu.dirty is False and False:
             pass
 
         # --------------------------------------------------- procedural scene
-        params = ndir.update(dt, an, cfg)
+        t_st = time.perf_counter()
+        params = ndir.update(dt, vis, cfg)
+        params["glass_on"] = cfg["fx_glass"]
+        lap("cena", t_st)
         look.apply(rend, params, ndir.cur, cfg["detail"])                  # shader kind, room colour, the black scene
-        params.update(bass=an.bass * rk, mid=an.mid * rk, high=an.high * rk, kick=an.kick * rk, snare=an.snare, hat=an.hat,
-                      beat=(an.beat_n + an.phase) if an.bpm > 0 else clock_t * 2.0)
+        gb, gm, gh = live.get("react_bass", 100) / 100.0, live.get("react_mid", 100) / 100.0, live.get("react_high", 100) / 100.0      # one gain per band
+        rend.exposure = 1.1 * live.get("expo", 100) / 100.0
+        params.update(bass=vis.bass * rk * gb, mid=vis.mid * rk * gm, high=vis.high * rk * gh, kick=vis.kick * rk, snare=vis.snare, hat=vis.hat,
+                      beat=(vis.beat_n + vis.phase) if vis.bpm > 0 else clock_t * 2.0)
+        if params.get("visual"):
+            look.audio(params, vis)
         if not params.get("blank"):
-            rend.bloom = live.get("bloom", cfg["bloom"]) / 100.0
-            rend.flash = min(1.0, max(max(an.strobe, an.burst_pulse) * strobe_on, an.flash * strobe_on, an.drop_flash * 1.1))
-        sil_t = sil_t + dt if an.silence > 0.95 else 0.0
-        idle = sil_t > 3.0 and not test                                                  # a long silence: the picture is dark and still, draw it rarely
-        skip = ((cfg["rrate"] > 0 and frame % (cfg["rrate"] + 1) != 0) or (idle and frame % 6 != 0)) and not test    # render rate: 1 frame out of 2 or 3
-        rend.preview = (not test) and menu.reserved > 0
+            rend.bloom = live.get("bloom", cfg["bloom"]) / 100.0 * min(1.6, 0.6 + 0.4 * cfg.get("macro_energy", 100) / 100.0)
+            rend.flash = min(1.0, max(max(vis.strobe, vis.burst_pulse) * strobe_on, vis.flash * strobe_on, vis.drop_flash * drop_gain)) * (1.0, 0.5, 0.12)[cfg["safe_flash"]]
+        skip = (cfg["rrate"] > 0 and frame % (cfg["rrate"] + 1) != 0) and not test       # render rate: 1 frame out of 2 or 3 (silence is no reason to draw less: the picture keeps going)
+        rend.preview = (not test) and (menu.reserved > 0 or menu.tab == 0 or phone.wanted)        # the strip of the editor, the picture of the Palco, or a phone watching
+        rend.preview_every = 3 if (menu.tab == 0 or phone.wanted) else 8                         # live: about 20 pictures a second
+        t_st = time.perf_counter()
         frame_img = None if skip else rend.render(params)
+        lap("GPU", t_st)
         if rend.preview and rend.preview_rgba is not None and rend.preview_n != pv_n:
             pv_n = rend.preview_n
             ctl.set_preview(rend.preview_rgba, rend.preview_size, rend.fmt)
+            if phone.wanted:
+                phone.push(rend.preview_rgba, rend.preview_size, rend.fmt)
 
         # ------------------------------------------------ control window + save
         ok, msg = rend.shader_status()
+        menu.problem("shader", None if ok else "Erro no shader (usando o anterior): " + msg[:60])
+        menu.problem("thumbs", None if thumbs is None or not thumbs.error else "Miniaturas ao vivo falharam")
         status = dict(gpu=rend.gpu_name, backend=rend.backend, shader_ok=ok, shader_msg=msg, reloads=rend.lib.reloads)
+        status["keys"] = dict(fullscreen=rend.fullscreen, vsync=rend.vsync, strobe=l_strobe > 0, auto=cfg["effect"] == 0, stage=stage[0])
         status["preview"] = dict(on=rend.preview, n=rend.preview_n, got=rend.preview_rgba is not None, err=rend.preview_err, reserved=menu.reserved,
                                  thumbs=(None if thumbs is None else (thumbs.ready, thumbs.error, len(thumbs.frames))))
         lat = (cap.frames / rate * 1000.0 if cap else 10.0) + HOP / rate * 1500.0 + dt * 1000.0
@@ -372,11 +489,14 @@ def main():
                 mov = (mv_names.get(ndir.mv_auto, "?") + " (auto)") if cfg["movement"] == MV_AUTO else dict((v, n) for n, v in MV_OPTS).get(cfg["movement"], "Manual")
                 sty = params.get("shader_name", "3D")
                 why, t_ch = ndir.last_change
-                status["image"] = dict(scene=ndir.scene_name(ndir.scene), scene_i=ndir.scene, pending_scene=params.get("pending_scene", -1), scene_when=params.get("scene_when", 2), style=sty, camera=cam, movement=mov, why=why or None, since=max(0.0, ndir.age - t_ch))
+                status["image"] = dict(scene=ndir.scene_name(ndir.scene), scene_i=ndir.scene, pending_scene=params.get("pending_scene", -1), pending_eta=params.get("pending_eta"), scene_when=params.get("scene_when", 2), style=sty, camera=cam, movement=mov, why=why or None, since=max(0.0, ndir.age - t_ch))
             except Exception:
                 pass
             status["look"] = ndir.look_name() + (f"  ·  gênero: {ndir.genre}" if ndir.genre != "?" else "")
+            status["timing"] = dict(tm)
+            t_st = time.perf_counter()
             ctl.update(time.perf_counter(), an, fps, lat, rend.vsync, status)
+            lap("UI", t_st)
             if menu.dirty and time.perf_counter() - menu.dirty_t > 1.0:
                 save_cfg(cfg)
                 menu.dirty = False
@@ -402,7 +522,7 @@ def main():
 
         # fps cap (only when not synced to the monitor)
         pace = cfg["fps_out"]                                                                  # the output FPS: the picture is never drawn faster than this
-        if not test and not rend.vsync and pace > 0:
+        if not test and (not rend.vsync or skip) and pace > 0:                                 # a skipped frame (a long silence draws 1 in 6) never reaches the swap that vsync waits on: it needs the cap too, or the loop spins at 1500 fps
             target = 1.0 / pace
             while time.perf_counter() - t_start < target:
                 time.sleep(0.0005)
@@ -411,6 +531,8 @@ def main():
         print("diretor:", " | ".join(ndir.log), flush=True)
     if menu.dirty and not test:
         save_cfg(cfg)
+    remote.close()
+    phone.close()
     if thumbs is not None:
         thumbs.stop()
     ctl.destroy()
@@ -420,50 +542,18 @@ def main():
     pygame.quit()
 
 
-def autotest_load():
-    """A test hook: VIS_AUTOTEST names a JSON list of steps {"wait": s, "do": "click"|"key"|"shot"|"quit", ...} that the running program performs on its own
-    control window (events go straight to the window code, the real mouse and screen are never touched; "shot" saves the panel as a PNG)."""
-    path = os.environ.get("VIS_AUTOTEST")
-    if not path:
-        return None
-    import json
-    with open(path, encoding="utf-8") as f:
-        return dict(steps=json.load(f), i=0, t=time.perf_counter())
+stage = [False]
 
 
-def autotest_step(auto, ctl, menu):
-    """Run the next step when its wait is over. Returns True when the program should quit."""
-    import types
-    if auto["i"] >= len(auto["steps"]):
-        return True
-    st = auto["steps"][auto["i"]]
-    if time.perf_counter() - auto["t"] < float(st.get("wait", 0.5)):
-        return False
-    auto["i"] += 1
-    auto["t"] = time.perf_counter()
-    do = st.get("do")
-    if do == "click":
-        pos = (int(st["x"]), int(st["y"]))
-        for typ, extra in ((pygame.MOUSEMOTION, dict(buttons=(0, 0, 0))), (pygame.MOUSEBUTTONDOWN, dict(button=1, buttons=(1, 0, 0))),
-                           (pygame.MOUSEBUTTONUP, dict(button=1, buttons=(0, 0, 0)))):
-            ctl.handle(types.SimpleNamespace(type=typ, pos=pos, **extra))
-    elif do == "back":
-        ctl.handle(types.SimpleNamespace(type=pygame.MOUSEBUTTONDOWN, pos=(100, 300), button=6, buttons=(0, 0, 0)))
-    elif do == "key":
-        k = getattr(pygame, "K_" + st["k"])
-        ctl.handle(types.SimpleNamespace(type=pygame.KEYDOWN, key=k, mod=0, unicode=""))
-    elif do == "tab":
-        menu.press("tab%d" % int(st["n"]))
-    elif do == "shot":
-        ctl.force = True
-        ctl.update(time.perf_counter(), None, 0, 0, False, None, force=True) if False else None
-        pygame.image.save(ctl.surf, st["f"])
-    elif do == "dump":
-        print("[autotest]", dict(view=menu.scene_view, tab=menu.tab, scenes=len(menu.cfg["scenes"]), card_menu=ctl.card_menu, effect=menu.cfg["effect"],
-                                 hits=[(str(r), k, a) for r, k, a in ctl.gal_hits if k in ("mi", "menu")][:6]), flush=True)
-    elif do == "quit":
-        return True
-    return False
+def stage_mode(on):
+    """Stage mode (key P): the control window is minimised so only the picture is left; P or Esc brings it back."""
+    if os.name != "nt" or on == stage[0]:
+        return
+    stage[0] = on
+    import ctypes
+    hwnd = ctypes.windll.user32.FindWindowW(None, "Audio Organism - Controles")
+    if hwnd:
+        ctypes.windll.user32.ShowWindow(hwnd, 6 if on else 9)                 # SW_MINIMIZE / SW_RESTORE
 
 
 def _single_instance():

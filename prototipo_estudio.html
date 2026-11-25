@@ -1,0 +1,314 @@
+<title>Estúdio Audio Organism</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: janela do app em moldura; abas Palco/Estúdio/Sistema; Estúdio = lista de cenas + editor com seções recolhíveis; tudo salva sozinho, com desfazer. */
+:root{
+  --bg:#0c0d12; --panel:#141621; --panel2:#1a1d2b; --line:#262a3b; --fg:#e8eaf3; --mute:#8b90a6;
+  --accent:#4de3c1; --air:#ff5a7a; --edit:#7aa2ff; --warn:#f2b84b;
+  --display:"Unbounded","Trebuchet MS",sans-serif; --body:"IBM Plex Sans","Segoe UI",sans-serif; --mono:"IBM Plex Mono",Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--body);padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.top{max-width:1100px;margin:0 auto 14px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.top h1{font:600 15px var(--display);letter-spacing:.02em;margin:0}
+.top p{margin:0;color:var(--mute);font-size:12.5px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{background:none;border:0;padding:6px 12px;color:var(--mute)}
+.seg button[aria-pressed=true]{background:var(--panel2);color:var(--fg)}
+.frame{max-width:1100px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;transition:max-width .25s}
+.frame.narrow{max-width:420px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 10px;background:var(--bg)}
+.tabs button{background:none;border:0;padding:11px 16px;color:var(--mute);border-bottom:2px solid transparent;font-weight:500}
+.tabs button[aria-selected=true]{color:var(--fg);border-bottom-color:var(--accent)}
+.view{min-height:560px}
+h2{font:600 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:0 0 10px}
+.pill{display:inline-flex;align-items:center;gap:6px;font:500 11px var(--mono);padding:3px 8px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
+.pill i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.air{color:var(--air);border-color:color-mix(in srgb,var(--air) 50%,transparent)}
+.pill.edit{color:var(--edit);border-color:color-mix(in srgb,var(--edit) 50%,transparent)}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:7px 12px}
+.btn:hover{border-color:var(--mute)}
+.btn.primary{background:var(--accent);color:#06241d;border-color:var(--accent);font-weight:600}
+.btn.primary:disabled{background:var(--panel2);color:var(--mute);border-color:var(--line);cursor:default}
+.btn:disabled{opacity:.4;cursor:default}
+canvas{display:block;width:100%;aspect-ratio:16/9;background:#05060a;border-radius:6px;border:1px solid var(--line)}
+
+/* Palco */
+.stage{padding:16px;display:grid;gap:16px;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
+.narrow .stage{grid-template-columns:1fr}
+.strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.tile{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:0;text-align:left;overflow:hidden;position:relative}
+.tile canvas{border:0;border-radius:0}
+.tile span{display:block;padding:6px 8px;font-size:12px}
+.tile.onair{border-color:var(--air)}
+.tile .pill{position:absolute;top:5px;left:5px;background:var(--bg)}
+.tile.plus{display:grid;place-items:center;min-height:90px;color:var(--mute);border-style:dashed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* Estúdio */
+.studio{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:560px;position:relative}
+.narrow .studio{grid-template-columns:1fr}
+.list{border-right:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:6px;background:var(--bg)}
+.narrow .list{position:absolute;z-index:5;inset:0 25% 0 0;transform:translateX(-102%);transition:transform .2s;border-right:1px solid var(--line)}
+.narrow .list.open{transform:none}
+.scrim{display:none}
+.narrow .scrim.open{display:block;position:absolute;inset:0;background:#0008;z-index:4}
+.item{display:flex;gap:8px;align-items:center;width:100%;background:none;border:1px solid transparent;border-radius:6px;padding:6px;text-align:left}
+.item:hover{background:var(--panel2)}
+.item.sel{background:var(--panel2);border-color:var(--edit)}
+.item canvas{width:52px;border-radius:4px}
+.item b{display:block;font-weight:500;font-size:13px}
+.item small{color:var(--mute);font-size:11px}
+.editor{padding:14px 16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.bar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.bar .who{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.name{background:none;border:0;border-bottom:1px dashed var(--line);font:600 16px var(--display);width:15ch;max-width:100%;padding:2px 0}
+.edit-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:16px;align-items:start}
+.narrow .edit-grid{grid-template-columns:1fr}
+.sticky{position:sticky;top:0}
+details{border:1px solid var(--line);border-radius:8px;background:var(--panel2)}
+details+details{margin-top:8px}
+summary{list-style:none;padding:10px 12px;display:flex;justify-content:space-between;cursor:pointer;font-weight:500}
+summary::-webkit-details-marker{display:none}
+summary small{color:var(--mute);font:11px var(--mono)}
+.body{padding:2px 12px 12px;display:grid;gap:10px}
+label.f{display:grid;grid-template-columns:110px 1fr 40px;gap:8px;align-items:center;font-size:13px}
+label.f em{font:11px var(--mono);color:var(--mute);text-align:right;font-style:normal}
+input[type=range]{accent-color:var(--accent);width:100%}
+.help{color:var(--mute);font-size:12px;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:4px 10px;font-size:12px}
+.chip[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
+.newbox{border:1px dashed var(--mute);border-radius:8px;padding:12px;display:grid;gap:10px;background:var(--bg)}
+.presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.saved{font:11px var(--mono);color:var(--mute)}
+.saved.on{color:var(--accent)}
+
+/* Sistema */
+.sys{padding:16px;display:grid;gap:12px;max-width:560px}
+.sys .f{grid-template-columns:140px 1fr}
+select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px}
+
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+.legend{max-width:1100px;margin:14px auto 0;color:var(--mute);font-size:12.5px;display:grid;gap:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500;600&family=Unbounded:wght@500;600&display=swap">
+
+<div class="top">
+  <div>
+    <h1>Audio Organism · Estúdio</h1>
+    <p>Protótipo navegável do fluxo proposto: um só fluxo, edição ao vivo, salva sozinha, com desfazer.</p>
+  </div>
+  <div class="seg" role="group" aria-label="Largura da janela">
+    <button id="wWide" aria-pressed="true">Janela larga</button>
+    <button id="wNarrow" aria-pressed="false">Janela estreita</button>
+  </div>
+</div>
+
+<div class="frame" id="frame">
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="palco" aria-selected="false">Palco</button>
+    <button role="tab" data-tab="estudio" aria-selected="true">Estúdio</button>
+    <button role="tab" data-tab="sistema" aria-selected="false">Sistema</button>
+  </div>
+  <div class="view" id="view"></div>
+</div>
+
+<div class="legend">
+  <span>Experimente: edite um controle (a imagem muda na hora), use Desfazer, crie uma cena a partir de um modelo, mande outra cena "Para o ar".</span>
+  <span>Na janela estreita a lista de cenas vira uma gaveta; o fluxo é o mesmo.</span>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const PRESETS=[
+ {id:'mandala',nome:'Mandala',sym:8,hue:170,sat:70,layers:['Anéis','Pétalas'],bass:70,treble:40,bloom:50,trails:60},
+ {id:'tunel',nome:'Túnel',sym:4,hue:260,sat:80,layers:['Túnel','Partículas'],bass:85,treble:30,bloom:65,trails:80},
+ {id:'cristal',nome:'Cristal',sym:6,hue:200,sat:55,layers:['Pétalas','Partículas'],bass:45,treble:75,bloom:35,trails:30},
+ {id:'brasa',nome:'Brasa',sym:12,hue:15,sat:90,layers:['Anéis','Túnel','Partículas'],bass:90,treble:55,bloom:80,trails:70}
+];
+const ALL_LAYERS=['Anéis','Pétalas','Túnel','Partículas'];
+let st={tab:'estudio',wide:true,scenes:[],air:0,sel:1,drawer:false,newOpen:false,
+  open:{camadas:true,cor:true,audio:false,efeitos:false},undo:[],redo:[],savedAt:0};
+function mk(p,nome){return {nome:nome||p.nome,sym:p.sym,hue:p.hue,sat:p.sat,layers:[...p.layers],bass:p.bass,treble:p.treble,bloom:p.bloom,trails:p.trails}}
+st.scenes=[mk(PRESETS[0],'Mandala Noturna'),mk(PRESETS[1],'Túnel Violeta'),mk(PRESETS[2],'Cristal Frio'),mk(PRESETS[3],'Brasa Viva')];
+st.air=0;st.sel=1;
+
+const $=s=>document.querySelector(s);
+const view=$('#view');
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),1800)}
+function snap(){st.undo.push(JSON.stringify(st.scenes));if(st.undo.length>50)st.undo.shift();st.redo=[]}
+function markSaved(){st.savedAt=Date.now();const e=document.querySelector('.saved');if(e){e.textContent='Salvo agora';e.classList.add('on');clearTimeout(markSaved.t);markSaved.t=setTimeout(()=>{e.textContent='Tudo salvo';e.classList.remove('on')},1500)}}
+function undo(){if(!st.undo.length)return;st.redo.push(JSON.stringify(st.scenes));st.scenes=JSON.parse(st.undo.pop());st.sel=Math.min(st.sel,st.scenes.length-1);st.air=Math.min(st.air,st.scenes.length-1);render();toast('Desfeito')}
+function redo(){if(!st.redo.length)return;st.undo.push(JSON.stringify(st.scenes));st.scenes=JSON.parse(st.redo.pop());render();toast('Refeito')}
+
+/* ---------- desenho do visualizador (áudio simulado) ---------- */
+let T=0;
+function audio(t){return{bass:Math.max(0,Math.sin(t*3.1))**3,treble:.5+.5*Math.sin(t*7.3+Math.sin(t))}}
+function draw(cv,s,t,mini){
+  const w=cv.width,h=cv.height,c=cv.getContext('2d'),a=audio(t);
+  const k=.2+(s.trails/100)*.6;
+  c.fillStyle=`rgba(5,6,10,${1-k*.85})`;c.fillRect(0,0,w,h);
+  c.save();c.translate(w/2,h/2);c.globalCompositeOperation='lighter';
+  const R=h*.45*(1+a.bass*(s.bass/100)*.25),n=s.sym;
+  const col=(l,al)=>`hsla(${(s.hue+l*25+t*8)%360},${s.sat}%,${55+a.treble*(s.treble/100)*20}%,${al})`;
+  c.lineWidth=mini?1:1.6;
+  s.layers.forEach((L,li)=>{
+    for(let i=0;i<n;i++){
+      c.save();c.rotate(i/n*Math.PI*2+t*.15*(li%2?-1:1));
+      c.strokeStyle=col(li,.55);c.fillStyle=col(li,.5);
+      if(L==='Anéis'){c.beginPath();c.arc(R*.5,0,R*.22*(1+a.treble*.3),0,7);c.stroke()}
+      else if(L==='Pétalas'){c.beginPath();c.moveTo(0,0);c.quadraticCurveTo(R*.6,-R*.35,R,0);c.quadraticCurveTo(R*.6,R*.35,0,0);c.stroke()}
+      else if(L==='Túnel'){c.beginPath();const z=((t*.4+i/n+li)%1);c.arc(0,0,R*z,0,.35);c.stroke()}
+      else{const z=((t*.3+i*.37)%1);c.beginPath();c.arc(R*z,Math.sin(i+t)*R*.12,2+a.bass*3,0,7);c.fill()}
+      c.restore();
+    }
+  });
+  const g=c.createRadialGradient(0,0,0,0,0,R*.5);g.addColorStop(0,col(0,.25*s.bloom/100*(1+a.bass)));g.addColorStop(1,'transparent');
+  c.fillStyle=g;c.fillRect(-w/2,-h/2,w,h);
+  c.restore();
+}
+const live=[]; // {cv,get}
+function frame(ts){T=ts/1000;live.forEach(l=>{if(l.cv.isConnected)draw(l.cv,l.get(),T+(l.off||0),l.mini)});requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+function cv(get,opt={}){const c=document.createElement('canvas');c.width=opt.w||640;c.height=opt.h||360;live.push({cv:c,get,mini:opt.mini,off:opt.off||0});return c}
+
+/* ---------- views ---------- */
+function el(html){const t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstChild}
+function render(){
+  live.length=0;view.innerHTML='';
+  document.querySelectorAll('.tabs [role=tab]').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===st.tab));
+  ({palco,estudio,sistema})[st.tab]();
+}
+function palco(){
+  const s=st.scenes[st.air];
+  const root=el(`<div class="stage"><div><div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">No ar</h2><span class="pill air"><i></i>${s.nome}</span></div><div id="pv"></div>
+   <div class="row" style="margin-top:10px"><button class="btn primary" id="editAir">Editar esta cena</button><span class="help">Abre o Estúdio nesta cena.</span></div></div>
+   <div><h2>Cenas</h2><div class="strip" id="strip"></div></div></div>`);
+  root.querySelector('#pv').append(cv(()=>st.scenes[st.air]));
+  const strip=root.querySelector('#strip');
+  st.scenes.forEach((sc,i)=>{
+    const b=el(`<button class="tile ${i===st.air?'onair':''}" title="Colocar no ar"></button>`);
+    b.append(cv(()=>sc,{w:220,h:124,mini:true,off:i*3}));
+    b.append(el(`<span>${sc.nome}</span>`));
+    if(i===st.air)b.append(el(`<span class="pill air"><i></i>No ar</span>`));
+    b.onclick=()=>{st.air=i;render();toast('No ar: '+sc.nome)};
+    strip.append(b);
+  });
+  const plus=el(`<button class="tile plus">+ Nova cena</button>`);
+  plus.onclick=()=>{st.tab='estudio';st.newOpen=true;render()};
+  strip.append(plus);
+  root.querySelector('#editAir').onclick=()=>{st.sel=st.air;st.tab='estudio';render()};
+  view.append(root);
+}
+function slider(key,label,max=100,unit=''){
+  const s=st.scenes[st.sel];
+  const w=el(`<label class="f">${label}<input type="range" min="0" max="${max}" value="${s[key]}" id="r_${key}"><em>${s[key]}${unit}</em></label>`);
+  const inp=w.querySelector('input'),out=w.querySelector('em');
+  let pushed=false;
+  inp.oninput=()=>{if(!pushed){const prev=JSON.parse(JSON.stringify(st.scenes));prev[st.sel][key]=s[key];snap0(prev);pushed=true}
+    s[key]=+inp.value;out.textContent=s[key]+unit;markSaved()};
+  inp.onchange=()=>{pushed=false};
+  return w;
+}
+function snap0(prev){st.undo.push(JSON.stringify(prev));if(st.undo.length>50)st.undo.shift();st.redo=[];refreshBar()}
+function refreshBar(){const u=document.getElementById('bUndo'),r=document.getElementById('bRedo');if(u)u.disabled=!st.undo.length;if(r)r.disabled=!st.redo.length}
+function section(id,title,hint,build){
+  const d=el(`<details ${st.open[id]?'open':''}><summary>${title}<small>${hint}</small></summary><div class="body"></div></details>`);
+  d.addEventListener('toggle',()=>{st.open[id]=d.open});
+  build(d.querySelector('.body'));return d;
+}
+function estudio(){
+  const s=st.scenes[st.sel],isAir=st.sel===st.air;
+  const root=el(`<div class="studio"><div class="scrim ${st.drawer?'open':''}"></div>
+    <aside class="list ${st.drawer?'open':''}"><h2>Cenas</h2></aside><main class="editor"></main></div>`);
+  const list=root.querySelector('.list');
+  st.scenes.forEach((sc,i)=>{
+    const b=el(`<button class="item ${i===st.sel?'sel':''}"><span></span><span><b>${sc.nome}</b><small>${i===st.air?'No ar':'Cena '+(i+1)}</small></span></button>`);
+    b.firstChild.replaceWith(cv(()=>sc,{w:104,h:58,mini:true,off:i*3}));
+    b.onclick=()=>{st.sel=i;st.drawer=false;render()};
+    list.append(b);
+  });
+  const nb=el(`<button class="btn">+ Nova cena</button>`);nb.onclick=()=>{st.newOpen=!st.newOpen;st.drawer=false;render()};
+  list.append(nb);
+  root.querySelector('.scrim').onclick=()=>{st.drawer=false;render()};
+
+  const ed=root.querySelector('.editor');
+  const bar=el(`<div class="bar"><div class="who">
+      ${st.wide?'':'<button class="btn" id="bList">☰ Cenas</button>'}
+      <input class="name" id="nm" value="${s.nome}" aria-label="Nome da cena">
+      <span class="pill edit"><i></i>Em edição</span>
+      ${isAir?'<span class="pill air"><i></i>No ar</span>':`<span class="pill" title="Cena no ar">No ar: ${st.scenes[st.air].nome}</span>`}
+    </div><div class="row">
+      <span class="saved">Tudo salvo</span>
+      <button class="btn" id="bUndo" ${st.undo.length?'':'disabled'} title="Ctrl+Z">Desfazer</button>
+      <button class="btn" id="bRedo" ${st.redo.length?'':'disabled'} title="Ctrl+Y">Refazer</button>
+      <button class="btn primary" id="bAir" ${isAir?'disabled':''}>${isAir?'Já está no ar':'Para o ar'}</button>
+    </div></div>`);
+  ed.append(bar);
+  bar.querySelector('#nm').onchange=e=>{snap();s.nome=e.target.value||s.nome;render();markSaved()};
+  bar.querySelector('#bUndo').onclick=undo;bar.querySelector('#bRedo').onclick=redo;
+  bar.querySelector('#bAir').onclick=()=>{st.air=st.sel;render();toast('No ar: '+s.nome)};
+  const bl=bar.querySelector('#bList');if(bl)bl.onclick=()=>{st.drawer=true;render()};
+
+  if(st.newOpen){
+    const nbx=el(`<div class="newbox"><div><b>Nova cena</b><p class="help">Escolha um modelo. A cena abre aqui e já pode ser editada.</p></div><div class="presets"></div><div class="row"><button class="btn" id="cancelNew">Cancelar</button></div></div>`);
+    PRESETS.forEach((p,i)=>{
+      const b=el(`<button class="tile"></button>`);b.append(cv(()=>p,{w:220,h:124,mini:true,off:i*2}));b.append(el(`<span>${p.nome}</span>`));
+      b.onclick=()=>{snap();st.scenes.push(mk(p,p.nome+' '+(st.scenes.length+1)));st.sel=st.scenes.length-1;st.newOpen=false;render();toast('Cena criada')};
+      nbx.querySelector('.presets').append(b);
+    });
+    nbx.querySelector('#cancelNew').onclick=()=>{st.newOpen=false;render()};
+    ed.append(nbx);
+  }
+
+  const grid=el(`<div class="edit-grid"><div class="sticky" id="pvCol"><div id="pv"></div><p class="help" style="margin-top:8px">${isAir?'Esta é a cena no ar: cada mudança aparece na tela grande.':'Pré-visualização. A tela grande só muda quando você usar "Para o ar".'}</p></div><div id="secs"></div></div>`);
+  grid.querySelector('#pv').append(cv(()=>st.scenes[st.sel]));
+  const secs=grid.querySelector('#secs');
+
+  secs.append(section('camadas','Camadas',s.layers.length+' ativas',b=>{
+    b.append(el(`<p class="help">Ligue as formas que compõem a cena.</p>`));
+    const ch=el(`<div class="chips"></div>`);
+    ALL_LAYERS.forEach(L=>{
+      const c=el(`<button class="chip" aria-pressed="${s.layers.includes(L)}">${L}</button>`);
+      c.onclick=()=>{snap();if(s.layers.includes(L)){if(s.layers.length>1)s.layers=s.layers.filter(x=>x!==L);else{toast('Mantenha ao menos uma camada');return}}else s.layers.push(L);render();markSaved()};
+      ch.append(c);
+    });
+    b.append(ch,slider('sym','Simetria',16));
+  }));
+  secs.append(section('cor','Cor','matiz '+s.hue+'°',b=>{b.append(slider('hue','Matiz',360,'°'),slider('sat','Saturação'))}));
+  secs.append(section('audio','Reação ao áudio','graves '+s.bass+' · agudos '+s.treble,b=>{
+    b.append(el(`<p class="help">Quanto a imagem responde a cada faixa da música.</p>`),slider('bass','Graves'),slider('treble','Agudos'));
+  }));
+  secs.append(section('efeitos','Efeitos','brilho '+s.bloom,b=>{b.append(slider('bloom','Brilho'),slider('trails','Rastro'))}));
+  const del=el(`<button class="btn" style="margin-top:12px" ${st.scenes.length<2?'disabled':''}>Excluir cena</button>`);
+  del.onclick=()=>{snap();st.scenes.splice(st.sel,1);st.air=Math.min(st.air>st.sel?st.air-1:st.air,st.scenes.length-1);st.sel=Math.min(st.sel,st.scenes.length-1);render();toast('Cena excluída. Use Desfazer para voltar.')};
+  secs.append(del);
+  ed.append(grid);
+  view.append(root);
+}
+function sistema(){
+  view.append(el(`<div class="sys"><h2>Entrada de áudio</h2>
+   <label class="f">Dispositivo<select id="dev"><option>Alto-falantes (loopback)</option><option>Mixagem estéreo</option><option>Microfone</option></select></label>
+   <label class="f">Monitor<select><option>Monitor 1 · 1920×1080</option><option>Monitor 2 · 2560×1440</option></select></label>
+   <label class="f">Qualidade<select><option>Alta</option><option>Média</option><option>Econômica</option></select></label>
+   <p class="help">Ajustes do sistema ficam separados do Estúdio. Mudanças valem na hora.</p></div>`));
+  view.querySelectorAll('select').forEach(x=>x.onchange=()=>toast('Aplicado'));
+}
+
+/* chrome */
+document.querySelectorAll('.tabs [role=tab]').forEach(b=>b.onclick=()=>{st.tab=b.dataset.tab;st.drawer=false;render()});
+function setWide(w){st.wide=w;st.drawer=false;$('#frame').classList.toggle('narrow',!w);$('#wWide').setAttribute('aria-pressed',w);$('#wNarrow').setAttribute('aria-pressed',!w);render()}
+$('#wWide').onclick=()=>setWide(true);$('#wNarrow').onclick=()=>setWide(false);
+document.addEventListener('keydown',e=>{
+  if(!(e.ctrlKey||e.metaKey))return;
+  if(e.key==='z'){e.preventDefault();undo()}else if(e.key==='y'){e.preventDefault();redo()}
+});
+render();
+</script>

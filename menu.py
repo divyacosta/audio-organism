@@ -1,6 +1,6 @@
-"""Settings panel (mouse + keyboard) and persistent settings.
+"""Settings panel (mouse + keyboard): it draws the pages of settings.py, takes the keys and the mouse and edits the settings (the steps of "+ Nova cena" are in wizard.py).
 
-Design: six tabs (Cenas, Câmera, Movimento, Imagem, Gráficos, Ajustes), grouped in cards. Every option has a label, a one-line explanation and a
+Design: three tabs (Palco, Estúdio, Sistema), grouped in cards; in a wide window the Estúdio and Sistema have two columns. Every option has a label, a one-line explanation and a
 clearly stateful control: toggle, segmented choice or slider. Disabled controls say why. Keyboard focus is
 always visible. Changes apply instantly and show a short confirmation.
 """
@@ -13,632 +13,49 @@ import copy
 import pygame
 
 import palettes as PAL
+import icons
 import ui
+import layers as LY
+import mods as MOD
+import i18n
 import scenes as SC
+import settings
 import shaderpresets as SP
-
-APPDIR = os.environ.get("VIS_APPDIR") or os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "AudioOrganism")      # VIS_APPDIR: tests keep their own settings
-PATH = os.path.join(APPDIR, "settings.json")
-
-DEFAULTS = {"vsync": False, "fullscreen": False, "strobe": 2, "bursts": True, "bloom": 60, "react": 100,
-            "effect": 0, "backend": 0, "style": 8, "style_v": 6, "camera": 0, "cam_orbit": 0, "cam_roll": 0, "cam_shake": 0, "cam_punch": 0, "cam_funnel": 2,
-            "cam_fov_min": 90, "cam_fov_max": 90, "cam_fov_var": 0, "cam_sync": 0,
-            "mv_speed": 1, "mv_rot": 2, "mv_dir": 0, "mv_pulse": 0, "mv_one": False, "mv_cuts": 1, "mv_inertia": 1, "movement": 0,
-            # what the automatic modes may control (aba Auto)
-            "auto_cam_orbit": True, "auto_cam_roll": True, "auto_cam_shake": True, "auto_cam_punch": True, "auto_cam_funnel": True,
-            "auto_cam_fov": True, "auto_cam_sync": True, "auto_mv_speed": True, "auto_mv_rot": True, "auto_mv_pulse": True, "auto_mv_cuts": True,
-            "auto_mv_inertia": True, "auto_scene": True, "auto_style": True, "auto_cuts": True, "auto_vars": True, "auto_shape": True,
-            "sh_when": 0, "sh_mix": 0, "sh_morph": 2, "ctrans": 0,
-            "sh_0": True, "sh_2": False, "sh_16": False, "sh_1": False, "sh_3": False, "sh_4": False, "sh_15": False, "sh_9": False, "sh_10": False, "sh_14": False, "sh_5": False, "sh_6": False, "sh_7": False, "sh_8": False, "sh_17": False, "sh_11": False, "sh_12": False, "sh_13": False, "sh_18": False,
-            # graphics (see PRESETS): render scale %, ray steps, ray-traced shadow / reflection / occlusion quality, lighting mode,
-            # bloom levels, edge AA, panel density %, dynamic resolution and its FPS target
-            "preset": 1, "res": 80, "steps": 60, "bloomq": 2, "aa_mode": 1, "detail": 75,
-            "dynres": True, "fps_out": 60, "mblur": 90, "mblur_fps": 24, "auto_update": True,
-            # more performance options: sharpening, bloom resolution, ray distance, render rate, lowest dynamic scale, panel refresh, GPU choice
-            "sharp": 0, "bloomres": 0, "dist": 1, "rrate": 0, "dynmin": 40, "gpu": 0, "panel_view": 2, "wave_blend": 0}
-
-_S0 = SC.starter_scenes()[0]
-DEFAULTS.update({k: _S0[k] for k in SC.MANDALA_KEYS + SC.IDENTITY_KEYS})        # the working copy of the scene being edited (starts as the first)
-DEFAULTS.update(scene_when=2, scene_every=30, scene_now=False, bg_light=0, bg_int=100, bg_speed=100)                          # how a scene change happens (see neon_director.update)
-DEFAULTS["scene_sec"] = 0                                                         # section of the scene editor (Visual, Fundo, Cores, ...)
-DEFAULTS["scenes"] = SC.starter_scenes()                                          # the scene presets (see scenes.py)
-DEFAULTS["scene_edit"] = 0                                                        # index of the scene being edited
-DEFAULTS["shaders"] = SP.factory()                                              # the shader presets (see shaderpresets.py)
-DEFAULTS.update(shd_v=1, shd_edit=0, shd_name="3D", shd_kind=1, shd_p1=100, shd_p2=100, shd_p3=100, shd_auto=True, shd_duo=0, shd_item=0, shd_r=10, shd_g=0, shd_b=40)
-DEFAULTS["palettes"] = PAL.factory()                                              # the palette presets (see palettes.py)
-DEFAULTS.update(pal_edit=0, pal_item=0, pal_name="Neon", pal_r=0, pal_g=0, pal_b=0)   # the palette / swatch being edited (working copy)
-
-# graphics presets; any manual change of one of these options switches the preset to "Personalizado"
-GFX_KEYS = ("res", "steps", "bloomq", "aa_mode", "detail", "mblur", "mblur_fps", "sharp", "bloomres", "dist")
-PRESETS = [
-    ("Baixo",  dict(res=60,  steps=48,  bloomq=1, aa_mode=0, detail=55,  mblur=0, mblur_fps=24, sharp=1, bloomres=1, dist=0)),
-    ("Médio",  dict(res=80,  steps=60,  bloomq=2, aa_mode=1, detail=75,  mblur=90, mblur_fps=24, sharp=0, bloomres=0, dist=1)),
-    ("Alto",   dict(res=100, steps=72,  bloomq=3, aa_mode=3, detail=100, mblur=180, mblur_fps=24, sharp=0, bloomres=0, dist=1)),
-    ("Ultra",  dict(res=100, steps=110, bloomq=4, aa_mode=4, detail=100, mblur=270, mblur_fps=24, sharp=0, bloomres=0, dist=2)),
-]
-CUSTOM = len(PRESETS)
+import widgets
+from widgets import (SURFACE, SURFACE2, BORDER, CTRL, TITLE, TEXT, DIM, ACCENT, ACCENT2, OK, DANGER, ON_ACCENT, ON_LIGHT, ON_SEL, SEL,
+                     CTRL_FILL, HOVER_FILL, HOVER_EDGE, FOCUS, dimmed)         # the colour tokens live in widgets.py
+from wizard import WizardMixin
+from settings import (ae_current, auto_cards, CAM_AUTO, CAM_KEYS, CAM_MANUAL, CAM_OPTS, CAM_PRESETS, CUSTOM, DEFAULTS, ed_view, ED_VIEWS, fresh,
+                      GFX_KEYS, FIN_KEYS, LIVE_H, load_ae, load_cfg, load_palette_edit, load_shader_edit, MACRO_ENERGY, macro_index, MACRO_SPEED,
+                      match_camera, match_movement, match_preset, MV_AUTO, MV_KEYS, MV_MANUAL, MV_OPTS, MV_PRESETS, NAMES, PRESETS,
+                      profile_path, save_cfg, scene_layout, scene_rows, scene_sub, sys_cards, SYS_IMAGE, SYS_ITEMS, sys_layout,
+                      TAB_LIVE, TAB_SCENES, TAB_SYS, TABS, WIDE_MIN, _item_text)        # the data and the file on disk live in settings.py; these names stay readable as menu.X
 
 
-# camera presets: 0..3 copy their values into the manual controls, 4 = automatic (the director picks one by the music), 5 = manual
-CAM_KEYS = ("cam_orbit", "cam_roll", "cam_shake", "cam_punch", "cam_funnel", "cam_fov_min", "cam_fov_max", "cam_fov_var", "cam_sync")
-CAM_PRESETS = [
-    ("Fixo",      dict(cam_orbit=0, cam_roll=0, cam_shake=0, cam_punch=0, cam_funnel=2, cam_fov_min=90, cam_fov_max=90,  cam_fov_var=0, cam_sync=0)),
-    ("Cinema",    dict(cam_orbit=2, cam_roll=0, cam_shake=0, cam_punch=0, cam_funnel=1, cam_fov_min=60, cam_fov_max=80,  cam_fov_var=1, cam_sync=2)),
-    ("Clipe",     dict(cam_orbit=1, cam_roll=1, cam_shake=2, cam_punch=2, cam_funnel=3, cam_fov_min=80, cam_fov_max=115, cam_fov_var=2, cam_sync=1)),
-    ("Hipnótico", dict(cam_orbit=1, cam_roll=2, cam_shake=0, cam_punch=0, cam_funnel=3, cam_fov_min=85, cam_fov_max=105, cam_fov_var=1, cam_sync=0)),
-]
-CAM_AUTO, CAM_MANUAL = 4, 5
-
-
-# movement presets (what moves inside the scene): 0..4 copy their values into the manual controls, 5 = manual
-MV_KEYS = ("mv_speed", "mv_rot", "mv_dir", "mv_pulse", "mv_one", "mv_cuts", "mv_inertia")
-MV_PRESETS = [
-    ("Padrão",       dict(mv_speed=1, mv_rot=2, mv_dir=0, mv_pulse=0, mv_one=False, mv_cuts=1, mv_inertia=1)),
-    ("Calmo",        dict(mv_speed=0, mv_rot=1, mv_dir=0, mv_pulse=0, mv_one=False, mv_cuts=0, mv_inertia=2)),
-    ("Hipnótico",    dict(mv_speed=1, mv_rot=2, mv_dir=2, mv_pulse=1, mv_one=False, mv_cuts=0, mv_inertia=2)),
-    ("Nervoso",      dict(mv_speed=2, mv_rot=3, mv_dir=2, mv_pulse=3, mv_one=False, mv_cuts=2, mv_inertia=0)),
-    ("Pela música",  dict(mv_speed=3, mv_rot=2, mv_dir=2, mv_pulse=2, mv_one=True, mv_cuts=1, mv_inertia=1)),
-]
-MV_AUTO = len(MV_PRESETS)             # the director picks one by the music
-MV_MANUAL = MV_AUTO + 1
-
-
-def match_movement(cfg):
-    for i, (_, vals) in enumerate(MV_PRESETS):
-        if all(cfg.get(k) == v for k, v in vals.items()):
-            return i
-    return MV_MANUAL
-
-
-def match_camera(cfg):
-    for i, (_, vals) in enumerate(CAM_PRESETS):
-        if all(cfg.get(k) == v for k, v in vals.items()):
-            return i
-    return CAM_MANUAL
-
-
-def match_preset(cfg):
-    for i, (_, vals) in enumerate(PRESETS):
-        if all(cfg.get(k) == v for k, v in vals.items()):
-            return i
-    return CUSTOM
-
-
-def fresh():
-    return copy.deepcopy(DEFAULTS)
-
-
-def load_palette_edit(cfg):
-    """Copy the palette being edited (and its selected swatch) into the working keys of the Cores tab."""
-    pal = cfg["palettes"][cfg["pal_edit"]]
-    cfg["pal_name"] = pal["name"]
-    its = PAL.items(pal)
-    cfg["pal_item"] = max(0, min(int(cfg.get("pal_item", 0)), len(its) - 1))
-    cfg["pal_r"], cfg["pal_g"], cfg["pal_b"] = its[cfg["pal_item"]][1]
-
-
-def load_shader_edit(cfg):
-    """Copy the shader preset being edited into the working keys of the Shaders tab."""
-    sh = cfg["shaders"][cfg["shd_edit"]]
-    cfg.update(shd_name=sh["name"], shd_kind=sh["kind"], shd_p1=int(sh["p1"]), shd_p2=int(sh["p2"]), shd_p3=int(sh["p3"]), shd_auto=bool(sh.get("auto", True)),
-               shd_duo=int(sh.get("duo_mode", 0)))
-    cfg["shd_item"] = max(0, min(int(cfg.get("shd_item", 0)), 1))
-    cfg["shd_r"], cfg["shd_g"], cfg["shd_b"] = (sh.get("duo_dark") if cfg["shd_item"] == 0 else sh.get("duo_light")) or [0, 0, 0]
-
-
-def load_cfg():
-    cfg = fresh()
-    data_style_v = 6
-    data = {}
-    try:
-        with open(PATH, encoding="utf-8") as f:
-            data = json.load(f)
-        data_style_v = data.get("style_v", 1) if isinstance(data.get("style_v", 1), int) else 1
-        for k, v in data.items():
-            if k in cfg and type(v) is type(cfg[k]):
-                cfg[k] = v
-        if "fps_out" not in data:                                  # older settings had a cap and a target: the output FPS is one number now
-            old = data.get("fps_cap") or data.get("fps_target") or 60
-            cfg["fps_out"] = min((v for _, v in FPS_OPTS), key=lambda v: abs(v - old))
-        cfg["res"] = min(cfg["res"], 100)
-        if "aa_mode" not in data and "aa" in data:                 # older settings: the on/off edge switch
-            cfg["aa_mode"] = 1 if data["aa"] else 0
-    except Exception:
-        pass
-    # scene presets: the stored list, or the six that ship (with the camera / movement / shapes the person already had)
-    extras = {k: cfg[k] for k in SC.CAMERA_KEYS + SC.MOVEMENT_KEYS + SC.SHAPE_KEYS + SC.REACT_KEYS + SC.BG_KEYS if k in cfg}
-    lst = data.get("scenes") if isinstance(data, dict) else None
-    if isinstance(lst, list) and lst and all(SC.valid(x) for x in lst):
-        base_ = SC.mandala_scene(0, extras)
-        for sc_ in lst:
-            sc_.setdefault("scene_preset", SC.preset_of(sc_))
-            for k, v in base_.items():
-                sc_.setdefault(k, v)
-        if not any(sc_.get("scene_visual", 1) == 0 for sc_ in lst):          # the scene with nothing drawn is always available
-            lst.append(SC.none_scene(extras))
-        cfg["scenes"] = lst
-    else:
-        cfg["scenes"] = SC.starter_scenes(extras)
-    sl = data.get("shaders") if isinstance(data, dict) else None
-    cfg["shaders"] = sl if (isinstance(sl, list) and sl and all(SP.valid(x) for x in sl)) else SP.factory()
-    for sh_ in cfg["shaders"]:
-        for k, v in SP.make(sh_["kind"]).items():
-            sh_.setdefault(k, v)
-    cfg["shd_edit"] = max(0, min(int(cfg.get("shd_edit", 0)), len(cfg["shaders"]) - 1))
-    load_shader_edit(cfg)
-    if data.get("shd_v") != 1 if isinstance(data, dict) else True:       # older scenes: 8 meant "automatic", 1..7 a fixed kind (the same order as the presets)
-        for sc_ in (cfg["scenes"] if isinstance(cfg.get("scenes"), list) else []):
-            if sc_.get("scene_shader") == 8 or sc_.get("scene_shader", 0) > len(cfg["shaders"]):
-                sc_["scene_shader"] = 0
-    pl = data.get("palettes") if isinstance(data, dict) else None
-    cfg["palettes"] = pl if (isinstance(pl, list) and pl and all(PAL.valid(x) for x in pl)) else PAL.factory()
-    cfg["pal_edit"] = max(0, min(int(cfg.get("pal_edit", 0)), len(cfg["palettes"]) - 1))
-    load_palette_edit(cfg)
-    cfg["scene_edit"] = max(0, min(int(cfg.get("scene_edit", 0)), len(cfg["scenes"]) - 1))
-    if 1 <= cfg["effect"] <= len(cfg["scenes"]):                  # a scene picked in the list is the one being edited
-        cfg["scene_edit"] = cfg["effect"] - 1
-    SC.apply_scene(cfg, cfg["scenes"][cfg["scene_edit"]])
-    if cfg["effect"] > len(cfg["scenes"]):
-        cfg["effect"] = 0
-    if data_style_v < 6:                 # the style list changed: back to "scene default"
-        cfg["style"] = 8
-    cfg["style_v"] = 6
-    cfg["scene_now"] = False
-    cfg["fullscreen"] = False        # never start full screen: the control window would be hidden behind it
-    cfg["preset"] = match_preset(cfg)
-    if cfg["camera"] != CAM_AUTO:
-        cfg["camera"] = match_camera(cfg)
-    if cfg["movement"] != MV_AUTO:
-        cfg["movement"] = match_movement(cfg)
-    return cfg
-
-
-def save_cfg(cfg):
-    try:
-        os.makedirs(APPDIR, exist_ok=True)
-        with open(PATH, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=1)
-    except Exception:
-        pass
-
-
-# ------------------------------------------------------------------ design tokens
-BG = (10, 9, 22)
-SURFACE = (20, 18, 42)
-SURFACE2 = (32, 30, 62)
-BORDER = (52, 48, 96)
-TEXT = (238, 240, 255)
-DIM = (160, 168, 208)          # >= 4.5:1 on SURFACE
-ACCENT = (255, 90, 210)
-ACCENT2 = (80, 220, 255)
-OK = (110, 235, 170)
-DANGER = (255, 120, 150)
-ON_ACCENT = (24, 8, 32)
-
-
-def dimmed(c, f=0.45):
-    return tuple(int(BG[i] + (c[i] - BG[i]) * f) for i in range(3))
-
-
-FPS_OPTS = [("24", 24), ("30", 30), ("60", 60), ("90", 90), ("120", 120), ("144", 144), ("240", 240)]
-TARGET_OPTS = [("30", 30), ("60", 60), ("90", 90), ("120", 120), ("144", 144)]
-STROBE_OPTS = [("Desligado", 0), ("Suave", 1), ("Completo", 2)]
-QUAL4_OPTS = [("Desligado", 0), ("Baixa", 1), ("Média", 2), ("Alta", 3)]
-STYLE_OPTS = [("Normal", 0), ("Anime", 1)]
-LIGHT_OPTS = [("Rápida", 0), ("Ray tracing", 1)]
-AA_OPTS = [("Desligado", 0), ("Bordas", 1), ("FXAA", 2), ("MSAA 2x", 3), ("MSAA 4x", 4), ("MSAA 8x", 5)]
-BLOOM_OPTS = [("Desligado", 0), ("Mínimo", 1), ("Baixo", 2), ("Médio", 3), ("Alto", 4)]
-PRESET_OPTS = [(n, i) for i, (n, _) in enumerate(PRESETS)] + [("Personalizado", CUSTOM)]
-BACKEND_OPTS = [("Auto", 0), ("Vulkan", 1), ("Direct3D 12", 2)]
-
-SCENES = [
-    ("CENA", [
-        dict(id="effect", kind="radio", value=0, label="Automático",
-             help="Escolhe a cena pelo gênero detectado e muda pela música"),
-        dict(id="effect", kind="radio", value=1, label="Facetas",
-             help="Painéis espelhados em 3 universos de cor"),
-        dict(id="effect", kind="radio", value=2, label="Estrela",
-             help="Bastões arredondados que formam estrelas; aceita todos os estilos"),
-        dict(id="effect", kind="radio", value=3, label="Túnel  ·  techno",
-             help="Costelas finas em cinza e preto, uma cor de destaque"),
-        dict(id="effect", kind="radio", value=4, label="Catedral  ·  trance",
-             help="Vitrais translúcidos em azul, violeta e ouro"),
-        dict(id="effect", kind="radio", value=5, label="Impacto  ·  EDM",
-             help="Painéis grossos e saturados; a câmera dá um soco no kick"),
-        dict(id="effect", kind="radio", value=6, label="Palco  ·  pop",
-             help="Painéis arredondados em pastel, contorno de tinta"),
-    ]),
-]
-GRAPHICS = [
-    ("PREDEFINIÇÃO", [
-        dict(id="preset", kind="seg", label="Qualidade gráfica", opts=PRESET_OPTS,
-             help=lambda c: "Ajusta várias opções de uma vez" if c["preset"] != CUSTOM else "Opções alteradas por você"),
-    ]),
-    ("TELA", [
-        dict(id="fullscreen", kind="toggle", label="Tela cheia", chip="F",
-             help="Duplo clique na imagem também alterna"),
-        dict(id="vsync", kind="toggle", label="Sincronia vertical (VSync)", chip="V",
-             help="Ligado: imagem sem rasgos, limitada ao monitor"),
-    ]),
-    ("DESEMPENHO", [
-        dict(id="res", kind="slider", label="Escala de resolução", lo=25, hi=100, step=5, unit="%",
-             help="Menor = muito mais FPS, imagem mais suave  ·  duplo clique restaura"),
-        dict(id="fps_out", kind="seg", label="FPS de saída", opts=FPS_OPTS,
-             help=lambda c: "Limite e meta da resolução dinâmica" + (" · VSync" if c["vsync"] else "")),
-        dict(id="dynres", kind="toggle", label="Resolução dinâmica",
-             help="Baixa a resolução sozinha quando o FPS cai do alvo"),
-        dict(id="detail", kind="slider", label="Densidade de painéis", lo=30, hi=100, step=5, unit="%",
-             help="Menos camadas na cena: mais FPS  ·  duplo clique restaura"),
-        dict(id="dynmin", kind="slider", label="Escala mínima (dinâmica)", lo=25, hi=90, step=5, unit="%",
-             help="Até onde a resolução dinâmica pode descer", enabled=lambda c: c["dynres"]),
-        dict(id="dist", kind="seg", label="Distância de render", opts=[("Curta", 0), ("Normal", 1), ("Longa", 2)],
-             help=lambda c: ["Corta as camadas mais fundas: mais leve", "Todas as camadas", "Raios vão mais longe"][c["dist"]]),
-        dict(id="rrate", kind="seg", label="Taxa de renderização", opts=[("Total", 0), ("Metade", 1), ("Um terço", 2)],
-             help=lambda c: ["Desenha todos os quadros", "1 quadro a cada 2: GPU pela metade", "1 a cada 3: o mais leve, mais picado"][c["rrate"]]),
-        dict(id="steps", kind="slider", label="Passos do raio", lo=24, hi=160, step=8, unit="",
-             help="Mais passos = bordas mais corretas, mais peso"),
-    ]),
-    ("ILUMINAÇÃO", [
-    ]),
-    ("IMAGEM", [
-        dict(id="bloomq", kind="seg", label="Qualidade do brilho", opts=BLOOM_OPTS,
-             help="Camadas do halo: mais = mais suave"),
-        dict(id="bloomres", kind="seg", label="Resolução do brilho", opts=[("Metade", 0), ("Quarto", 1), ("Oitavo", 2)],
-             help="Base do halo: menor = mais leve"),
-        dict(id="bloom", kind="slider", label="Intensidade do brilho", lo=0, hi=200, step=10, unit="%",
-             help="Força do halo  ·  duplo clique restaura"),
-        dict(id="mblur", kind="slider", label="Motion blur: ângulo do obturador", lo=0, hi=720, step=15, unit="°",
-             help="0° desligado  ·  180° cinema  ·  360° aberto"),
-        dict(id="mblur_fps", kind="seg", label="Quadros de referência do blur", opts=[("24", 24), ("30", 30), ("48", 48), ("60", 60)],
-             help=lambda c: f"Obturador aberto por {c['mblur'] / 360.0 / c['mblur_fps'] * 1000:.0f} ms ({c['mblur']}° a {c['mblur_fps']} quadros)" if c["mblur"] else "Ligue o blur para usar",
-             enabled=lambda c: c["mblur"] > 0),
-        dict(id="aa_mode", kind="seg", label="Modo", opts=AA_OPTS,
-             help=lambda c: ["Sem suavização", "Cobertura nas bordas",
-                             "Filtro sobre a imagem pronta", "2 amostras por pixel nas bordas",
-                             "4 amostras por pixel nas bordas", "8 amostras nas bordas: o mais pesado"][c["aa_mode"]]),
-        dict(id="sharp", kind="seg", label="Nitidez", opts=[("Desligada", 0), ("Leve", 1), ("Média", 2), ("Forte", 3)],
-             help="Realça detalhes: ajuda em resolução baixa"),
-    ]),
-]
-STYLES = [
-    ("ESTILO", [
-        dict(id="style", kind="radio", value=8, label="Automático",
-             help="O estilo muda com a parte da música: suave na calma, brilhante nos drops"),
-        dict(id="style", kind="radio", value=0, label="Padrão da cena",
-             help="Cada cena usa o estilo que combina com ela"),
-        dict(id="style", kind="radio", value=1, label="3D",
-             help="Volumes com luz e sombra, câmera em perspectiva"),
-        dict(id="style", kind="radio", value=2, label="Neon",
-             help="Facetas escuras com o contorno brilhando, como tubos de neon"),
-        dict(id="style", kind="radio", value=3, label="Holograma",
-             help="Gradiente em cada faceta, linhas finas e bordas de luz"),
-        dict(id="style", kind="radio", value=4, label="Raio X",
-             help="Película azul e branca: só densidade, bordas e brilho de contorno"),
-        dict(id="style", kind="radio", value=5, label="Cromado",
-             help="Metal polido que reflete um estúdio colorido (ray tracing: reflete os vizinhos)"),
-        dict(id="style", kind="radio", value=6, label="Aquarela",
-             help="Pigmento sobre papel, com borda molhada e grão"),
-        dict(id="style", kind="radio", value=7, label="Duotom",
-             help="A imagem toda em duas cores, que trocam junto com as cores da música"),
-    ]),
-]
-SETTINGS = [
-    ("MÚSICA E LUZ", [
-        dict(id="strobe", kind="seg", label="Flashes e strobe", chip="S", opts=STROBE_OPTS,
-             help="Completo pisca rápido, no ritmo da música"),
-        dict(id="bursts", kind="toggle", label="Rajadas de 1/4 de tempo",
-             help=lambda c: "Piscadas rápidas ocasionais no ritmo" if c["strobe"] == 2 else "Disponível só em Flashes: Completo",
-             enabled=lambda c: c["strobe"] == 2),
-        dict(id="react", kind="slider", label="Reatividade ao som", lo=25, hi=200, step=25, unit="%",
-             help="Quanto a imagem reage à música  ·  duplo clique restaura"),
-    ]),
-    ("SISTEMA", [
-        dict(id="backend", kind="seg", label="Backend gráfico", opts=BACKEND_OPTS,
-             help="Vulkan ou Direct3D 12  ·  vale após reiniciar"),
-        dict(id="gpu", kind="seg", label="Placa de vídeo", opts=[("Alto desempenho", 0), ("Economia", 1)],
-             help="Após reiniciar; Economia = GPU integrada"),
-        dict(id="wave_blend", kind="seg", label="Onda do Ao vivo", opts=[("Transparente", 0), ("Sólida", 1)],
-             help=lambda c: "Camadas misturadas: dá para ver o que está atrás" if c["wave_blend"] == 0 else "Camadas sólidas, uma sobre a outra"),
-        dict(id="auto_update", kind="toggle", label="Verificar atualizações ao abrir",
-             help="Consulta o GitHub em segundo plano; só baixa se você clicar em Atualizar"),
-    ]),
-]
-CAM_OPTS = [(n, i) for i, (n, _) in enumerate(CAM_PRESETS)] + [("Auto", CAM_AUTO), ("Manual", CAM_MANUAL)]
-def _cam_on(g):
-    return lambda c: c["camera"] != CAM_AUTO or not c["auto_cam_" + g]          # editable unless the Auto tab hands this parameter to Auto
-
-
-def _mv_on(g):
-    return lambda c: c["movement"] != MV_AUTO or not c["auto_mv_" + g]
-
-
-CAMERA = [
-    ("PREDEFINIÇÃO", [
-        dict(id="camera", kind="seg", label="Câmera", opts=CAM_OPTS,
-             help=lambda c: "Muda pela música" if c["camera"] == CAM_AUTO else ("Ajustado por você" if c["camera"] == CAM_MANUAL else "Preenche os controles")),
-    ]),
-    ("MOVIMENTO", [
-        dict(id="cam_orbit", kind="seg", label="Órbita", opts=[("Parada", 0), ("Lenta", 1), ("Média", 2), ("Ampla", 3)],
-             help="A câmera passeia ao redor da imagem", enabled=_cam_on("orbit")),
-        dict(id="cam_roll", kind="seg", label="Giro", opts=[("Parado", 0), ("Balanço", 1), ("Contínuo", 2)],
-             help="Inclina de lado a lado ou gira", enabled=_cam_on("roll")),
-        dict(id="cam_shake", kind="seg", label="Tremor no kick", opts=[("Nenhum", 0), ("Leve", 1), ("Forte", 2)],
-             help="A câmera treme a cada batida", enabled=_cam_on("shake")),
-        dict(id="cam_punch", kind="seg", label="Soco no kick", opts=[("Nenhum", 0), ("Leve", 1), ("Forte", 2)],
-             help="A câmera avança um pouco a cada batida", enabled=_cam_on("punch")),
-        dict(id="cam_funnel", kind="seg", label="Funil", opts=[("Desligado", 0), ("Suave", 1), ("Normal", 2), ("Forte", 3)],
-             help="Entra nas camadas em build-ups e drops", enabled=_cam_on("funnel")),
-    ]),
-    ("RITMO", [
-        dict(id="cam_sync", kind="seg", label="Sincronia com o ritmo", opts=[("Livre", 0), ("No compasso", 1), ("Na frase", 2)],
-             help=lambda c: ("Os movimentos seguem o tempo, não o relógio" if c["cam_sync"] else "Os movimentos têm ritmo próprio"), enabled=_cam_on("sync")),
-    ]),
-    ("LENTE", [
-        dict(id="cam_fov_min", kind="slider", label="FOV mínimo", lo=30, hi=140, step=5, unit="°",
-             help="Lente mais fechada: o ângulo nunca fica abaixo disto", enabled=_cam_on("fov")),
-        dict(id="cam_fov_max", kind="slider", label="FOV máximo", lo=30, hi=140, step=5, unit="°",
-             help="Lente mais aberta: o ângulo nunca passa disto", enabled=_cam_on("fov")),
-        dict(id="cam_fov_var", kind="seg", label="Variação do FOV", opts=[("Fixo", 0), ("Respira", 1), ("Pela música", 2)],
-             help=lambda c: ("Fica na média entre mínimo e máximo" if c["cam_fov_var"] == 0 else
-                             "Vai e volta devagar entre mínimo e máximo" if c["cam_fov_var"] == 1 else
-                             "Abre com a energia, o build-up e os drops"),
-             enabled=lambda c: _cam_on("fov")(c) and c["cam_fov_min"] != c["cam_fov_max"]),
-    ]),
-]
-
-
-SHAPES = [
-    ("TROCA DE FORMA", [
-        dict(id="sh_when", kind="seg", label="Quando trocar", opts=[("Nunca", 0), ("Na frase", 1), ("A cada compasso", 2), ("Auto", 3)],
-             help=lambda c: ["As formas ficam como estão", "Na virada da frase de 8 compassos", "Na batida 1 de cada compasso", "Pela música: frase e drops"][c["sh_when"]]),
-        dict(id="sh_mix", kind="seg", label="Distribuição", opts=[("Uma por camada", 0), ("Todas iguais", 1)],
-             help=lambda c: "Cada camada usa uma forma da lista" if c["sh_mix"] == 0 else "Todas as camadas usam a mesma forma"),
-        dict(id="sh_morph", kind="seg", label="Transformação", opts=[("Corte seco", 0), ("Rápida", 1), ("Suave", 2), ("Lenta", 3)],
-             help=lambda c: ["A forma troca de uma vez", "A forma vira outra em 0,35 s", "A forma vira outra em 0,9 s", "A forma vira outra em 2 s"][c["sh_morph"]]),
-    ]),
-    ("PAINÉIS E CAIXAS", [
-        dict(id="sh_0", kind="toggle", label="Painéis (padrão)", help="Retângulos e triângulos finos, como sempre foram"),
-        dict(id="sh_2", kind="toggle", label="Cubo", help="Seis faces iguais, arestas vivas"),
-        dict(id="sh_16", kind="toggle", label="Cuboide", help="Caixa retangular, mais longa que larga"),
-    ]),
-    ("REDONDAS", [
-        dict(id="sh_1", kind="toggle", label="Esfera", help="Totalmente redonda, só o contorno marca a borda"),
-        dict(id="sh_3", kind="toggle", label="Cilindro", help="Lata: duas tampas planas e lado curvo"),
-        dict(id="sh_4", kind="toggle", label="Cone", help="Ponta para cima, base redonda"),
-        dict(id="sh_15", kind="toggle", label="Cone truncado", help="Cone com a ponta cortada"),
-        dict(id="sh_9", kind="toggle", label="Toro", help="Rosca com o buraco no meio"),
-        dict(id="sh_10", kind="toggle", label="Anel", help="Aro grosso, de frente para a câmera"),
-        dict(id="sh_14", kind="toggle", label="Meia-esfera", help="Cúpula com a base plana"),
-    ]),
-    ("PIRÂMIDES E PRISMAS", [
-        dict(id="sh_5", kind="toggle", label="Pirâmide quadrada", help="Base quadrada e quatro faces"),
-        dict(id="sh_6", kind="toggle", label="Pirâmide hexagonal", help="Base de seis lados"),
-        dict(id="sh_7", kind="toggle", label="Prisma triangular", help="Barra com seção de triângulo"),
-        dict(id="sh_8", kind="toggle", label="Prisma hexagonal", help="Barra com seção de hexágono"),
-        dict(id="sh_17", kind="toggle", label="Prisma pentagrâmico", help="Barra com seção de estrela de cinco pontas"),
-    ]),
-    ("POLIEDROS", [
-        dict(id="sh_11", kind="toggle", label="Octaedro", help="Oito faces triangulares, dois diamantes colados"),
-        dict(id="sh_12", kind="toggle", label="Dodecaedro", help="Doze faces pentagonais"),
-        dict(id="sh_13", kind="toggle", label="Icosaedro", help="Vinte faces triangulares"),
-        dict(id="sh_18", kind="toggle", label="Buckyball", help="Bola de futebol: hexágonos e pentágonos"),
-    ]),
-]
-MV_OPTS = [(n, i) for i, (n, _) in enumerate(MV_PRESETS)] + [("Auto", MV_AUTO), ("Manual", MV_MANUAL)]
-MOVEMENT = [
-    ("PREDEFINIÇÃO", [
-        dict(id="movement", kind="seg", label="Modo", opts=MV_OPTS,
-             help=lambda c: "Muda pela música" if c["movement"] == MV_AUTO else ("Ajustado por você" if c["movement"] == MV_MANUAL else "Preenche os controles")),
-    ]),
-    ("VELOCIDADE", [
-        dict(id="mv_speed", kind="seg", label="Velocidade geral", opts=[("Lenta", 0), ("Normal", 1), ("Rápida", 2), ("Pela música", 3)],
-             help="Ritmo do fluxo e da rotação", enabled=lambda c: _mv_on("speed")(c)),
-        dict(id="mv_inertia", kind="seg", label="Inércia", opts=[("Seca", 0), ("Normal", 1), ("Fluida", 2)],
-             help=lambda c: ("Responde na hora, nervoso" if c["mv_inertia"] == 0 else "Equilibrada" if c["mv_inertia"] == 1 else "Suaviza tudo, como em câmera lenta"), enabled=lambda c: _mv_on("inertia")(c)),
-    ]),
-    ("CAMADAS", [
-        dict(id="mv_rot", kind="seg", label="Rotação", opts=[("Parada", 0), ("Lenta", 1), ("Média", 2), ("Rápida", 3)],
-             help="Velocidade com que as camadas giram", enabled=lambda c: _mv_on("rot")(c)),
-        dict(id="mv_dir", kind="seg", label="Direção", opts=[("Horário", 0), ("Anti-horário", 1), ("Alternada", 2)],
-             help="Alternada: vizinhas giram ao contrário", enabled=lambda c: (_mv_on("rot")(c)) and c["mv_rot"] > 0),
-    ]),
-    ("PULSO E TROCAS", [
-        dict(id="mv_pulse", kind="seg", label="Pulso no kick", opts=[("Nenhum", 0), ("Leve", 1), ("Médio", 2), ("Forte", 3)],
-             help="As camadas respiram (crescem) a cada batida", enabled=lambda c: _mv_on("pulse")(c)),
-        dict(id="mv_one", kind="toggle", label="Pulsar só na batida 1",
-             help="Só a primeira batida do compasso faz a imagem pulsar", enabled=lambda c: (_mv_on("pulse")(c)) and c["mv_pulse"] > 0),
-        dict(id="ctrans", kind="seg", label="Transição de cor", opts=[("Corte", 0), ("Rápida", 1), ("Suave", 2), ("Lenta", 3), ("No tempo", 4)],
-             help=lambda c: ["A cor troca de uma vez", "Uma cor vira a outra em 0,25 s", "Uma cor vira a outra em 0,8 s", "Uma cor vira a outra em 1,8 s",
-                             "Dura duas batidas do compasso"][c["ctrans"]]),
-        dict(id="mv_cuts", kind="seg", label="Frequência dos cortes", opts=[("Raros", 0), ("Normais", 1), ("Frequentes", 2)],
-             help="Trocas de cor e universo na batida", enabled=lambda c: _mv_on("cuts")(c)),
-    ]),
-]
-_ROWS = {r["id"]: r for _, rs in GRAPHICS + SETTINGS for r in rs if r["kind"] != "radio"}
-
-
-def _card(title, *ids):
-    return (title, [_ROWS[i] for i in ids])
-
-
-# five tabs, one purpose each: what is drawn / how the camera moves / how the picture looks / how heavy it is / the program itself
-LIVE_H = 540                       # height of the live tab's content (drawn by the control window, see deck.py)
-GENRE_OPTS = [("Nenhum", ""), ("techno", "techno"), ("trance", "trance"), ("EDM", "edm"), ("pop", "pop")]
-SHADER_OPTS = [("Automático", 8), ("3D", 1), ("Neon", 2), ("Holograma", 3), ("Raio X", 4), ("Cromado", 5), ("Aquarela", 6), ("Duotom", 7)]
-
-
-SEC_OPTS = [("Cena", 0), ("Visual", 1), ("Fundo", 2), ("Cores", 3), ("Shader", 4), ("Câmera", 5), ("Movim.", 6), ("Formas", 7)]
-
-
-def scene_rows(cfg, view="gallery"):
-    """The Cenas tab. The gallery (and the picker of a new scene) is drawn by the control window; the editor of one scene is made of rows:
-    a header with the way back and the section selector, then one section at a time (Cena, Visual, Fundo, Cores, Shader, Câmera, Movimento,
-    Formas). Rebuilt whenever the scene changes."""
-    if view != "editor":
-        return []
-    scn = cfg.get("scenes") or DEFAULTS["scenes"]
-    ed = cfg.get("scene_edit", 0)
-    name = scn[ed]["scene_name"] if 0 <= ed < len(scn) else "?"
-    cards = [(f"CENA  ·  {name.upper()}", [
-        dict(id="scene_back", kind="action", label="Voltar às cenas", btn="‹ Galeria", help="Mostra todas as cenas no ar  ·  Esc também volta"),
-        dict(id="scene_sec", kind="seg", label="", opts=SEC_OPTS, help=""),
-    ])]
-    sec = cfg.get("scene_sec", 0)
-    if sec == 0:
-        cards.append(("IDENTIDADE", [
-            dict(id="scene_name", kind="text", label="Nome", help="Clique e digite  ·  Enter confirma"),
-            dict(id="scene_auto", kind="toggle", label="Entra no Auto", help="O modo Automático pode escolher esta cena"),
-            dict(id="scene_genre", kind="seg", label="Gênero", opts=GENRE_OPTS, help="Chama esta cena no Automático"),
-            dict(id="scene_new", kind="action", label="Duplicar cena", btn="Duplicar", help="Uma cópia para você mexer"),
-            dict(id="scene_delete", kind="action", label="Apagar cena", btn="Apagar", help="Tira esta cena do ar (fica pelo menos uma)",
-                 enabled=lambda c: len(c.get("scenes", [])) > 1),
-        ]))
-    elif sec == 1:
-        cards.append(("VISUAL", [dict(id="scene_visual", kind="seg", label="O que aparece", opts=[("Nenhum", 0), ("Mandala", 1)],
-                                      help=lambda c: "Só uma tela preta" if c["scene_visual"] == 0 else "O motor de facetas, com os números abaixo")]))
-        if cfg.get("scene_visual", 1) == 1:
-            cards += [
-                ("PRESET DA MANDALA", [dict(id="scene_preset", kind="seg", label="Preset", opts=[(n, i) for i, n in enumerate(SC.PRESET_NAMES)],
-                                            help="Copia os números")]),
-                ("MANDALA", [
-                    dict(id="m_base", kind="seg", label="Caráter", opts=[(n, i) for i, n in enumerate(SC.BASE_NAMES)],
-                         help="A base de cores e de tom"),
-                    dict(id="m_psx", kind="slider", label="Largura do painel", lo=20, hi=100, step=2, unit="%", help="Metade da largura de cada painel"),
-                    dict(id="m_psy", kind="slider", label="Altura do painel", lo=3, hi=60, step=1, unit="%", help="Metade da altura de cada painel"),
-                    dict(id="m_pox", kind="slider", label="Afastamento horizontal", lo=10, hi=100, step=2, unit="%", help="Quanto cada camada se afasta do centro"),
-                    dict(id="m_poy", kind="slider", label="Afastamento vertical", lo=5, hi=60, step=2, unit="%", help="Quanto cada camada sobe ou desce"),
-                    dict(id="m_decay", kind="slider", label="Encolhimento por camada", lo=60, hi=96, step=1, unit="%", help="Quanto do tamanho a próxima camada mantém"),
-                    dict(id="m_thick", kind="slider", label="Espessura", lo=30, hi=300, step=10, unit="%", help="Em relação à espessura do caráter"),
-                    dict(id="m_funnel", kind="slider", label="Funil mínimo", lo=0, hi=100, step=5, unit="%", help="O funil nunca fecha abaixo disto"),
-                    dict(id="m_cuts", kind="slider", label="Frequência dos cortes", lo=20, hi=250, step=10, unit="%", help="Trocas de cor e universo na batida"),
-                    dict(id="m_round", kind="seg", label="Cantos", opts=[("Retos", 0), ("Alternados", 1), ("Arredondados", 2)],
-                         help="Alternados: um painel sim, outro não"),
-                    dict(id="m_glass", kind="slider", label="Opacidade das faces", lo=20, hi=100, step=5, unit="%", help="100% sólido, 40% vitral"),
-                ]),
-                ("SIMETRIAS", [dict(id="m_sym%d" % i, kind="toggle", label=SC.SYM_LABELS[i], help="Esta dobra de caleidoscópio pode ser usada") for i in range(SC.SYM_COUNT)]),
-            ]
-        cards += [_card("SOM E LUZ", "react", "strobe", "bursts"), _card("BRILHO", "bloom")]          # how the picture answers the music
-    elif sec == 2:
-        cards.append(("FUNDO", [dict(id="scene_bg", kind="seg", label="Cor do fundo", opts=[("Da paleta", 0), ("Preto", 1)],
-                                     help=lambda c: "Usa os fundos da paleta da cena" if c["scene_bg"] == 0 else "Sempre preto")]))
-        cards.append(("LUZES DE FUNDO", [
-            dict(id="bg_light", kind="seg", label="Luzes", opts=[("Nenhuma", 0), ("Aurora", 1), ("Feixes", 2), ("Pulsos", 3)],
-                 help=lambda c: ["Sem luzes", "Faixas de luz que ondulam", "Raios que giram", "Anéis que saem no ritmo"][c["bg_light"]]),
-            dict(id="bg_int", kind="slider", label="Intensidade", lo=10, hi=300, step=10, unit="%", help="Com as cores da paleta da cena", enabled=lambda c: c["bg_light"] > 0),
-            dict(id="bg_speed", kind="slider", label="Velocidade", lo=20, hi=300, step=10, unit="%", help="Quão rápido as luzes se movem", enabled=lambda c: c["bg_light"] > 0),
-        ]))
-    elif sec == 3:
-        cards += color_rows(cfg)                                  # the palette of the scene, the list of palettes and the editor of the selected one
-    elif sec == 4:
-        cards += [("AUTOMÁTICO", [dict(id="scene_pref", kind="seg", label="Favorecido", opts=[(SP.KIND_NAMES[k], k) for k in SP.ORDER], help="",
-                                       enabled=lambda c: c["scene_shader"] == 0)])]
-        cards += shader_rows(cfg)                                 # the shader of the scene, the list of shaders and the editor of the selected one
-    elif sec == 5:
-        cards += CAMERA
-    elif sec == 6:
-        cards += MOVEMENT
-    else:
-        cards += SHAPES
-    return cards
-
-
-def shader_rows(cfg):
-    """The Shaders tab: which shader the scene uses, the list, and the editor of the selected preset (the three numbers are named by the kind)."""
-    shs = cfg.get("shaders") or DEFAULTS["shaders"]
-    radios = [dict(id="scene_shader", kind="radio", value=0, label="Automático",
-                   help="Muda pelas partes da música, entre os shaders marcados com Entra no Auto")]
-    for i, sh in enumerate(shs):
-        radios.append(dict(id="scene_shader", kind="radio", value=i + 1, label=sh["name"], help=("" if sh["name"] == SP.KIND_NAMES[sh["kind"]] else SP.KIND_NAMES[sh["kind"]]) + ("" if sh.get("auto", True) else (" · " if sh["name"] != SP.KIND_NAMES[sh["kind"]] else "") + "fora do Auto")))
-    ed = cfg.get("shd_edit", 0)
-    sh = shs[ed] if 0 <= ed < len(shs) else shs[0]
-    kind = sh["kind"]
-    rows = [dict(id="shd_name", kind="text", label="Nome", help="Clique e digite  ·  Enter confirma"),
-            dict(id="shd_kind", kind="seg", label="Tipo", opts=[(SP.KIND_NAMES[k], k) for k in SP.ORDER], help=""),
-            dict(id="shd_auto", kind="toggle", label="Entra no Auto", help="O modo Automático pode escolher este shader")]
-    for key, lab in zip(("shd_p1", "shd_p2", "shd_p3"), SP.labels(kind)):
-        if lab:
-            rows.append(dict(id=key, kind="slider", label=lab[0], lo=20, hi=300, step=10, unit="%", help=lab[1] + "  ·  100% é como sempre foi"))
-    if kind == 7:
-        rows.append(dict(id="shd_duo", kind="seg", label="Cores do duotom", opts=[("Da paleta", 0), ("Fixas", 1)], help="De onde vêm a cor escura e a clara"))
-        if cfg.get("shd_duo", 0) == 1:
-            rows.append(dict(id="shd_item", kind="swatches", label="Cor", help="Escura e clara", items=[sh["duo_dark"], sh["duo_light"]]))
-            for key, lab in (("shd_r", "Vermelho"), ("shd_g", "Verde"), ("shd_b", "Azul")):
-                rows.append(dict(id=key, kind="slider", label=lab, lo=0, hi=255, step=5, unit="", help="Da cor selecionada"))
-    return [("SHADER DA CENA", radios), ("LISTA", [
-        dict(id="shd_new", kind="action", label="Novo shader", btn="Duplicar", help="Cria uma cópia do shader selecionado para você mexer"),
-        dict(id="shd_delete", kind="action", label="Apagar shader", btn="Apagar", help="Remove o shader selecionado (as cenas que o usavam voltam ao Automático)",
-             enabled=lambda c: len(c.get("shaders", [])) > 1),
-        dict(id="shd_factory", kind="action", label="Shaders de fábrica", btn="Restaurar", help="Volta aos sete shaders que vêm com o programa"),
-    ]), (f"EDITANDO  ·  {sh['name'].upper()}", rows)]
-
-
-def color_rows(cfg):
-    """The Cores tab: which palette the scene uses, the list of palettes, and the editor of the selected palette."""
-    pls = cfg.get("palettes") or DEFAULTS["palettes"]
-    radios = [dict(id="scene_palette", kind="radio", value=0, label="Do caráter", help="As cores próprias do caráter da cena (como sempre foram)")]
-    for i, pl in enumerate(pls):
-        radios.append(dict(id="scene_palette", kind="radio", value=i + 1, label=pl["name"], help=f"{len(pl['colors'])} cores · {len(pl['bgs'])} fundos"))
-    ed = cfg.get("pal_edit", 0)
-    pal = pls[ed] if 0 <= ed < len(pls) else pls[0]
-    its = PAL.items(pal)
-    return [("PALETA DA CENA", radios), ("LISTA", [
-        dict(id="pal_new", kind="action", label="Nova paleta", btn="Duplicar", help="Cria uma cópia da paleta selecionada para você mexer"),
-        dict(id="pal_delete", kind="action", label="Apagar paleta", btn="Apagar", help="Remove a paleta selecionada (as cenas que a usavam voltam às cores do caráter)",
-             enabled=lambda c: len(c.get("palettes", [])) > 1),
-        dict(id="pal_factory", kind="action", label="Paletas de fábrica", btn="Restaurar", help="Volta às seis paletas que vêm com o programa"),
-    ]), (f"EDITANDO  ·  {pal['name'].upper()}", [
-        dict(id="pal_name", kind="text", label="Nome", help="Clique e digite  ·  Enter confirma"),
-        dict(id="pal_item", kind="swatches", label="Cor selecionada", help="Fundos primeiro, depois as cores da paleta", items=[c for _, c in its]),
-        dict(id="pal_r", kind="slider", label="Vermelho", lo=0, hi=255, step=5, unit="", help="Da cor selecionada"),
-        dict(id="pal_g", kind="slider", label="Verde", lo=0, hi=255, step=5, unit="", help="Da cor selecionada"),
-        dict(id="pal_b", kind="slider", label="Azul", lo=0, hi=255, step=5, unit="", help="Da cor selecionada"),
-        dict(id="pal_add", kind="action", label="Adicionar cor", btn="Adicionar", help="Mais uma cor para a paleta sortear"),
-        dict(id="pal_add_bg", kind="action", label="Adicionar fundo", btn="Adicionar", help="Mais um fundo possível"),
-        dict(id="pal_remove", kind="action", label="Remover a selecionada", btn="Remover", help="Tira a cor ou o fundo selecionado (fica pelo menos um de cada)",
-             enabled=lambda c: True),
-    ])]
-
-
-TABS = [
-    ("Ao vivo", []),
-    ("Cenas", scene_rows(DEFAULTS)),
-    ("Gráficos", [_card("PREDEFINIÇÃO", "preset"), _card("RESOLUÇÃO E FPS", "res", "dynres", "fps_out", "dynmin", "rrate"),
-                  _card("RAIOS E CAMADAS", "detail", "steps", "dist"), _card("BRILHO", "bloomq", "bloomres"),
-                  _card("MOTION BLUR", "mblur", "mblur_fps"), _card("SUAVIZAÇÃO", "aa_mode", "sharp")]),
-    ("Ajustes", [_card("TELA", "fullscreen", "vsync"), _card("SISTEMA", "backend", "gpu", "wave_blend", "auto_update")]),
-]
-TAB_SCENES = 1
-TAB_LIVE = 0
-PV_TABS = ("Cenas", "Gráficos")        # the tabs that show the live thumbnail under the tab bar
-PV_H = 184
-TAB_PERF = [n for n, _ in TABS].index("Gráficos")
-TAB_SET = [n for n, _ in TABS].index("Ajustes")
-NAMES = {"fullscreen": "Tela cheia", "vsync": "VSync", "fps_cap": "Limite de FPS", "strobe": "Flashes",
-         "bursts": "Rajadas", "bloom": "Intensidade do brilho", "react": "Reatividade", "effect": "Cena", "res": "Resolução",
-         "backend": "Backend", "preset": "Qualidade", "steps": "Passos do raio", "shadows": "Sombras", "reflect": "Reflexos",
-         "ao": "Oclusão", "bloomq": "Brilho", "aa_mode": "Suavização", "sharp": "Nitidez", "bloomres": "Resolução do brilho", "dist": "Distância", "bounce": "Reflexos em cadeia", "rrate": "Taxa de renderização", "dynmin": "Escala mínima", "gpu": "Placa de vídeo", "panel_hz": "Painel", "panel_view": "Monitor do painel", "wave_blend": "Onda do Ao vivo", "detail": "Densidade", "rt": "Iluminação",
-         "style": "Estilo", "camera": "Câmera", "cam_orbit": "Órbita", "cam_roll": "Giro", "cam_shake": "Tremor", "cam_punch": "Soco", "cam_funnel": "Funil", "cam_fov_min": "FOV mínimo", "cam_fov_max": "FOV máximo", "cam_fov_var": "Variação do FOV", "cam_sync": "Sincronia", "sh_when": "Troca de forma", "sh_mix": "Distribuição", "sh_morph": "Transformação", "ctrans": "Transição de cor", "auto_shape": "Auto: formas", "sh_0": "Painéis (padrão)", "sh_2": "Cubo", "sh_16": "Cuboide", "sh_1": "Esfera", "sh_3": "Cilindro", "sh_4": "Cone", "sh_15": "Cone truncado", "sh_9": "Toro", "sh_10": "Anel", "sh_14": "Meia-esfera", "sh_5": "Pirâmide quadrada", "sh_6": "Pirâmide hexagonal", "sh_7": "Prisma triangular", "sh_8": "Prisma hexagonal", "sh_17": "Prisma pentagrâmico", "sh_11": "Octaedro", "sh_12": "Dodecaedro", "sh_13": "Icosaedro", "sh_18": "Buckyball", "auto_cam_orbit": "Auto: órbita", "auto_cam_roll": "Auto: giro", "auto_cam_shake": "Auto: tremor", "auto_cam_punch": "Auto: soco", "auto_cam_funnel": "Auto: funil", "auto_cam_fov": "Auto: FOV", "auto_cam_sync": "Auto: sincronia", "auto_mv_speed": "Auto: velocidade", "auto_mv_rot": "Auto: rotação", "auto_mv_pulse": "Auto: pulso", "auto_mv_cuts": "Auto: cortes", "auto_mv_inertia": "Auto: inércia", "auto_scene": "Auto: cena", "auto_style": "Auto: estilo", "auto_cuts": "Auto: cortes de cor", "auto_vars": "Auto: cor por elemento",  "movement": "Movimento", "mv_speed": "Velocidade", "mv_inertia": "Inércia", "mv_rot": "Rotação", "mv_dir": "Direção", "mv_pulse": "Pulso", "mv_one": "Pulso só na batida 1", "mv_cuts": "Cortes", "mblur": "Obturador", "auto_update": "Verificação de atualização", "mblur_fps": "Quadros de referência", "dynres": "Resolução dinâmica", "fps_out": "FPS de saída", "scene_palette": "Paleta", "shd_name": "Nome do shader", "shd_kind": "Tipo", "shd_p1": "Ajuste 1", "shd_p2": "Ajuste 2", "shd_p3": "Ajuste 3", "shd_auto": "Entra no Auto", "shd_duo": "Cores do duotom", "shd_item": "Cor", "shd_r": "Vermelho", "shd_g": "Verde", "shd_b": "Azul", "pal_name": "Nome da paleta", "pal_item": "Cor selecionada", "pal_r": "Vermelho", "pal_g": "Verde", "pal_b": "Azul", "m_sym0": "Espelho 4x", "m_sym1": "Espelho lateral", "m_sym2": "Radial 6", "m_sym3": "Radial 8", "m_sym4": "Radial 5", "m_sym5": "Diagonal", "m_sym6": "Espelho vertical", "m_sym7": "Radial 12", "scene_name": "Nome", "scene_visual": "Visual", "scene_bg": "Fundo", "scene_sec": "Seção", "bg_light": "Luzes de fundo", "bg_int": "Intensidade das luzes", "bg_speed": "Velocidade das luzes", "scene_pref": "Shader favorecido", "scene_when": "Trocar de cena", "scene_every": "A cada", "scene_preset": "Preset", "scene_auto": "Entra no Auto", "scene_genre": "Gênero", "scene_shader": "Shader", "m_base": "Caráter", "m_psx": "Largura", "m_psy": "Altura", "m_pox": "Afastamento horizontal", "m_poy": "Afastamento vertical", "m_decay": "Encolhimento", "m_thick": "Espessura", "m_funnel": "Funil mínimo", "m_cuts": "Cortes", "m_round": "Cantos", "m_glass": "Opacidade"}
-
-
-class Menu:
+class Menu(WizardMixin):
     W = 640
     HEAD = 44
     ROW = 52
     GAP = 12
-    FOOT = 90
+    FOOT = 28
 
     def __init__(self, cfg):
         self.cfg = cfg
+        if not cfg.get("lang"):                                                  # the first time: the language of Windows
+            cfg["lang"] = i18n.system_lang()
+        i18n.set_lang(cfg["lang"])
         self.dirty = False
         self.dirty_t = 0.0
         self.need = True
-        self.f = pygame.font.SysFont("segoeui", 15)
-        self.fb = pygame.font.SysFont("segoeui", 15, bold=True)
-        self.f_s = pygame.font.SysFont("segoeui", 12)
-        self.f_sb = pygame.font.SysFont("segoeui", 12, bold=True)
-        self.title = pygame.font.SysFont("segoeui", 22, bold=True)
-        self.ftab = pygame.font.SysFont("segoeui", 13, bold=True)
+        self.f = widgets.font("body")
+        self.fb = widgets.font("body", True)
+        self.f_s = widgets.font("cap")
+        self.f_sb = widgets.font("cap", True)
+        self.title = widgets.font("title", True)
+        self.ftab = widgets.font("small", True)
         self.hits = []
+        self._tile_cache, self._tile_sig = {}, None
+        self.base, self._live_eff = None, None             # the scene as it was saved when the editor opened (Live), and the Auto / fixed choice to bring back when Live ends
         self.order = []
         self.order_val = []
         self.focus = 0
@@ -646,43 +63,279 @@ class Menu:
         self.hover = None
         self.drag = None
         self.toast = None
+        self.draft, self.leave_armed = None, 0.0                       # the copy of the scene being edited, and until when a second press on Galeria leaves without saving
+        self.preview_sym = None                                        # the symmetry the preview shows (the last one touched)
+        self.dd_open, self.dd_hl, self.dd_rects = None, 0, {}          # the dropdown that is open, the option lit, and where each dropdown box is on the surface
+        self.undo, self._undo_last = [], (None, 0.0)           # snapshots of the scenes, shaders and palettes (Ctrl+Z)
+        self.sys_undo = []                                     # (when, label, restore function) of the Sistema actions with no confirmation: the toast offers "Desfazer"
+        self._push_t = 0.0                                     # when the last scene snapshot was taken (Ctrl+Z undoes the newest of the two stacks)
+        self.del_armed = (-1, 0.0)             # (scene, until) the delete button of a row of the list of scenes asks twice
+        self.restore_armed = 0.0               # the same for "Cenas de fábrica"
+        self.live_i, self.pend_i, self.live_scene = 0, -1, 0       # the scene on the air and the one that waits (the control window reports them)
+        self.thumb_slots, self.popup_rect = [], None               # where the list of scenes wants its live thumbnails (the control window draws them)
+        self.ear_slots = []                                            # where Sistema > Áudio wants the analysis of the music (the control window draws it)
+        self.card_marks = []
+        self._opening, self._extra = False, None
+        self.osd_name = None                                  # (name, when) of the scene the person just brought to the picture: the picture window writes it once (osd.py)
+        self.wizard = None                                    # "+ Nova cena" in three steps (what to see, colours, name) while scene_view is "wizard"
+        self.taps, self.tap_release, self.tap_t = [], False, 0.0     # tap tempo asked for since the last frame (times), "back to automatic" asked for, and when the last tap was
+        self._pending_img = None
+        self.problems = {}                      # persistent warnings (audio, shader, thumbnails): key -> text, shown until they go away
         self.quit_armed = 0.0
         self.last_click = (None, 0.0)
         self.frects = {}
-        self.scroll = 0
+        self.scroll = self.scroll2 = 0
         self.view_h = 10 ** 6
-        self.tab = int(os.environ.get("VIS_TAB", "0"))        # test hook
+        self.tab = max(0, min(int(os.environ.get("VIS_TAB", self.cfg.get("ui_tab", 0))), 2))        # the tab you left it on (VIS_TAB: test hook)
         self.live = ""
-        self.info = ""                 # version / update status, shown in the header of the Ajustes tab
-        self.upd_label = ""            # text of the "update to vX" button (empty = no update to offer)
+        self._info = ""                # version / update status, shown in Sistema > Aplicativo
+        self._upd_label = ""           # text of the "update to vX" button (empty = no update to offer)
+        self._notes = ""
         self.live_h = LIVE_H                           # current height of the live tab's content (the deck reports it)
         self.text_focus = None                         # id of the text field being typed into
         self.reserved = 0                              # height of the preview strip under the tab bar (the control window sets it)
         self.heights = []
+        self.audio_devices, self.monitors = [], 1       # asked of the system by the app once it is open
         self.scene_view = "gallery"                    # the Cenas tab: gallery (all scenes), picker (a new scene) or editor (one scene)
         self.gal_h = 420                               # height of the gallery content (the control window reports it)
         self.templates = SC.templates()                # the scenes the picker offers (kept, so their live thumbnails stay the same)
         self.preset_templates = SC.preset_templates()  # the second step: a mandala preset
         self._eff_before = 0                           # the Auto / fixed-scene choice to bring back when the editor closes
+        self.W = type(self).W                          # the width of the panel: it follows the window (set_width)
+        self.mx = 0                                    # where the pointer was last (x on the panel): the wheel scrolls the column under it
+        self.cols = {TAB_SCENES: [], TAB_SYS: []}      # the column of each card when the window is wide: "F" full width, "L" left, "R" right
+        self.slider_geos = {}                          # cid -> (left of the track, its length), on the surface
         self.rebuild_scenes(first=True)
         self.H = max(self.heights)                  # the surface fits the tallest tab (with room for more scenes)
         self.surf = pygame.Surface((self.W, self.H + 800), pygame.SRCALPHA)
 
     def _compute_heights(self):
         self.heights = []
-        for tname, secs in TABS:
+        wl, wr, _g = self._col_widths()
+        wcol = {"F": self.W, "L": wl, "R": wr}
+        for t, (tname, secs) in enumerate(TABS):
             h = self.HEAD
-            for _, rows in secs:
-                h += 40 + len(rows) * self.ROW + 10 + self.GAP
-            if tname == TABS[TAB_LIVE][0]:
+            cols = self.cols.get(t) or []
+            if cols and len(cols) == len(secs):
+                tot = {"F": 0, "L": 0, "R": 0}
+                run = 0
+                for (ttl, rows), col in zip(secs, cols):
+                    if col == "F":
+                        run += max(tot["L"], tot["R"]) + self._card_h(rows, ttl, wcol[col]) + self.GAP
+                        tot = {"F": 0, "L": 0, "R": 0}
+                    else:
+                        tot[col] += self._card_h(rows, ttl, wcol[col]) + self.GAP
+                h += run + max(tot["L"], tot["R"])
+            else:
+                for ttl, rows in secs:
+                    h += self._card_h(rows, ttl) + self.GAP
+            if t == TAB_LIVE:
                 h = self.HEAD + self.live_h + 8
-            if tname == TABS[TAB_SCENES][0] and self.scene_view != "editor":
+            if t == TAB_SCENES and self.scene_view != "editor":
                 h = self.HEAD + self.gal_h + 8
-            self.heights.append(h + self.FOOT + (112 if tname == TABS[TAB_SET][0] else 0))      # the Ajustes tab has a second row of buttons (updates)
+            self.heights.append(h + self.FOOT)
+
+    def _card_h(self, rows, title="x", wc=None):
+        """A card with a title is 40 high before its rows; one without a title (the bar of the editor) only has a little air. wc is the width of the card: a run of
+        `flow` rows (the scenes of the Automático) is laid in lines, so its height depends on it."""
+        return (40 if title else 8) + self._rows_h(rows, wc or self.W) + 10
+
+    FLOW_H, FLOW_GAP = 32, 8                                      # a pill of a run of `flow` switches, and the air between two of them
+
+    def _flow_layout(self, rows, wc):
+        """Where the pills of a run of `flow` rows go: left to right, in lines, inside a card of width wc. Returns ([(row, x, y, w)], height of the run)."""
+        cells, x, y, inner = [], 0, 0, wc - 36
+        for row in rows:
+            w = max(56, min(200, self.fb.size(row["label"])[0] + 28))             # measured in bold: a pill does not change its size when it is turned on
+            if x and x + w > inner:
+                x, y = 0, y + self.FLOW_H + self.FLOW_GAP
+            cells.append((row, 18 + x, 4 + y, w))
+            x += w + self.FLOW_GAP
+        return cells, 4 + y + self.FLOW_H + 6
+
+    TILE_GAP = 10
+
+    def _tile_layout(self, rows, wc):
+        """A run of `tile` rows (a model of the mandala, a palette): a live thumbnail each, in lines. Returns ([(row, x, y, w, thumb h)], height of the run, height of a tile)."""
+        gap, inner = self.TILE_GAP, wc - 36
+        ncol = max(2, (inner + gap) // (118 + gap))
+        tw = (inner - gap * (ncol - 1)) // ncol
+        th = tw * 9 // 16
+        rh = th + 26
+        cells = [(row, 18 + (k % ncol) * (tw + gap), 4 + (k // ncol) * (rh + gap), tw, th) for k, row in enumerate(rows)]
+        lines = (len(rows) + ncol - 1) // ncol
+        return cells, 4 + lines * (rh + gap) - gap + 6, rh
+
+    def _tile_scene(self, row):
+        """The scene being edited as it would be with this tile chosen: what the thumbnail of the tile draws."""
+        key, v = row["tile"]
+        sig = json.dumps(self.draft, sort_keys=True) if self.draft is not None else ""
+        if sig != self._tile_sig:
+            self._tile_cache, self._tile_sig = {}, sig
+        sc = self._tile_cache.get((key, v))
+        if sc is None:
+            sc = copy.deepcopy(self.draft or {})
+            if key == "preset":
+                SC.apply_preset(sc, v)
+                sc["scene_preset"] = v
+            else:
+                sc["scene_palette"] = v
+            self._tile_cache[(key, v)] = sc
+        return sc
+
+    def _tile_rows(self, rows, y, wc):
+        """A run of choices drawn as thumbnails (the control window paints them over the dark slots). They are radios like the others: same ids, hits and focus."""
+        s, c = self.surf, self.cfg
+        cells, h, rh = self._tile_layout(rows, wc)
+        for row, x, dy, tw, th in cells:
+            cid, val = row["id"], row["value"]
+            fkey = f"{cid}#{val}"
+            sel = c[cid] == val
+            r = pygame.Rect(x, y + dy, tw, rh)
+            ui.rect(s, (*SURFACE2, 255), r, border_radius=10)
+            tr = pygame.Rect(r.x + 4, r.y + 4, tw - 8, th)
+            ui.rect(s, (6, 7, 11, 255), tr, border_radius=8)
+            self.thumb_slots.append((tr, self._tile_scene(row)))
+            ui.rect(s, (*(SEL if sel else BORDER), 255), r, width=3 if sel else 1, border_radius=10)
+            self._txt(self.f_s, self._fit(self.f_s, row["label"], tw - 12), (r.x + 8, r.y + th + 9), TEXT if sel else DIM)
+            self.frects[fkey] = r
+            self.order.append(fkey)
+            self.order_val.append(val)
+            self.hits.append((r, cid, "radio", val))
+        return h
+
+    def _rows_h(self, rows, wc):
+        """The height of the rows of a card: one ROW each, and one block for every run of `flow` (or `tile`) rows."""
+        h, i = 0, 0
+        while i < len(rows):
+            if rows[i].get("tile"):
+                j = i
+                while j < len(rows) and rows[j].get("tile"):
+                    j += 1
+                h += self._tile_layout(rows[i:j], wc)[1]
+                i = j
+            elif rows[i].get("flow"):
+                j = i
+                while j < len(rows) and rows[j].get("flow"):
+                    j += 1
+                h += self._flow_layout(rows[i:j], wc)[1]
+                i = j
+            elif rows[i].get("kind") == "ear":
+                h += self.EAR_H
+                i += 1
+            else:
+                h += self.ROW + (self.STACK if self._stacked(rows[i], wc) else 0)
+                i += 1
+        return h
+
+    EAR_H = 492                                                                  # the analysis of the music in Sistema > Áudio (deck's card, open)
+
+    STACK = 40                                                                   # the extra height of a row whose choices go on a line of their own
+
+    def _stacked(self, row, W):
+        """A row of choices so wide that its name and help would be cut: the choices go on a second line, under the text."""
+        if row.get("kind") != "seg" or not row.get("label"):
+            return False
+        R = W - 26
+        return R - self._ctl_left(row, "seg", R, W) > (W - 20) * 0.5
+
+    def _flow_rows(self, rows, y, wc):
+        """A run of switches drawn as pills that wrap (the scenes of the Automático): lit = on. They are switches like the others: same ids, same hits, same focus.
+        Returns the height they took."""
+        s, c = self.surf, self.cfg
+        cells, h = self._flow_layout(rows, wc)
+        for row, x, dy, w in cells:
+            cid = row["id"]
+            en = self.enabled(row)
+            on = row["get"](c) if "get" in row else c[cid]
+            r = pygame.Rect(x, y + dy, w, self.FLOW_H)
+            widgets.button(s, self.fb if on else self.f, r, row["label"], "select" if on else "plain", hover=self.hover == cid and en, enabled=en, radius=self.FLOW_H // 2)
+            self.frects[cid] = r
+            if en:
+                self.order.append(cid)
+                self.order_val.append(row.get("value"))
+            self.hits.append((r, cid, "toggle", None))
+        return h
 
     # ------------------------------------------------------------ scene presets
+    @property
+    def wide(self):
+        return self.W >= WIDE_MIN
+
+    def set_width(self, w):
+        """The panel follows the window: a new width redraws everything, and the editor changes layout at WIDE_MIN."""
+        w = max(560, int(w))
+        if w == self.W:
+            return
+        self.W = w
+        self.rebuild_scenes()
+        self.surf = pygame.Surface((self.W, max(self.heights) + 800), pygame.SRCALPHA)
+        self.H = max(self.H, max(self.heights))
+        self.dd_open = None
+        self.need = True
+
+    def _col_widths(self):
+        gap = 12
+        wl = max(300, min(440, int(self.W * 0.40)))
+        return wl, self.W - wl - gap, gap
+
+    @property
+    def info(self):
+        return self._info
+
+    @info.setter
+    def info(self, v):
+        if v != self._info:
+            self._info, self.need = v, True
+
+    @property
+    def upd_label(self):
+        return self._upd_label
+
+    @upd_label.setter
+    def upd_label(self, v):
+        if v != self._upd_label:
+            self._upd_label, self.need = v, True
+
+    @property
+    def notes(self):
+        return self._notes
+
+    @notes.setter
+    def notes(self, v):
+        if v != self._notes:
+            self._notes, self.need = v, True
+
+    def pv_mode(self):
+        """The strip with the picture under the tab bar: "draft" (the scene being edited), "live" (the picture on the air, in Sistema > Imagem) or None."""
+        if self.tab == TAB_SCENES and self.scene_view == "editor" and self.draft is not None:
+            return "draft"
+        if self.tab == TAB_SYS and int(self.cfg.get("sys_item", 0)) == SYS_IMAGE:
+            return "live"
+        return None
+
+    def workspace(self):
+        """The Estúdio that is only an editor (the scene chosen in a list beside it). Not any more: every width starts on the gallery, and the editor has the
+        stack of the scene on its left."""
+        return False
+
     def rebuild_scenes(self, first=False):
-        TABS[TAB_SCENES] = ("Cenas", scene_rows(self.cfg, self.scene_view))
+        if self.workspace() and self.scene_view not in ("editor", "wizard") and not self._opening and self.cfg["scenes"]:
+            self._opening = True                                              # a wide Estúdio never shows the gallery: the scene being edited opens
+            try:
+                self.open_scene(max(0, min(int(self.cfg["scene_edit"]), len(self.cfg["scenes"]) - 1)))
+            finally:
+                self._opening = False
+            return
+        wide = self.W >= WIDE_MIN
+        self.cfg["ed_tab"] = settings.ed_tab_of(self.cfg)
+        cards, cols = scene_layout(self.cfg, self.scene_view, wide and self.scene_view == "editor")
+        TABS[TAB_SCENES] = ("Estúdio", cards)
+        self.cols[TAB_SCENES] = cols
+        cards, cols = sys_layout(self.cfg, max(0, min(int(self.cfg.get("sys_item", 0)), len(SYS_ITEMS) - 1)), wide, self.audio_devices, self.monitors, self)
+        TABS[TAB_SYS] = ("Sistema", cards)
+        self.cols[TAB_SYS] = cols
+        self._extra = None
         self._compute_heights()
         self.need = True
         if not first:
@@ -691,10 +344,107 @@ class Menu:
                 self.surf = pygame.Surface((self.W, max(self.heights) + 800), pygame.SRCALPHA)
 
     def store_scene(self):
+        """The working keys go back into the scene being edited: while the editor is open that is the DRAFT (a copy), so nothing reaches the picture until Salvar."""
         scn = self.cfg["scenes"]
         ed = self.cfg["scene_edit"]
-        if 0 <= ed < len(scn):
+        if self.scene_view == "editor" and self.draft is not None:
+            SC.store_scene(self.cfg, self.draft)
+            if self.cfg.get("live") and 0 <= ed < len(scn):                      # Live: the scene itself follows, so the big picture and the thumbnails do too
+                scn[ed].clear()
+                scn[ed].update(copy.deepcopy(self.draft))
+        elif 0 <= ed < len(scn):
             SC.store_scene(self.cfg, scn[ed])
+
+    def _live_take(self, i):
+        """Live: the scene being edited takes the picture (the Auto / fixed choice comes back when Live ends)."""
+        if self._live_eff is None:
+            self._live_eff = self.cfg["effect"]
+        self.cfg["effect"] = i + 1
+        self.cfg["scene_now"] = True
+
+    def _live_end(self):
+        if self._live_eff is not None:
+            self.cfg["effect"] = self._live_eff
+            self._live_eff = None
+
+    def set_live_edit(self, on):
+        """The Live switch of the Estúdio: on, every change of the scene shows on the big picture at once; off, the editor works on a draft until Salvar."""
+        self.cfg["live"] = on
+        ed = self.cfg["scene_edit"]
+        if on and self.scene_view == "editor" and self.draft is not None and 0 <= ed < len(self.cfg["scenes"]):
+            self.store_scene()
+            self._live_take(ed)
+        elif not on:
+            self._live_end()
+        self.rebuild_scenes()
+        self.touch()
+        self.say("Live ligado: o que você muda aparece na tela grande" if on else "Live desligado")
+
+    def is_dirty(self):
+        """True when the draft differs from the scene as it is saved."""
+        scn = self.cfg["scenes"]
+        ed = self.cfg["scene_edit"]
+        if self.scene_view != "editor" or self.draft is None or not 0 <= ed < len(scn):
+            return False
+        ref = self.base if (self.cfg.get("live") and self.base is not None) else scn[ed]
+        return json.dumps(self.draft, sort_keys=True) != json.dumps(ref, sort_keys=True)
+
+    def save_scene(self):
+        """Salvar: the draft becomes the scene (in place, so the picture and the thumbnails that hold it follow at once)."""
+        scn = self.cfg["scenes"]
+        ed = self.cfg["scene_edit"]
+        if self.draft is None or not 0 <= ed < len(scn):
+            return
+        self.store_scene()
+        scn[ed].clear()
+        scn[ed].update(copy.deepcopy(self.draft))
+        self.base = copy.deepcopy(self.draft)
+        self.leave_armed = 0.0
+        self.rebuild_scenes()
+        self.touch()
+        self.say("Cena salva")
+
+    def discard_scene(self):
+        """Descartar: the draft goes back to the scene as it is saved."""
+        scn = self.cfg["scenes"]
+        ed = self.cfg["scene_edit"]
+        if self.draft is None or not 0 <= ed < len(scn):
+            return
+        if self.cfg.get("live") and self.base is not None:                    # Live: the scene itself goes back to how it was when the editor opened
+            scn[ed].clear()
+            scn[ed].update(copy.deepcopy(self.base))
+        self.draft = copy.deepcopy(scn[ed])
+        SC.apply_scene(self.cfg, self.draft)
+        self.leave_armed = 0.0
+        self.rebuild_scenes()
+        self.say("Alterações descartadas")
+
+    def select_item(self, k):
+        """A click on an item of the stack of the editor: its parameters show below (a layer of the six opens on the top thing it has)."""
+        self.cfg["ed_item"] = int(k)
+        slot = settings.ITEM_SLOT.get(int(k))
+        if slot in ("bg", "lights", "parts", "finish"):
+            i = LY.first_of(self.cfg, slot)
+            if i >= 0:
+                self.cfg["ly_sel"] = i
+                LY.load_lp(self.cfg)
+        self.cfg["ed_page"] = True                                       # its own page (in a wide window the item shows beside the stack: no page, the view stays where it is)
+        self.dd_open = None
+        self.reset_scroll(inspector=True)
+        self.rebuild_scenes()
+
+    def reset_scroll(self, inspector=False):
+        """Back to the top. In a wide window the two columns scroll on their own: with `inspector` only the right one (the item shown) goes to the top and the list stays."""
+        self.scroll2 = 0
+        if not (inspector and self.panes()):
+            self.scroll = 0
+
+    def ed_back(self):
+        """From the page of an item back to the overview of the scene."""
+        self.cfg["ed_page"] = False
+        self.dd_open = None
+        self.scroll = self.scroll2 = 0
+        self.rebuild_scenes()
 
     def _pal(self):
         return self.cfg["palettes"][self.cfg["pal_edit"]]
@@ -734,38 +484,62 @@ class Menu:
             return
         if self.scene_view != "editor":
             self._eff_before = self.cfg["effect"]
-        self.cfg["scene_sec"] = 0
-        SC.apply_scene(self.cfg, scn[i])
+        self.wizard = None                                  # opening a scene's editor leaves the steps of a new scene
+        self.cfg["ed_item"], self.cfg["ed_sub"], self.cfg["ed_page"] = 0, 0, False
+        self.draft = copy.deepcopy(scn[i])                  # the editor works on a copy: the picture keeps the saved scene until Salvar
+        self.leave_armed = 0.0
+        SC.apply_scene(self.cfg, self.draft)
+        self.base = copy.deepcopy(scn[i])
+        if self.cfg.get("live"):
+            self._live_take(i)
         self.cfg["scene_edit"] = i
-        self.cfg["effect"] = i + 1
-        self.cfg["scene_now"] = True                        # the editor shows the scene at once, whatever the "Trocar de cena" choice
         self.scene_view = "editor"
-        self.scroll = 0
+        self.scroll = self.scroll2 = 0
         self.rebuild_scenes()
         self.touch()
 
     def close_scene(self):
-        """Back to the gallery: the Auto / fixed choice from before the editor comes back."""
+        """Back to the gallery. What was not saved is dropped; the working keys go back to the saved scene."""
         self.store_scene()
-        self.cfg["scene_now"] = False
-        self.cfg["effect"] = self._eff_before if self._eff_before <= len(self.cfg["scenes"]) else 0
+        self._live_end()
+        self.draft = None
+        self.leave_armed = 0.0
+        scn = self.cfg["scenes"]
+        if 0 <= self.cfg["scene_edit"] < len(scn):
+            SC.apply_scene(self.cfg, scn[self.cfg["scene_edit"]])
         self.scene_view = "gallery"
-        self.scroll = 0
+        self.scroll = self.scroll2 = 0
         self.rebuild_scenes()
         self.touch()
 
+    def leave_editor(self):
+        """Out of the editor to the gallery. With unsaved changes the first press only warns."""
+        now = time.perf_counter()
+        if self.is_dirty() and not self.cfg.get("live") and now > self.leave_armed:
+            self.leave_armed = now + 4.0
+            self.say("Alterações não salvas: Salvar, Descartar, ou toque de novo em Galeria")
+            self.need = True
+            return None
+        self.close_scene()
+        return None
+
     def back_to_gallery(self):
+        if self.scene_view == "wizard":
+            return self.wizard_back()                                         # one step back, and out from the first one
         if self.scene_view == "editor":
-            self.close_scene()
+            if self.workspace():                                              # the wide Estúdio has no gallery: the list of scenes is always there
+                return None
+            return self.leave_editor()
         else:
             self.scene_view = "gallery"
-            self.scroll = 0
+            self.scroll = self.scroll2 = 0
             self.rebuild_scenes()
             self.touch()
         return None
 
     def duplicate_scene(self, i):
         """A copy of scene i, right after it in the gallery."""
+        self._push()
         scn = self.cfg["scenes"]
         if not 0 <= i < len(scn):
             return
@@ -783,8 +557,233 @@ class Menu:
         self.touch()
         self.say(f"Cena duplicada: {new['scene_name']}")
 
+    def play_scene(self, i, osd=True):
+        """Bring scene i to the picture: at once, unless "Ao clicar numa cena" (an advanced choice) asks it to wait for the moment "Quando troca sozinha" says.
+        `osd` asks the picture window to write the name of the scene on the screen (a click or a key of the person; never a controller: that one may be
+        driving a projection)."""
+        scn = self.cfg["scenes"]
+        if not 0 <= i < len(scn):
+            return False
+        now = not self.cfg.get("scene_wait", 0)
+        was_auto = self.cfg["effect"] == 0
+        self.cfg["effect"] = i + 1
+        self.cfg["scene_now"] = now
+        self.touch()
+        self.tour_mark(1)
+        if osd:
+            self.osd_name = (scn[i]["scene_name"], time.perf_counter())         # the picture window writes the name on the screen (see osd.py)
+        self.say(f"{scn[i]['scene_name']}: entra " + ("agora" if now else ("agora", "no próximo compasso", "na próxima frase", "no próximo evento da música", "na próxima frase")[int(self.cfg.get("scene_when", 2)) % 5])
+                 + ("  ·  automático desligado" if was_auto else ""))
+        return True
+
+    def tour_mark(self, i):
+        """A step of the first-use card is done (kept in the settings: the card remembers where the person stopped)."""
+        bit = 1 << i
+        if not self.cfg.get("tour_done") and not int(self.cfg.get("tour_marks", 0)) & bit:
+            self.cfg["tour_marks"] = int(self.cfg.get("tour_marks", 0)) | bit
+            self.touch()
+
+    def set_scene_auto(self, i, on):
+        """May the Automático bring scene i to the picture? Kept on the scene, and on the working copy and the draft when it is the one being edited (so the
+        draft does not turn "not saved" just because of a switch somewhere else)."""
+        scn = self.cfg["scenes"]
+        if not 0 <= i < len(scn):
+            return
+        on = bool(on)
+        scn[i]["scene_auto"] = on
+        if i == self.cfg.get("scene_edit"):
+            self.cfg["scene_auto"] = on
+            if self.draft is not None:
+                self.draft["scene_auto"] = on
+        self.touch()
+        self.say(f"{scn[i]['scene_name']}: " + ("entra no Automático" if on else "fora do Automático"))
+
+    def open_sys(self, k):
+        """Go to page k of Sistema (the warnings of the Palco lead here, and so does the Opções button next to "Troca automática")."""
+        self.cfg["sys_item"] = max(0, min(int(k), len(SYS_ITEMS) - 1))
+        self.cfg["search"] = ""                                                   # the page, not an old search
+        self.press("tab%d" % TAB_SYS)
+
+    def adv_hidden(self):
+        """How many settings of Sistema the Avançado switch would show (cached: it only changes with the graphics preset)."""
+        key = self.cfg.get("preset")
+        if getattr(self, "_adv_n", (None, 0))[0] != key:
+            full = dict(self.cfg, advanced=True)
+            n = 0
+            for k in range(len(SYS_ITEMS)):
+                shown = {r["id"] for _, rs in sys_cards(self.cfg, k) for r in rs}
+                n += len({r["id"] for _, rs in sys_cards(full, k) for r in rs if r["kind"] != "note" and r["id"] not in shown})
+            self._adv_n = (key, n)
+        return self._adv_n[1]
+
+    def goto(self, dest):
+        """Jump to a place of the panel: "sys:N" is page N of Sistema, "acab" is the Acabamento layer of the scene being edited, "tab:N" a tab."""
+        kind, _, arg = dest.partition(":")
+        if kind == "sys":
+            self.open_sys(int(arg))
+        elif kind in ("acab", "ed"):                                              # a page of the editor of the scene (Acabamento by name)
+            item = settings.SLOT_ITEM["finish"] if kind == "acab" else int(arg)
+            self.press("tab%d" % TAB_SCENES)
+            if self.scene_view != "editor" or self.draft is None:
+                self.open_scene(max(0, min(int(self.cfg.get("scene_edit", 0)), len(self.cfg["scenes"]) - 1)))
+            self.cfg["ed_item"], self.cfg["ed_sub"] = item, 0
+            self.reset_scroll(inspector=True)
+            self.rebuild_scenes()
+        elif kind == "tab":
+            self.press("tab%d" % int(arg))
+        self.need = True
+
+    def lower_quality(self):
+        """The picture is slow: one step down the graphics shortcut (Ultra, Alto, Médio, Baixo). "Personalizado" goes to the strongest shortcut that asks
+        for less than it does, so it never goes up. Returns False when there is nothing left to give up."""
+        weight = lambda d: d.get("res", 80) * d.get("steps", 60)
+        w = weight(self.cfg)
+        lower = [i for i, (_, p) in enumerate(PRESETS) if weight(p) < w]
+        if not lower:
+            self.say("Já está na qualidade mais baixa. Feche outros programas que usam a placa de vídeo")
+            return False
+        new = max(lower)
+        self.set_value("preset", new, announce=False)
+        self.say(f"Qualidade: {PRESETS[new][0]}. Para voltar, use Sistema › Imagem")
+        return True
+
+    def fix(self, kind):
+        """The button of a warning of the Palco."""
+        if kind == "sound":
+            self.open_sys(1)                                                  # Tela e áudio: where the sound input is chosen
+        elif kind == "quality":
+            self.lower_quality()
+
+    def shortcut(self, ch, live_scene=0, osd=True):
+        """Keys that work from both windows: 1..9 bring that scene to the picture (at the moment "Quando troca sozinha" says), A turns the automatic
+        change of scenes on or off. Returns True when the key was used."""
+        if not ch or self.text_focus:
+            return False
+        if ch in "123456789" and len(ch) == 1:
+            self.play_scene(int(ch) - 1, osd=osd)
+            return True
+        if ch.lower() == "a":
+            self.live_scene = live_scene
+            self.toggle_auto()
+            return True
+        if ch.lower() == "l":                                                    # Live: the edits of the Estúdio show on the big picture
+            self.set_value("live", not self.cfg.get("live", False))
+            return True
+        if ch.lower() == "t":                                                    # tap tempo: tap the beat of the music
+            self.request_tap()
+            return True
+        return False
+
+    def request_tap(self):
+        """A tap of the tap tempo (the T key of either window, the TAP of the Palco, a controller): the main loop gives it to the analyser (apply_taps)."""
+        now = time.perf_counter()
+        self.taps.append(now)
+        self.tap_t = now
+
+    def apply_taps(self, an):
+        """The taps and the "back to automatic" asked for since the last frame go to the analyser (the main loop calls this before it updates it)."""
+        for t in self.taps:
+            an.tap(t)
+        self.taps.clear()
+        if self.tap_release:
+            an.release_tap()
+            self.tap_release = False
+
+    def share_path(self):
+        """Where the scenes are exported to and imported from: Documents\\AudioOrganism\\cenas.json."""
+        base = os.environ.get("VIS_SHAREDIR") or os.path.join(os.path.expanduser("~"), "Documents", "AudioOrganism")
+        return os.path.join(base, "cenas.json")
+
+    def export_scenes(self):
+        """Write the scenes with the palettes and shaders they use, to a file that can be shared."""
+        self.store_scene()
+        path = self.share_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"app": "AudioOrganism", "scenes": self.cfg["scenes"], "palettes": self.cfg["palettes"], "shaders": self.cfg["shaders"]}, f, indent=1, ensure_ascii=False)
+            self.say("Cenas exportadas")
+            return path
+        except Exception as e:
+            self.say(f"Não deu para exportar: {e}")
+            return None
+
+    def import_scenes(self):
+        """Add the scenes of the exported file to the gallery, with their palettes and shaders (the numbers of the palette / shader are remapped)."""
+        path = self.share_path()
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            scenes = [s for s in data.get("scenes", []) if SC.valid(s)]
+            raw_pals, raw_shs = list(data.get("palettes", [])), list(data.get("shaders", []))
+        except FileNotFoundError:
+            self.say("Não achei o arquivo cenas.json em Documentos\\AudioOrganism")
+            return 0
+        except Exception as e:
+            self.say(f"Arquivo inválido: {e}")
+            return 0
+        if not scenes:
+            self.say("O arquivo não tem cenas")
+            return 0
+        base = SC.mandala_scene(0, {k: self.cfg[k] for k in SC.EXTRA_KEYS if k in self.cfg})
+        p_map, s_map = {}, {}                                           # the file's palette / shader number -> the number it gets here
+        for i, pal in enumerate(raw_pals):
+            if PAL.valid(pal):
+                self.cfg["palettes"].append(pal)
+                p_map[i + 1] = len(self.cfg["palettes"])
+        for i, sh in enumerate(raw_shs):
+            if SP.valid(sh):
+                self.cfg["shaders"].append(sh)
+                s_map[i + 1] = len(self.cfg["shaders"])
+        for sc in scenes:
+            LY.migrate(sc)
+            for k, v in base.items():
+                sc.setdefault(k, v)
+            sc["scene_palette"] = p_map.get(int(sc.get("scene_palette", 0)), 0)      # a palette the file does not carry falls back to the character's own
+            sc["scene_shader"] = s_map.get(int(sc.get("scene_shader", 0)), 0)
+            sc["scene_name"] = (str(sc["scene_name"]) + " (importada)")[:28]
+            self.cfg["scenes"].append(sc)
+        self.rebuild_scenes()
+        self.touch()
+        self.say(f"{len(scenes)} cena(s) importada(s)")
+        return len(scenes)
+
+    def new_scene(self):
+        """"Nova cena": a mandala with no layers, straight in the editor of layers."""
+        self._push()
+        base = {k: self.cfg[k] for k in SC.EXTRA_KEYS if k in self.cfg}
+        names = {s.get("scene_name") for s in self.cfg["scenes"]}
+        n = 1
+        while ("Nova cena" if n == 1 else f"Nova cena {n}") in names:
+            n += 1
+        new = SC.blank_scene(base, "Nova cena" if n == 1 else f"Nova cena {n}")
+        self.cfg["scenes"].append(new)
+        self._eff_before = self.cfg["effect"]
+        self.scene_view = "gallery"
+        self.open_scene(len(self.cfg["scenes"]) - 1)
+        self.cfg["ed_item"], self.cfg["ed_page"] = (4 if self.cfg.get("advanced") else 0), False              # the overview: the list of layers is empty and the add menu is right there
+        self.cfg["ly_sel"] = 0
+        self.rebuild_scenes()
+        self.say("Nova cena: adicione camadas")
+
+    def edit_live_scene(self):
+        """The Palco's "Editar esta cena": the Estúdio opens on the scene that is on the air. If that scene (or another one) is already open the unsaved changes stay."""
+        scn = self.cfg["scenes"]
+        if not scn:
+            return
+        i = max(0, min(int(self.live_scene), len(scn) - 1))
+        self.press("tab%d" % TAB_SCENES)
+        if self.scene_view == "editor":
+            if i == self.cfg["scene_edit"]:
+                return
+            if self.is_dirty():
+                self.say("Alterações não salvas em " + scn[self.cfg["scene_edit"]]["scene_name"] + ": Salvar ou Descartar antes de abrir outra cena")
+                return
+        self.open_scene(i)
+
     def add_preset(self, i):
         """A new Mandala scene with preset i: it joins the scenes and opens in the editor, on the Visual section."""
+        self._push()
         if not 0 <= i < len(self.preset_templates):
             return
         new = copy.deepcopy(self.preset_templates[i])
@@ -792,12 +791,13 @@ class Menu:
         self._eff_before = self.cfg["effect"]
         self.scene_view = "gallery"
         self.open_scene(len(self.cfg["scenes"]) - 1)
-        self.cfg["scene_sec"] = 1
+        self.cfg["ed_item"], self.cfg["ed_sub"], self.cfg["ed_page"] = 0, 0, False
         self.rebuild_scenes()
         self.say(f"Cena criada: {new['scene_name']}")
 
     def delete_scene(self, i):
         """Remove scene i from the gallery (there is always at least one)."""
+        self._push()
         scn = self.cfg["scenes"]
         if len(scn) <= 1 or not 0 <= i < len(scn):
             return False
@@ -807,14 +807,82 @@ class Menu:
         self.cfg["effect"] = 0 if eff == i + 1 else (eff - 1 if eff > i + 1 else eff)
         ed = self.cfg["scene_edit"]
         self.cfg["scene_edit"] = max(0, min(ed - 1 if ed > i else ed, len(scn) - 1))
-        SC.apply_scene(self.cfg, scn[self.cfg["scene_edit"]])
+        if self.scene_view == "editor" and ed == i:                           # the scene that was open is gone: the editor takes the one that is left in its place
+            self.draft = copy.deepcopy(scn[self.cfg["scene_edit"]])
+            self.leave_armed = 0.0
+            SC.apply_scene(self.cfg, self.draft)
+        else:
+            SC.apply_scene(self.cfg, self.draft if (self.scene_view == "editor" and self.draft is not None) else scn[self.cfg["scene_edit"]])
         self.rebuild_scenes()
         self.touch()
         self.say(f"Cena apagada: {name}")
         return True
 
+    def switch_scene(self, i):
+        """In the wide Estúdio: edit scene i. With unsaved changes in the one that is open the first click only warns. The item on the right stays where it was."""
+        scn = self.cfg["scenes"]
+        if not 0 <= i < len(scn):
+            return
+        if self.scene_view == "editor" and i == self.cfg["scene_edit"]:
+            return
+        now = time.perf_counter()
+        if self.scene_view == "editor" and self.is_dirty() and now > self.leave_armed:
+            self.leave_armed = now + 4.0
+            self.say("Alterações não salvas: Salvar, Descartar, ou clique de novo para trocar mesmo assim")
+            self.need = True
+            return
+        item, sub = int(self.cfg.get("ed_item", 0)), int(self.cfg.get("ed_sub", 0))
+        keep = self.scroll
+        self.open_scene(i)
+        self.scroll = keep
+        if item == 4 and not self.cfg.get("layers"):
+            item = 0
+        self.cfg["ed_item"], self.cfg["ed_sub"] = item, sub
+        self.cfg["ly_sel"] = max(0, min(int(self.cfg.get("ly_sel", 0)), len(self.cfg.get("layers") or []) - 1))
+        LY.load_lp(self.cfg)
+        self.rebuild_scenes()
+
+    def scene_action(self, arg):
+        """A click on a row of the list of scenes: (what, index)."""
+        what, i = arg
+        scn = self.cfg["scenes"]
+        if not 0 <= i < len(scn):
+            return
+        now = time.perf_counter()
+        if what == "sel":
+            self.switch_scene(i)
+        elif what == "menu":
+            self.dd_open = f"scm:{i}"
+            self.dd_hl = 0
+            self.need = True
+        elif what == "play":
+            self.play_scene(i)
+        elif what == "dup":
+            self.duplicate_scene(i)
+        elif what == "del":
+            if len(scn) <= 1:
+                self.say("Fica pelo menos uma cena")
+            elif self.del_armed[0] == i and self.del_armed[1] > now:
+                self.del_armed = (-1, 0.0)
+                self.delete_scene(i)
+            else:
+                self.del_armed = (i, now + 3.0)
+                self.say(f"Clique de novo para apagar {scn[i]['scene_name']}")
+            self.need = True
+
+    def toggle_auto(self, on=None):
+        """Troca automática: on = the program chooses the scenes; off = the scene on the air stays."""
+        eff = self.cfg["effect"]
+        want = (eff != 0) if on is None else bool(on)
+        if want == (eff == 0):
+            return
+        self.cfg["effect"] = 0 if want else min(int(self.live_scene), len(self.cfg["scenes"]) - 1) + 1
+        self.touch()
+        self.say("Troca automática: " + ("ligada" if want else "desligada (cena fixa)"))
+
     def add_scene(self, t):
         """A new scene from template t of the picker: it joins the scenes and opens in the editor."""
+        self._push()
         if not 0 <= t < len(self.templates):
             return
         new = copy.deepcopy(self.templates[t])
@@ -832,12 +900,246 @@ class Menu:
         self.rebuild_scenes()
 
     # ------------------------------------------------------------ state
+    def _push(self):
+        """Snapshot of everything the editors change, for Desfazer."""
+        self.store_scene()
+        c = self.cfg
+        self.undo.append(copy.deepcopy((c["scenes"], c["shaders"], c["palettes"], c["scene_edit"], self.draft)))
+        del self.undo[:-40]
+        self._push_t = time.perf_counter()
+
+    def sys_push(self, label, keys=None, restore=None):
+        """Remembers what a Sistema action is about to change, so the toast can offer Desfazer. `keys`: settings to put back
+        (None = every setting, lists and dicts restored in place); `restore`: a function that undoes by itself (a file)."""
+        c = self.cfg
+        if restore is None:
+            snap = copy.deepcopy({k: c[k] for k in (keys if keys is not None else list(c)) if k in c})
+
+            def restore():
+                for k, v in snap.items():
+                    cur = c.get(k)
+                    if isinstance(cur, list) and isinstance(v, list):
+                        cur[:] = v
+                    elif isinstance(cur, dict) and isinstance(v, dict):
+                        cur.clear()
+                        cur.update(v)
+                    else:
+                        c[k] = v
+                if "scenes" in snap:
+                    c["scene_edit"] = max(0, min(int(c["scene_edit"]), len(c["scenes"]) - 1))
+                    SC.apply_scene(c, c["scenes"][c["scene_edit"]])
+                self.rebuild_scenes()
+                self.touch()
+        self.sys_undo.append((time.perf_counter(), label, restore))
+        del self.sys_undo[:-10]
+
+    def _snap(self, cid):
+        """One snapshot per burst of changes of the same control (a slider drag is one step to undo, not fifty)."""
+        if not (cid in SC.SCENE_KEYS or cid.startswith(("shd_", "pal_", "bgc_", "lp_"))) or cid in ("scene_sec", "shd_edit", "pal_edit", "shd_item", "pal_item", "bgc_item"):
+            return
+        now = time.perf_counter()
+        last_cid, last_t = self._undo_last
+        self._undo_last = (cid, now)
+        if cid == last_cid and now - last_t < 1.0:
+            return
+        self._push()
+
+    def undo_last(self):
+        if self.sys_undo and (not self.undo or self.sys_undo[-1][0] >= self._push_t):       # the newest action wins
+            _, label, restore = self.sys_undo.pop()
+            restore()
+            self.toast = None
+            self.say(f"Desfeito: {label}")
+            return
+        if not self.undo:
+            self.say("Nada para desfazer")
+            return
+        sc, sh, pa, ed, dr = self.undo.pop()
+        c = self.cfg
+        c["scenes"][:], c["shaders"][:], c["palettes"][:] = sc, sh, pa
+        c["scene_edit"] = max(0, min(ed, len(sc) - 1))
+        c["shd_edit"] = max(0, min(int(c["shd_edit"]), len(sh) - 1))
+        c["pal_edit"] = max(0, min(int(c["pal_edit"]), len(pa) - 1))
+        if self.scene_view == "editor" and dr is not None:
+            self.draft = dr
+            SC.apply_scene(c, dr)
+        else:
+            SC.apply_scene(c, c["scenes"][c["scene_edit"]])
+        load_shader_edit(c)
+        load_palette_edit(c)
+        self._undo_last = (None, 0.0)
+        self.rebuild_scenes()
+        self.touch()
+        self.say("Desfeito")
+
+    def profile_save(self):
+        self.store_scene()
+        try:
+            os.makedirs(settings.PROFILE_DIR, exist_ok=True)
+            path = profile_path(self.cfg["profile"])
+            old = None
+            if os.path.exists(path):
+                with open(path, "rb") as f:
+                    old = f.read()
+
+            def put_back(path=path, old=old):                                # Desfazer: the profile that was there (or none)
+                if old is None:
+                    if os.path.exists(path):
+                        os.remove(path)
+                else:
+                    with open(path, "wb") as f:
+                        f.write(old)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.cfg, f, indent=1)
+            if old is not None:
+                self.sys_push(f"perfil {self.cfg['profile']} salvo", restore=put_back)
+            self.say(f"Perfil {self.cfg['profile']} salvo", undo=old is not None)
+        except Exception as e:
+            self.say("Não consegui salvar o perfil")
+            self.problem("profile", f"Perfil não salvo: {str(e)[:50]}")
+            return
+        self.problem("profile")
+        self.rebuild_scenes()
+
+    def profile_load(self):
+        p = profile_path(self.cfg["profile"])
+        if not os.path.exists(p):
+            return
+        self.store_scene()
+        self.sys_push(f"perfil {self.cfg['profile']} carregado")
+        keep = {k: self.cfg[k] for k in ("fullscreen", "profile", "safe_flash", "safe_motion")}      # the comfort limits belong to the person, not to the profile
+        new = load_cfg(p)
+        new.update(keep)
+        new["effect"] = 0
+        self.cfg.update(new)
+        self.cfg["scene_edit"] = max(0, min(self.cfg["scene_edit"], len(self.cfg["scenes"]) - 1))
+        SC.apply_scene(self.cfg, self.cfg["scenes"][self.cfg["scene_edit"]])
+        self.scene_view = "gallery"
+        self.rebuild_scenes()
+        self.touch()
+        self.say(f"Perfil {self.cfg['profile']} carregado", undo=True)
+
+    # ------------------------------------------------------------ layers
+    def _layers(self):
+        return self.cfg.setdefault("layers", [])
+
+    def _layers_changed(self, sel=None, open_page=False):
+        if sel is not None:
+            self.cfg["ly_sel"] = max(0, min(sel, len(self._layers()) - 1))
+            self.cfg["ed_item"] = settings.layer_item(self.cfg) if self._layers() else 0
+            if open_page:
+                self.cfg["ed_page"] = True
+                self.reset_scroll(inspector=True)
+        LY.load_lp(self.cfg)
+        self.store_scene()
+        self.rebuild_scenes()
+        self.touch()
+
+    def add_layer(self, t):
+        layers = self._layers()
+        fx, bg = LY.counts(layers)
+        info = LY.TYPES.get(t)
+        if info is None:
+            return
+        if info["group"] == "fx" and fx >= LY.MAX_FX:
+            self.say(f"No máximo {LY.MAX_FX} efeitos por cena")
+            return
+        if info["group"] == "bg" and bg >= LY.MAX_BG:
+            self.say(f"No máximo {LY.MAX_BG} fundos por cena")
+            return
+        if t in ("fb", "part") and any(l.get("t") == t for l in layers):
+            self.say("Só um " + ("rastro" if t == "fb" else "conjunto de partículas") + " por cena")
+            return
+        self._push()
+        layers.append(LY.new_layer(t))
+        self._layers_changed(len(layers) - 1, open_page=True)               # a new layer opens on its own page
+        self.say(f"{info['label']} adicionada")
+
+    def apply_stack_template(self, i):
+        self._push()
+        self.cfg["layers"] = LY.apply_template(self._layers(), i)
+        self._layers_changed(0)
+        self.say(f"Modelo: {LY.TEMPLATES[max(0, min(len(LY.TEMPLATES) - 1, i))][0]}")
+
+    def layer_action(self, arg):
+        """A click on a row of the list of layers: (what, index). The list shows the top layer first."""
+        what, i = arg
+        layers = self._layers()
+        if not 0 <= i < len(layers):
+            return
+        if what == "sel":
+            self.cfg["ly_sel"] = i
+            self.cfg["ed_item"] = settings.layer_item(self.cfg)
+            self.cfg["ed_page"] = True                                    # the page of the layer
+            self.reset_scroll(inspector=True)
+            LY.load_lp(self.cfg)
+            self.rebuild_scenes()
+            return
+        self._push()
+        if what == "eye":
+            layers[i]["on"] = not layers[i].get("on", True)
+            self._layers_changed(i)
+        elif what in ("up", "down"):
+            j = i + 1 if what == "up" else i - 1
+            if 0 <= j < len(layers):
+                layers[i], layers[j] = layers[j], layers[i]
+                self._layers_changed(j)
+        elif what == "dup":
+            fx, bg = LY.counts(layers)
+            t = layers[i].get("t")
+            if (LY.TYPES[t]["group"] == "fx" and fx >= LY.MAX_FX) or (LY.TYPES[t]["group"] == "bg" and bg >= LY.MAX_BG) or t in ("fb", "part"):
+                self.say("Esta camada não pode ser duplicada")
+                self.undo.pop()
+                return
+            layers.insert(i + 1, copy.deepcopy(layers[i]))
+            self._layers_changed(i + 1)
+        elif what == "del":
+            del layers[i]
+            self._layers_changed(min(i, len(layers) - 1))
+
     def touch(self):
         self.dirty = self.need = True
         self.dirty_t = time.perf_counter()
 
-    def max_scroll(self):
+    def panes(self):
+        """True when the tab is drawn as two columns that scroll on their own (the wide Estúdio and Sistema)."""
+        cols = self.cols.get(self.tab)
+        return bool(cols) and len(cols) == len(TABS[self.tab][1])
+
+    def pane_dims(self):
+        """(height of what stays fixed under the tab bar, height of the left column, height of the right one), cards and gaps included."""
+        tot = {"F": 0, "L": 0, "R": 0}
+        wl, wr, _g = self._col_widths()
+        wcol = {"F": self.W, "L": wl, "R": wr}
+        for (ttl, rows), col in zip(TABS[self.tab][1], self.cols.get(self.tab) or []):
+            tot[col] += self._card_h(rows, ttl, wcol[col]) + self.GAP
+        return tot["F"], tot["L"], tot["R"]
+
+    def pane_view_h(self):
+        return max(60, self.content_h() - self.pane_dims()[0])
+
+    def max_scroll(self, pane=0):
+        """How far the content scrolls. In two columns: pane 0 is the left one and 1 the right one."""
+        if self.panes():
+            _, hl, hr = self.pane_dims()
+            return max(0, (hr if pane else hl) - self.pane_view_h())
         return max(0, self.heights[self.tab] - self.view_h + self.reserved)
+
+    def clamp_scroll(self):
+        self.scroll = max(0, min(self.scroll, self.max_scroll(0)))
+        self.scroll2 = max(0, min(self.scroll2, self.max_scroll(1))) if self.panes() else 0
+
+    def in_right_pane(self, x):
+        return self.panes() and x >= self._col_widths()[0] + self._col_widths()[2] // 2
+
+    def surf_y_at(self, x, y):
+        """The y on the panel's surface of a point at (x, y), y counted from the top of the panel with the preview strip taken out (so the tab bar is HEAD high)."""
+        if self.panes():
+            fixed = self.HEAD + self.pane_dims()[0]
+            if y < fixed:
+                return y
+            return y + (self.scroll2 if self.in_right_pane(x) else self.scroll)
+        return y + self.scroll
 
     def content_h(self):
         """Height of the scrolling area: the window minus the tab bar and the preview strip (when the tab has one)."""
@@ -849,6 +1151,22 @@ class Menu:
         fr = self.frects.get(self.order[self.focus % len(self.order)])
         if fr is None:
             return
+        if self.panes():
+            fixed = self.HEAD + self.pane_dims()[0]
+            if fr.top < fixed:
+                return                                                       # the tab bar and the bar of the editor never scroll
+            right = self.in_right_pane(fr.x)
+            cur = self.scroll2 if right else self.scroll
+            vh = self.pane_view_h()
+            if fr.top < fixed + cur + 8:
+                cur = max(0, fr.top - fixed - 8)
+            elif fr.bottom > fixed + cur + vh - 8:
+                cur = min(self.max_scroll(1 if right else 0), fr.bottom - fixed - vh + 8)
+            if right:
+                self.scroll2 = cur
+            else:
+                self.scroll = cur
+            return
         top = self.HEAD + self.scroll
         if fr.top < top + 8:
             self.scroll = max(0, fr.top - self.HEAD - 8)
@@ -859,33 +1177,102 @@ class Menu:
         """Short live status ("96 FPS · 1280×720 · 80%") shown in the header of the Gráficos tab."""
         if text != self.live:
             self.live = text
-            if self.tab == TAB_PERF:
+            if self.pv_mode() == "live":
                 self.need = True
 
-    def say(self, text):
-        self.toast = (text, time.perf_counter() + 2.2)
+    def problem(self, key, text=None):
+        """Raise (text) or clear (None) a persistent warning, shown as a red strip over the panel instead of a modal box."""
+        if text:
+            self.problems[key] = text
+        else:
+            self.problems.pop(key, None)
+
+    def say(self, text, undo=False):
+        """The confirmation toast. With `undo` it stays longer and shows a Desfazer button (it runs undo_last)."""
+        self.toast = (text, time.perf_counter() + (7.0 if undo else 2.2), bool(undo))
         self.need = True
 
     def enabled(self, row):
         fn = row.get("enabled")
         return True if fn is None else bool(fn(self.cfg))
 
+    def _scm_opts(self, i):
+        """The ••• menu of a scene of the list: what it can do besides being edited (a click on the row)."""
+        scn = self.cfg["scenes"]
+        armed = self.del_armed[0] == i and self.del_armed[1] > time.perf_counter()
+        return ([("Tocar agora", "play")] if i != self.live_i else []) + [("Duplicar", "dup")] + ([("Apagar mesmo?" if armed else "Apagar", "del")] if len(scn) > 1 else [])
+
     def find(self, cid):
+        if isinstance(cid, str) and cid.startswith("scm:"):
+            return dict(id=cid, kind="dd", label="", help="", opts=self._scm_opts(int(cid[4:])))
+        if isinstance(cid, str) and cid in SC.LAYER_ON_KEYS:                    # the switch of a layer of the stack of the editor
+            return dict(id=cid, kind="toggle", label=next(n for k, n, _ in LY.SLOTS if "ly_" + k == cid), help="")
         for _, secs in TABS:
             for _, rows in secs:
                 for r in rows:
                     if r["id"] == cid:
                         return r
-        return None
+        if self._extra is None:                                   # the pages of Sistema that are not open
+            self._extra = {}
+            for k in range(len(SYS_ITEMS)):
+                for _, rows in sys_cards(self.cfg, k, self.audio_devices, self.monitors, self):
+                    for r in rows:
+                        self._extra.setdefault(r["id"], r)
+        return self._extra.get(cid)
 
     def set_value(self, cid, value, announce=True):
-        if cid == "scene_sec":
+        if cid == "lang":                                                        # the language of the panel: everything is drawn again in it
+            self.cfg["lang"] = value
+            i18n.set_lang(value)
+            self.touch()
+            self.rebuild_scenes()
+            self.need = True
+            return None
+        if cid.startswith("scm:"):                                               # an option of the ••• menu of a scene
+            self.dd_open = None
+            return self.scene_action((value, int(cid[4:])))
+        if cid.startswith("m_sym"):                                              # the preview shows the fold of the symmetry touched last
+            self.preview_sym = 8 if cid == "m_symnone" else int(cid[5:])
+        if cid == "ly_add":
+            return self.add_layer(value)
+        if cid == "ly_tpl":
+            return self.apply_stack_template(int(value))
+        if cid == "lib":                                                         # the menu of the library of scenes: export, import, factory scenes
+            self.dd_open = None
+            return self.press(("scenes_export", "scenes_import", "scenes_restore")[int(value) % 3])
+        if cid == "sc_filter":                                                   # which scenes the list shows
+            self.cfg["sc_filter"] = int(value)
+            self.rebuild_scenes()
+            self.need = True
+            return None
+        if cid.startswith("sc_auto:"):                                           # a switch of the Automático page: may the program bring this scene?
+            return self.set_scene_auto(int(cid[8:]), bool(value))
+        if cid in ("scene_sec", "sys_item"):
             announce = False                                     # changing section says nothing (the toast would cover the tab bar)
+        if cid == "autoall":
+            return self.toggle_auto(bool(value))
+        if cid == "live":
+            return self.set_live_edit(bool(value))
+        if cid == "ed_tab":
+            settings.ed_tab_apply(self.cfg, int(value))
+            self.dd_open = None
+            self.reset_scroll(inspector=True)
+            self.rebuild_scenes()
+            self.touch()
+            return None
         if cid == "preset":
-            if value == CUSTOM or not (0 <= value < len(PRESETS)):
+            if value == CUSTOM:                                                  # every value stays as it is; the options of the picture show up to be changed
+                self.cfg["preset"] = CUSTOM
+                self.rebuild_scenes()
+                self.touch()
+                if announce:
+                    self.say("Qualidade: Personalizado")
+                return
+            if not (0 <= value < len(PRESETS)):
                 return
             self.cfg.update(PRESETS[value][1])
             self.cfg["preset"] = value
+            self.rebuild_scenes()                                                # and a shortcut hides them again
             self.touch()
             if announce:
                 self.say(f"Qualidade: {PRESETS[value][0]}")
@@ -912,6 +1299,7 @@ class Menu:
             return
         if self.cfg.get(cid) == value:
             return
+        self._snap(cid)
         self.cfg[cid] = value
         if cid == "scene_shader":
             self.store_scene()
@@ -945,23 +1333,54 @@ class Menu:
             lst, idx = PAL.item_ref(self._pal(), self.cfg["pal_item"])
             lst[idx] = [self.cfg["pal_r"], self.cfg["pal_g"], self.cfg["pal_b"]]
             self.rebuild_scenes()
+        elif cid == "sys_item":
+            self.cfg["search"] = ""                                              # a click on a category leaves the search
+            self.scroll = self.scroll2 = 0
+            self.rebuild_scenes()
         elif cid == "scene_sec":
-            self.scroll = 0
+            self.scroll = self.scroll2 = 0
             self.rebuild_scenes()
         elif cid == "scene_preset":                                              # a mandala preset: its numbers become the scene's
             SC.apply_preset(self.cfg, int(value))
             self.store_scene()
             self.rebuild_scenes()
-        elif cid == "effect" and value >= 1:                                     # selecting a scene: it becomes the one being edited and shown
-            self.select_scene(value - 1)
-        elif cid in SC.SCENE_KEYS:
-            if cid in ("camera", "movement"):
-                pass
+        elif cid in ("ed_sub", "ed_item"):
+            if cid == "ed_sub" and value == 3 and self.preview_sym is None:
+                self.preview_sym = next((k for k in range(SC.SYM_COUNT) if self.cfg.get("m_sym%d" % k)), None)
+            self.scroll = min(self.scroll, 0) if cid == "ed_item" else self.scroll
+            self.rebuild_scenes()
+        elif cid == "ly_sel":
+            LY.load_lp(self.cfg)
+            self.rebuild_scenes()
+        elif cid.startswith("lp_"):                                                 # a parameter of the layer being edited: it goes into the layer
+            if LY.write_lp(self.cfg, cid, value):
+                self.rebuild_scenes()
             self.store_scene()
-            if cid in ("scene_name", "scene_genre", "scene_visual") or cid.startswith("m_sym"):
+        elif cid in ("ae_kind", "ae_part"):
+            load_ae(self.cfg)
+            self.rebuild_scenes()
+        elif cid.startswith("ae_"):
+            kind, part = ae_current(self.cfg)
+            self.cfg["auto_sets"][kind][part][cid[3:]] = value
+        elif cid == "search":
+            self.rebuild_scenes()
+        elif cid == "effect" and value >= 1:                                     # selecting a scene: it becomes the one being edited and shown
+            self.cfg["scene_now"] = not self.cfg.get("scene_wait", 0)
+            self.select_scene(value - 1)
+        elif cid == "bgc_item":
+            cols = self.cfg["bgc_cols"]
+            self.cfg["bgc_r"], self.cfg["bgc_g"], self.cfg["bgc_b"] = cols[max(0, min(len(cols) - 1, int(value)))]
+            self.rebuild_scenes()
+        elif cid in ("bgc_r", "bgc_g", "bgc_b"):
+            self.cfg["bgc_cols"][int(self.cfg["bgc_item"])] = [self.cfg["bgc_r"], self.cfg["bgc_g"], self.cfg["bgc_b"]]
+            self.store_scene()
+            self.rebuild_scenes()
+        elif cid in SC.SCENE_KEYS:
+            self.store_scene()
+            if cid in ("scene_name", "scene_genre", "scene_visual", "scene_bg", "bgc_src") or cid.startswith("m_sym") or (cid.startswith("fx_") and cid.endswith("_src")):
                 self.rebuild_scenes()
         elif cid == "scene_sec":
-            self.scroll = 0
+            self.scroll = self.scroll2 = 0
             self.rebuild_scenes()
         if cid == "cam_fov_min" and value > self.cfg["cam_fov_max"]:
             self.cfg["cam_fov_max"] = value
@@ -973,15 +1392,15 @@ class Menu:
         if cid in MV_KEYS and self.cfg["movement"] != MV_AUTO:
             self.cfg["movement"] = match_movement(self.cfg)
             self.store_scene()
-        if cid in GFX_KEYS:
-            self.cfg["preset"] = match_preset(self.cfg)
+        if cid in GFX_KEYS and (self.cfg.get("advanced") or self.cfg["preset"] != CUSTOM):
+            self.cfg["preset"] = match_preset(self.cfg)                         # (in the simple mode Personalizado stays until a shortcut is chosen: the options would hide under the pointer)
         self.touch()
         row = self.find(cid) if announce else None
         if row:
             if row["kind"] == "toggle":
                 self.say(f"{NAMES.get(cid, cid)}: {'ligado' if value else 'desligado'}")
             elif row["kind"] == "seg":
-                lbl = [l for l, v in row["opts"] if v == value][0]
+                lbl = next((l for l, v in row["opts"] if v == value), str(value))          # a row may share its id with another one that has the other options
                 self.say(f"{NAMES.get(cid, cid)}: {lbl}" + ("  ·  reinicie para aplicar" if cid == "backend" else ""))
 
     def adjust(self, cid, d):
@@ -989,7 +1408,8 @@ class Menu:
         if row is None or not self.enabled(row):
             return
         if row["kind"] == "toggle":
-            self.set_value(cid, d > 0 if d != 0 else not self.cfg[cid])
+            cur = row["get"](self.cfg) if "get" in row else self.cfg[cid]
+            self.set_value(cid, d > 0 if d != 0 else not cur)
         elif row["kind"] == "seg":
             vals = [v for _, v in row["opts"]]
             i = vals.index(self.cfg[cid]) if self.cfg[cid] in vals else 0
@@ -1000,9 +1420,18 @@ class Menu:
 
     def slider_from_x(self, cid, x):
         row = self.find(cid)
-        tl, tw = self.slider_geo
+        tl, tw = self.slider_geos.get(cid) or self.slider_geo
         t = max(0.0, min(1.0, (x - tl) / tw))
         v = row["lo"] + t * (row["hi"] - row["lo"])
+        m = (self.cfg.get("mods") or {}).get(cid) if self.scene_view == "editor" else None
+        if m is not None:                                                 # a range: the handle nearest to the click moves (and keeps moving while dragged)
+            v = int(round(v / row["step"]) * row["step"])
+            if getattr(self, "mod_end", None) is None:
+                self.mod_end = "lo" if abs(v - m["lo"]) <= abs(v - m["hi"]) else "hi"
+            m[self.mod_end] = v
+            self.store_scene()
+            self.need = True
+            return
         self.set_value(cid, int(round(v / row["step"]) * row["step"]), announce=False)
 
     def press(self, cid):
@@ -1010,9 +1439,10 @@ class Menu:
         now = time.perf_counter()
         if cid.startswith("tab"):
             if int(cid[3:]) == TAB_SCENES and self.tab == TAB_SCENES and self.scene_view != "gallery":
-                return self.back_to_gallery()                         # the Cenas tab again: back to the gallery
-            self.tab = max(0, min(int(cid[3:]), len(TABS) - 1))
-            self.scroll = 0
+                return self.back_to_gallery()                         # the Estúdio tab again: back to the gallery (in a narrow window)
+            self.tab = self.cfg["ui_tab"] = max(0, min(int(cid[3:]), len(TABS) - 1))
+            self.scroll = self.scroll2 = 0
+            self.rebuild_scenes()                                     # the wide Estúdio opens its editor
             self.need = True
             return None
         if cid == "shd_new":
@@ -1083,6 +1513,9 @@ class Menu:
             self.touch()
             self.say("Paletas de fábrica restauradas")
             return None
+        if cid.startswith("goto:"):                                               # a link that was only a note: it takes you there
+            self.goto(cid[5:])
+            return None
         if cid in ("pal_add", "pal_add_bg"):
             pal = self._pal()
             (pal["bgs"] if cid == "pal_add_bg" else pal["colors"]).append([200, 200, 200])
@@ -1103,9 +1536,76 @@ class Menu:
             else:
                 self.say("A paleta precisa de pelo menos uma cor e um fundo")
             return None
-        if cid == "scene_back":
-            self.close_scene()
+        if cid == "ed_save":
+            self.save_scene()
             return None
+        if cid == "ed_discard":
+            self.discard_scene()
+            return None
+        if cid == "undo":
+            self.undo_last()
+            return None
+        if cid in ("profile_save", "profile_load"):
+            getattr(self, cid)()
+            return None
+        if cid == "ae_reset":
+            kind, part = ae_current(self.cfg)
+            self.cfg["auto_sets"][kind][part] = {}
+            load_ae(self.cfg)
+            self.touch()
+            self.say("Valores de fábrica")
+            return None
+        if cid == "advanced":
+            self.cfg["advanced"] = not self.cfg.get("advanced", False)
+            if not self.cfg["advanced"]:
+                pass
+                if int(self.cfg.get("ed_sub", 0)) in (2, 4):
+                    self.cfg["ed_sub"] = 0
+            self.scroll = self.scroll2 = 0
+            self.dd_open = None
+            self.rebuild_scenes()
+            self.touch()
+            self.say("Modo avançado: " + ("ligado" if self.cfg["advanced"] else "desligado"))
+            return None
+        if cid == "gen_pick":
+            self.pick_image()
+            return None
+        if cid == "gen_clear":
+            self.set_value("gen_img", "", announce=False)
+            self.say("Imagem retirada: vale o texto")
+            return None
+        if cid == "scene_add":
+            self.start_wizard()
+            return None
+        if cid == "scenes_export":
+            self.export_scenes()
+            return None
+        if cid == "pal_open":                                                    # the editor of the palette: only when asked for
+            self.cfg["pal_open"] = not self.cfg.get("pal_open")
+            self.rebuild_scenes()
+            self.need = True
+            return None
+        if cid == "scenes_import":
+            self.import_scenes()
+            return None
+        if cid == "scenes_restore":
+            if self.restore_armed > now:
+                self.restore_armed = 0.0
+                return self.press("scene_factory")
+            self.restore_armed = now + 3.0
+            self.say("Toque de novo para apagar as suas cenas e voltar às de fábrica")
+            self.need = True
+            return None
+        if cid.startswith(("unmod:", "uncyc:")):                              # the Ligações page: this one stops following the music
+            (self.cfg.get("mods" if cid.startswith("unmod:") else "cycles") or {}).pop(cid[6:], None)
+            self.store_scene()
+            self.rebuild_scenes()
+            return None
+        if cid == "ed_back":
+            self.ed_back()
+            return None
+        if cid == "scene_back":
+            return self.leave_editor()
         if cid == "scene_new":                                       # duplicate the scene being edited
             scn = self.cfg["scenes"]
             self.store_scene()
@@ -1128,7 +1628,7 @@ class Menu:
                 self.say("Cena apagada")
             return None
         if cid == "scene_factory":
-            extras = {k: self.cfg[k] for k in SC.CAMERA_KEYS + SC.MOVEMENT_KEYS + SC.SHAPE_KEYS + SC.REACT_KEYS + SC.BG_KEYS}
+            extras = {k: self.cfg[k] for k in SC.EXTRA_KEYS if k in self.cfg}
             self.cfg["scenes"][:] = SC.starter_scenes(extras)
             self.cfg["effect"] = 0
             self.cfg["scene_edit"] = 0
@@ -1138,25 +1638,36 @@ class Menu:
             self.touch()
             self.say("Cenas de fábrica restauradas")
             return None
-        if cid == "reset" and self.tab == TAB_SCENES:
+        if cid == "reset" and self.tab != TAB_SYS:
             return None
         if cid == "reset":
             keep = {k: self.cfg[k] for k in ("fullscreen",)}
-            ids = {r["id"] for _, rows in TABS[self.tab][1] for r in rows}
+            ids = {r["id"] for _, rows in TABS[self.tab][1] for r in rows if not r["id"].startswith(("sys_", "reset", "bench"))}
             base = fresh()
             if "camera" in ids:
                 ids |= set(CAM_KEYS)
             if "movement" in ids:
                 ids |= set(MV_KEYS)
             if "preset" in ids:
-                ids |= set(GFX_KEYS)
+                ids |= set(GFX_KEYS) | set(FIN_KEYS)
+            ids -= {"safe_flash", "safe_motion"} | set(SC.ACAB_KEYS)                # a reset never lowers the comfort limits, nor touches what each scene owns (Acabamento)
+            self.sys_push("restaurar", [k for k in ids | {"preset", "camera", "movement"} if k in self.cfg])
             self.cfg.update({k: base[k] for k in ids if k in base})
             self.cfg["preset"] = match_preset(self.cfg)
             self.cfg["camera"] = match_camera(self.cfg) if self.cfg["camera"] != CAM_AUTO else CAM_AUTO
             self.cfg["movement"] = match_movement(self.cfg) if self.cfg["movement"] != MV_AUTO else MV_AUTO
             self.cfg.update(keep)
+            self.rebuild_scenes()
             self.touch()
-            self.say(f"Padrões da aba {TABS[self.tab][0]} restaurados")
+            self.say(f"Padrões de {SYS_ITEMS[int(self.cfg.get('sys_item', 0)) % len(SYS_ITEMS)][0].lower()} restaurados", undo=True)
+            return None
+        if cid == "fx_none":                                                       # all the heavy effects together: off if any is on, else back on
+            keys = ("fx_glass", "fx_bloom", "fx_trail", "fx_parts", "fx_mblur")
+            on = not any(self.cfg[k] for k in keys)
+            self.sys_push("efeitos pesados", keys)
+            self.cfg.update({k: on for k in keys})
+            self.touch()
+            self.say("Efeitos pesados ligados" if on else "Efeitos pesados desligados", undo=True)
             return None
         if cid in ("bench", "update_check", "update_apply"):
             return cid
@@ -1167,6 +1678,48 @@ class Menu:
             self.need = True
         return None
 
+    def pick_image(self):
+        """Opens the window of Windows to choose the logo (in a thread: the panel keeps working); the choice is taken in render()."""
+        import threading
+
+        def ask():
+            try:
+                from tkinter import Tk, filedialog
+                root = Tk()
+                root.withdraw()
+                root.attributes("-topmost", True)
+                path = filedialog.askopenfilename(title="Escolha o logo ou a imagem", filetypes=[("Imagens", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"), ("Todos", "*.*")])
+                root.destroy()
+                if path:
+                    self._pending_img = path
+            except Exception:
+                self._pending_img = ""
+                self.say("Não deu para abrir a janela. Ponha o arquivo logo.png em Documentos\\AudioOrganism")
+        threading.Thread(target=ask, daemon=True).start()
+
+    def set_macro(self, kind, idx):
+        """A button of the Palco: "energy" / "speed" take a step of the tables, "pal" a palette (0 = each scene keeps its own), "reset" puts the three back."""
+        c = self.cfg
+        if kind == "reset":
+            c["macro_energy"], c["macro_speed"], c["macro_pal"] = 100, 100, 0
+            self.say("Intensidade, velocidade e cores voltaram ao normal")
+        elif kind == "energy":
+            c["macro_energy"] = MACRO_ENERGY[max(0, min(len(MACRO_ENERGY) - 1, int(idx)))][1]
+        elif kind == "speed":
+            c["macro_speed"] = MACRO_SPEED[max(0, min(len(MACRO_SPEED) - 1, int(idx)))][1]
+        elif kind == "pal":
+            c["macro_pal"] = max(0, min(len(c.get("palettes", [])), int(idx)))
+            self.say("Cores: " + ("de cada cena" if c["macro_pal"] == 0 else c["palettes"][c["macro_pal"] - 1]["name"]))
+        self.touch()
+
+    def open_search(self):
+        """Ctrl+F: the search field of Sistema, with the cursor in it."""
+        self.tab = TAB_SYS
+        self.scroll = self.scroll2 = 0
+        self.rebuild_scenes()
+        self.text_focus = "search"
+        self.need = True
+
     # -------------------------------------------------------------- input
     def text_key(self, e):
         """Typing into the text field that has the focus. Returns True when the key was used."""
@@ -1176,6 +1729,8 @@ class Menu:
         v = str(self.cfg.get(cid, ""))
         if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_ESCAPE, pygame.K_TAB):
             self.text_focus = None
+            if e.key == pygame.K_ESCAPE and cid == "search" and v:
+                self.set_value("search", "", announce=False)                     # Esc in the search field brings the page back
         elif e.key == pygame.K_BACKSPACE:
             self.set_value(cid, v[:-1], announce=False)
         elif getattr(e, "unicode", "") and e.unicode.isprintable() and len(v) < 28:
@@ -1189,16 +1744,21 @@ class Menu:
         n = len(self.order)
         if n == 0:
             return None
-        if k in (pygame.K_DOWN, pygame.K_TAB):
+        if k == pygame.K_DOWN and self.dd_open:
+            row_ = self.find(self.dd_open)
+            self.dd_hl = min(len(row_["opts"]) - 1, self.dd_hl + 1)
+        elif k in (pygame.K_DOWN, pygame.K_TAB):
             step = -1 if (k == pygame.K_TAB and mod & pygame.KMOD_SHIFT) else 1
             self.focus = (self.focus + step) % n
+        elif k == pygame.K_UP and self.dd_open:
+            self.dd_hl = max(0, self.dd_hl - 1)
         elif k == pygame.K_UP:
             self.focus = (self.focus - 1) % n
         elif k in (pygame.K_LEFT, pygame.K_RIGHT):
             cid = self.order[self.focus].split("#")[0]
             if cid.startswith("tab"):
                 self.press(f"tab{max(0, min(len(TABS) - 1, self.tab + (-1 if k == pygame.K_LEFT else 1)))}")
-            elif self.find(cid)["kind"] in ("text", "action"):
+            elif self.find(cid)["kind"] in ("text", "action", "dd", "layer", "note", "item", "edbar", "scene"):
                 pass
             elif self.find(cid)["kind"] == "radio":
                 vals = [r["value"] for r in [x for _, rows in TABS[self.tab][1] for x in rows] if r["id"] == cid]
@@ -1209,11 +1769,29 @@ class Menu:
         elif k in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
             fkey = self.order[self.focus]
             cid = fkey.split("#")[0]
-            if cid in ("reset", "quit") or cid.startswith("tab"):
+            if cid in ("ed_save", "ed_discard", "scene_back", "advanced") or cid.startswith("tab"):
                 return self.press(cid)
             row = self.find(cid)
             if row["kind"] == "action":
                 return self.press(cid) if self.enabled(row) else None
+            if row["kind"] == "dd" and self.enabled(row):
+                if self.dd_open == cid:
+                    self.dd_open = None
+                    self.set_value(cid, row["opts"][self.dd_hl][1])
+                else:
+                    self.dd_open = cid
+                    vals = [v for _, v in row["opts"]]
+                    self.dd_hl = vals.index(self.cfg.get(cid)) if self.cfg.get(cid) in vals else 0
+                return None
+            if row["kind"] == "layer":
+                self.layer_action(("sel", row["idx"]))
+                return None
+            if row["kind"] == "item":
+                self.select_item(row["item"])
+                return None
+            if row["kind"] == "scene":
+                self.scene_action(("sel", row["idx"]))
+                return None
             if row["kind"] == "text":
                 self.text_focus = cid
             elif row["kind"] == "radio":
@@ -1226,7 +1804,10 @@ class Menu:
                 if self.enabled(row):
                     self.set_value(cid, vals[(i + 1) % len(vals)])
         elif k == pygame.K_ESCAPE:
-            if self.tab == TAB_SCENES and self.scene_view != "gallery":
+            if self.dd_open:
+                self.dd_open = None
+                return None
+            if self.tab == TAB_SCENES and self.scene_view != "gallery" and not self.workspace():
                 return self.back_to_gallery()
             self.kbd = False
         self.scroll_to_focus()
@@ -1240,12 +1821,19 @@ class Menu:
 
     def mouse(self, ev, ox, oy, scale):
         if ev.type == pygame.MOUSEWHEEL:
+            self.dd_open = None
             if self.hover and self.find(self.hover) and self.find(self.hover)["kind"] == "slider":
                 self.adjust(self.hover, 1 if ev.y > 0 else -1)
             else:
-                self.scroll = max(0, min(self.max_scroll(), self.scroll - ev.y * 48))
+                x = (ev.pos[0] - ox) if hasattr(ev, "pos") else self.mx                  # a wheel event has no position of its own: the last one of the pointer
+                if self.in_right_pane(x):
+                    self.scroll2 = max(0, min(self.max_scroll(1), self.scroll2 - ev.y * 48))
+                else:
+                    self.scroll = max(0, min(self.max_scroll(0), self.scroll - ev.y * 48))
                 self.need = True
             return None
+        if hasattr(ev, "pos"):
+            self.mx = ev.pos[0] - ox
         pos = (ev.pos[0] - ox, ev.pos[1] - oy + self.scroll)
         hit = self.hit_at(pos)
         self.kbd = False
@@ -1270,13 +1858,44 @@ class Menu:
             self.need = True
             if kind == "btn":
                 return self.press(cid)
+            if kind == "ddclose":
+                self.dd_open = None
+                return None
+            if kind == "ddopt":
+                self.dd_open = None
+                self.set_value(cid, arg)
+                return None
+            if self.dd_open:
+                self.dd_open = None
             row = self.find(cid)
             if row is None or not self.enabled(row):
                 return None
             if kind == "text":
                 self.text_focus = cid
+            elif kind == "dd":
+                self.dd_open = cid
+                vals = [v for _, v in row["opts"]]
+                self.dd_hl = vals.index(self.cfg.get(cid)) if self.cfg.get(cid) in vals else 0
+            elif kind == "ly":
+                self.layer_action(arg)
+            elif kind == "it":
+                self.select_item(arg)
+            elif kind == "sc":
+                self.scene_action(arg)
             elif kind == "toggle":
                 self.adjust(cid, 0)
+            elif kind == "modbtn":
+                self.mod_next(cid)
+            elif kind == "cycbtn":
+                self.cyc_next(cid)
+            elif kind in ("seg", "radio") and (self.cfg.get("cycles") or {}).get(cid) and self.scene_view == "editor":     # alternating: a click picks or drops a value
+                opts = self.cfg["cycles"][cid]["opts"]
+                if arg in opts and len(opts) > 1:
+                    opts.remove(arg)
+                elif arg not in opts:
+                    opts.append(arg)
+                self.store_scene()
+                self.need = True
             elif kind in ("seg", "radio"):
                 self.set_value(cid, arg)
             elif kind == "slider":
@@ -1289,6 +1908,7 @@ class Menu:
                 else:
                     self.last_click = (cid, now)
                     self.drag = cid
+                    self.mod_end = None
                     self.slider_from_x(cid, pos[0])
         return None
 
@@ -1311,120 +1931,495 @@ class Menu:
         if self.quit_armed and now > self.quit_armed:
             self.quit_armed = 0.0
             self.need = True
+        if self._pending_img is not None:                                             # the logo chosen in the window of Windows
+            path, self._pending_img = self._pending_img, None
+            if path:
+                self.set_value("gen_img", path, announce=False)
+                self.say("Imagem escolhida")
+        if self.del_armed[0] >= 0 and now > self.del_armed[1]:
+            self.del_armed = (-1, 0.0)
+            self.need = True
+        if self.restore_armed and now > self.restore_armed:
+            self.restore_armed = 0.0
+            self.need = True
         if not self.need:
             return False
         self.need = False
         s, c = self.surf, self.cfg
         s.fill((0, 0, 0, 0))
         self.hits, self.order, self.frects, self.order_val = [], [], {}, []
+        self.dd_rects = {}
+        self.slider_geos = {}
+        self.thumb_slots, self.popup_rect = [], None
+        self.ear_slots = []                                            # where Sistema > Áudio wants the analysis of the music (the control window draws it)
+        self.card_marks = []                                           # (x0, top, height, width, title) of every card with a title, on the surface: the control window pins the title of the one being scrolled
         W = self.W
         # tab bar
         x = 0
+        hidden_n = 0 if self.cfg.get("advanced", False) else self.adv_hidden()          # how many settings the simple mode keeps out of sight
+        adv_w = 150 if hidden_n else 118
+        adv_r = pygame.Rect(W - adv_w, 0, adv_w, 36)
         for i, (name, _) in enumerate(TABS):
             cid = f"tab{i}"
-            tw = (W - 6 * (len(TABS) - 1)) // len(TABS)
+            tw = (W - adv_w - 6 - 6 * (len(TABS) - 1)) // len(TABS)
             r = pygame.Rect(x, 0, tw, 36)
             sel, hov = i == self.tab, self.hover == cid
-            ui.rect(s, (*(ACCENT if sel else (SURFACE2 if hov else SURFACE)), 255), r, border_radius=10)
+            ui.rect(s, (*(SEL if sel else (SURFACE2 if hov else SURFACE)), 255), r, border_radius=10)   # the chosen tab is blue like every choice: red is for what is on the air and for leaving
             if not sel:
                 ui.rect(s, (*BORDER, 255), r, width=1, border_radius=10)
-            self._txt(self.ftab, name, (r.centerx, r.y + 9), ON_ACCENT if sel else TEXT, "c")
+            self._txt(self.ftab, name, (r.centerx, r.y + 9), ON_SEL if sel else TEXT, "c")
             self.hits.append((r, cid, "btn", None))
             self.order.append(cid)
             self.order_val.append(None)
             self.frects[cid] = r
             x += tw + 6
+        on = bool(c.get("advanced", False))                                        # the switch of the advanced mode, on the right of the tab bar
+        hv = self.hover == "advanced"
+        ui.rect(s, (*(SURFACE2 if hv else SURFACE), 255), adv_r, border_radius=10)
+        ui.rect(s, (*(ACCENT2 if on else CTRL), 255), adv_r, width=2 if on else 1, border_radius=10)
+        pill = pygame.Rect(adv_r.x + 10, adv_r.centery - 8, 28, 16)
+        ui.rect(s, (*(OK if on else (74, 80, 108)), 255), pill, border_radius=8)
+        ui.circle(s, (255, 255, 255), (pill.right - 8 if on else pill.left + 8, pill.centery), 6)
+        self._txt(self.ftab, "Avançado" + (f"  +{hidden_n}" if hidden_n else ""), (pill.right + 8, adv_r.y + 9), TEXT if on else DIM)
+        self.hits.append((adv_r, "advanced", "btn", None))
+        self.order.append("advanced")
+        self.order_val.append(None)
+        self.frects["advanced"] = adv_r
         y = self.HEAD
-        for title, rows in TABS[self.tab][1]:
-            ch = 40 + len(rows) * self.ROW + 10
-            ui.rect(s, (*SURFACE, 255), (0, y, W, ch), border_radius=14)
-            ui.rect(s, (*BORDER, 255), (0, y, W, ch), width=1, border_radius=14)
-            self._txt(self.f_sb, "  ".join(title), (18, y + 14), ACCENT)
-            ry = y + 40
-            for row in rows:
-                self._row(row, ry)
-                ry += self.ROW
-            y += ch + self.GAP
-
-        if self.tab == TAB_LIVE:
-            y = self.HEAD + self.live_h                 # the live content is drawn here by the control window
-        elif self.in_gallery():
-            y = self.HEAD + self.gal_h                  # the gallery is drawn here by the control window
-        # footer buttons
-        fy = y + 4
-        armed = self.quit_armed > now
-        if self.tab >= 1 and self.tab != TAB_SCENES:
-            self._button("reset", pygame.Rect(0, fy, 200, 42), "Restaurar esta aba", False)
-        if self.tab == TAB_PERF:
-            self._button("bench", pygame.Rect(208, fy, 190, 42), "Medir (10 s)", False)
-        if self.tab == TAB_SET:
-            self._button("update_check", pygame.Rect(0, fy + 52, 250, 42), "Verificar atualização", False)
-            if self.upd_label:
-                self._button("update_apply", pygame.Rect(262, fy + 52, 298, 42), self.upd_label, False, True)
-        self._button("quit", pygame.Rect(W - 150, fy, 150, 42), "Confirmar?" if armed else "Sair", True, armed)
-
-        sy = fy + (108 if self.tab == TAB_SET else 56)
-        if self.tab == TAB_PERF and self.live:
-            self._txt(self.f_sb, self.live, (0, sy), OK, "l")
-        elif self.tab == TAB_SET and self.info:
-            self._txt(self.f_sb, self.info, (0, sy), OK if self.upd_label else DIM, "l")
+        cards = TABS[self.tab][1]
+        cols = self.cols.get(self.tab) or []
+        if cols and len(cols) == len(cards):
+            wl, wr, gap = self._col_widths()
+            yl = yr = y
+            for (title, rows), col in zip(cards, cols):
+                if col == "F":
+                    y = max(yl, yr)
+                    y += self._draw_card(title, rows, y, 0, W) + self.GAP
+                    yl = yr = y
+                elif col == "L":
+                    yl += self._draw_card(title, rows, yl, 0, wl) + self.GAP
+                else:
+                    yr += self._draw_card(title, rows, yr, wl + gap, wr) + self.GAP
+            y = max(yl, yr)
         else:
-            self._txt(self.f_s, "salvo automaticamente", (0, sy + 1), DIM, "l")
+            for title, rows in cards:
+                y += self._draw_card(title, rows, y, 0, W) + self.GAP
+        if self.dd_open:
+            self._dropdown_popup()
         # keyboard focus ring, drawn once the full focus order is known
         if self.kbd and self.order:
             fr = self.frects.get(self.order[self.focus % len(self.order)])
             if fr is not None:
-                ui.rect(s, (*ACCENT2, 255), fr.inflate(6, 6), width=2, border_radius=12)
+                ui.rect(s, (*FOCUS, 255), fr.inflate(6, 6), width=2, border_radius=12)
         return True
 
-    def _button(self, cid, rect, label, danger, armed=False):
-        self.hits.append((rect, cid, "btn", None))
+    TAG_COLORS = {"fx": (24, 95, 165), "bg": (15, 110, 86), "part": (153, 60, 29), "vis": (83, 74, 183), "beh": (80, 86, 110), "sc": (80, 86, 110)}
+
+    def _edbar(self, row, y):
+        """The bar of the editor: whether the scene is saved, and the buttons Salvar, Descartar and Galeria."""
+        s = self.surf
+        dirty = self.is_dirty()
+        W = self.W
+        rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
+        cy = y + (self.ROW - 4) // 2
+        if dirty and self.cfg.get("live"):                                          # three states, one line each: saved / changing live / only in the preview
+            ui.circle(s, (*ACCENT, 255), (26, cy - 8), 5)
+            self._txt(self.fb, "Mudando ao vivo", (40, cy - 17), TEXT)
+            self._txt(self.f_s, "A tela grande já mostra  ·  Salvar guarda, Voltar desfaz", (40, cy + 3), DIM)
+        elif dirty:
+            ui.circle(s, (*ACCENT2, 255), (26, cy - 8), 5)
+            self._txt(self.fb, "Só na prévia", (40, cy - 17), TEXT)
+            self._txt(self.f_s, "A tela grande muda quando você salvar", (40, cy + 3), DIM)
+        else:
+            ui.circle(s, (*OK, 255), (26, cy - 8), 5)
+            self._txt(self.fb, "Tudo salvo", (40, cy - 17), TEXT)
+            self._txt(self.f_s, "O que você mexer fica num rascunho", (40, cy + 3), DIM)
+        x = W - 26
+        for cid, label, on, primary in ((("scene_back", "‹ Galeria", True, False),) if not self.workspace() else ()) + (("ed_discard", "Voltar ao que era" if self.cfg.get("live") else "Descartar", dirty, False), ("ed_save", "Salvar", dirty, True)):
+            w = max(78, self.fb.size(label)[0] + 26)
+            br = pygame.Rect(x - w, cy - 16, w, 32)
+            widgets.button(s, self.fb, br, label, "primary" if (primary and on) else "plain", hover=self.hover == cid and on, enabled=on, radius=9, dy=1)
+            if on:
+                self.hits.append((br, cid, "btn", None))
+                self.order.append(cid)
+                self.order_val.append(None)
+                self.frects[cid] = br
+            x -= w + 8
+
+    def _item_row(self, row, y):
+        """An item of the stack of the editor (the mandala, the camera ...): its tag, its name and how it is set; the selected one is lit."""
+        s, c = self.surf, self.cfg
+        cid, k = row["id"], row["item"]
+        W = self.W
+        rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
+        sel = int(c.get("ed_item", 0)) == k
+        hov = self.hover == cid
+        ui.rect(s, (*((30, 52, 110) if sel else (SURFACE2 if hov else (22, 25, 38))), 255), rowr, border_radius=10)
+        ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
+        self.frects[cid] = rowr
         self.order.append(cid)
         self.order_val.append(None)
-        self.frects[cid] = rect
+        self.hits.append((rowr, cid, "it", k))
+        cy = y + (self.ROW - 4) // 2
+        tag = row["tag"]
+        tw = self.f_sb.size(tag)[0] + 14
+        tr = pygame.Rect(18, cy - 10, tw, 20)
+        ui.rect(s, (*self.TAG_COLORS.get(row.get("group"), (60, 60, 90)), 255), tr, border_radius=6)
+        self._txt(self.f_sb, tag, (tr.centerx, tr.y + 2), (255, 255, 255), "c")
+        nx = tr.right + 12
+        tw_ = rowr.right - (44 + 58 if row.get("sw") else 44) - nx
+        on_ = bool(c.get(row["sw"], True)) if row.get("sw") else True
+        self._txt(self.f, self._fit(self.f, row["label"], tw_), (nx, cy - 17), TEXT if on_ else DIM)
+        self._txt(self.f_s, self._fit(self.f_s, row["help"], tw_), (nx, cy + 3), DIM)
+        kx, ky = rowr.right - 20, cy
+        pygame.draw.polygon(s, ACCENT2 if sel else DIM, [(kx - 3, ky - 5), (kx - 3, ky + 5), (kx + 3, ky)])
+        if row.get("sw"):                                                       # a layer of the stack: its switch, on the right of the row
+            on = bool(c.get(row["sw"], True))
+            pill = pygame.Rect(rowr.right - 36 - 46, cy - 13, 46, 26)
+            ui.rect(s, (*(OK if on else (74, 80, 108)), 255), pill, border_radius=13)
+            ui.circle(s, (255, 255, 255), (pill.right - 13 if on else pill.left + 13, pill.centery), 9)
+            self.hits.append((pill.inflate(8, 8), row["sw"], "toggle", None))
+
+    def _fit(self, font, text, w):
+        return widgets.fit(font, text, w)
+
+    def scene_state(self, i):
+        """What scene i is doing: (text, fill, text colour) or None."""
+        c = self.cfg
+        if i == self.live_i:
+            return ("NO AR" + ("  ·  FIXA" if c["effect"] == i + 1 else ""), ACCENT, ON_ACCENT)
+        if i == self.pend_i:
+            return (("ENTRANDO", "NO COMPASSO", "NA FRASE", "NA MÚSICA", "NA FRASE")[int(c.get("scene_when", 2)) % 5], ACCENT2, ON_LIGHT)
+        if c["effect"] == i + 1:
+            return ("FIXA", ACCENT2, ON_LIGHT)
+        scn = c.get("scenes") or []
+        if 0 <= i < len(scn) and not scn[i].get("scene_auto", True):
+            return ("FORA DO AUTOMÁTICO", (46, 50, 72), DIM)
+        return None
+
+    def _scene_row(self, row, y):
+        """A scene of the list: its live thumbnail (the control window paints it), name, what it is made of, what it is doing, and play / duplicate / delete."""
+        s, c = self.surf, self.cfg
+        cid, i = row["id"], row["idx"]
+        W = self.W
+        rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
+        sel = i == c.get("scene_edit", 0) and self.scene_view == "editor"
         hov = self.hover == cid
-        col = DANGER if danger else ACCENT2
-        fill = col if armed else (SURFACE2 if hov else SURFACE)
-        ui.rect(self.surf, (*fill, 255), rect, border_radius=10)
-        ui.rect(self.surf, (*col, 255), rect, width=2 if (hov or armed) else 1, border_radius=10)
-        tcol = ON_ACCENT if armed else (TEXT if hov else col)
-        self._txt(self.fb, label, (rect.centerx, rect.y + 11), tcol, "c")
+        ui.rect(s, (*((30, 52, 110) if sel else (SURFACE2 if hov else (22, 25, 38))), 255), rowr, border_radius=10)
+        ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
+        self.frects[cid] = rowr
+        self.order.append(cid)
+        self.order_val.append(None)
+        self.hits.append((rowr, cid, "sc", ("sel", i)))
+        cy = y + (self.ROW - 4) // 2
+        th = pygame.Rect(16, cy - 18, 64, 36)
+        ui.rect(s, (*(6, 7, 11), 255), th, border_radius=6)
+        self.thumb_slots.append((th, i))
+        nx = th.right + 12
+        right = W - 26 - 28 - 6
+        st = self.scene_state(i)
+        name = self._fit(self.fb if sel else self.f, row["label"], right - nx - (self.f_sb.size(st[0])[0] + 22 if st else 4))
+        nw = self._txt(self.fb if sel else self.f, name, (nx, cy - 17), TEXT)
+        if st:
+            cr = pygame.Rect(nx + nw + 8, cy - 14, self.f_sb.size(st[0])[0] + 14, 17)
+            ui.rect(s, (*st[1], 255), cr, border_radius=8)
+            self._txt(self.f_sb, st[0], (cr.centerx, cr.y + 1), st[2], "c")
+        self._txt(self.f_s, self._fit(self.f_s, row["help"], right - nx - 4), (nx, cy + 3), DIM)
+        armed = self.del_armed[0] == i and self.del_armed[1] > time.perf_counter()
+        br = pygame.Rect(right, cy - 13, 28, 26)
+        scm = f"scm:{i}"
+        opn = self.dd_open == scm
+        ui.rect(s, (*(DANGER if armed else (HOVER_FILL if opn else CTRL_FILL)), 255), br, border_radius=7)
+        ui.rect(s, (*(DANGER if armed else CTRL), 255), br, width=1, border_radius=7)
+        for dx in (-6, 0, 6):
+            ui.circle(s, ON_LIGHT if armed else TEXT, (br.centerx + dx, br.centery), 2)
+        self.dd_rects[scm] = br
+        self.hits.append((br, cid, "sc", ("menu", i)))
+
+    def _layer_row(self, row, y):
+        """One layer of the list: the eye, its type, its name and detail, how it is blended, and the buttons to move, duplicate and delete it."""
+        s, c = self.surf, self.cfg
+        cid, i = row["id"], row["idx"]
+        layers = c.get("layers") or []
+        if not 0 <= i < len(layers):
+            return
+        L = layers[i]
+        info = LY.TYPES.get(L.get("t"), LY.TYPES["fb"])
+        on = L.get("on", True)
+        sel = i == c.get("ly_sel", 0) and int(c.get("ed_item", 4)) in (4, 7, 8, 9, 10)
+        W = self.W
+        rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
+        hov = self.hover == cid
+        ui.rect(s, (*((30, 52, 110) if sel else (SURFACE2 if hov else (22, 25, 38))), 255), rowr, border_radius=10)
+        ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
+        self.frects[cid] = rowr
+        self.order.append(cid)
+        self.order_val.append(None)
+        self.hits.append((rowr, cid, "ly", ("sel", i)))
+        cy = y + (self.ROW - 4) // 2
+        eye = pygame.Rect(18, cy - 13, 26, 26)
+        ui.circle(s, (*(ACCENT2 if on else (58, 63, 88)), 255), eye.center, 9, 0 if on else 2)
+        if on:
+            ui.circle(s, (*ON_LIGHT, 255), eye.center, 3)
+        self.hits.append((eye, cid, "ly", ("eye", i)))
+        tag = info["tag"]
+        tw = self.f_sb.size(tag)[0] + 14
+        tr = pygame.Rect(54, cy - 10, tw, 20)
+        ui.rect(s, (*(self.TAG_COLORS.get(info["group"], (60, 60, 90)) if on else (46, 50, 72)), 255), tr, border_radius=6)
+        self._txt(self.f_sb, tag, (tr.centerx, tr.y + 2), (255, 255, 255) if on else DIM, "c")
+        nx = tr.right + 10
+        detail = LY.detail_of(L)
+        bm = LY.BLEND[int(L.get("bm", 0)) % 4][0] if info["group"] in ("fx", "bg") and L.get("t") != "tone" else ""
+        right = W - 26 - 4 * 34 - 8
+        self._txt(self.f, self._fit(self.f, info["label"], right - nx - 8), (nx, cy - 17), TEXT if on else DIM)
+        sub = "  ·  ".join(t for t in (detail, bm if bm and bm != "Normal" else "", f"{int(L.get('op', 100))}%" if int(L.get("op", 100)) != 100 else "") if t)
+        self._txt(self.f_s, self._fit(self.f_s, sub, right - nx - 8), (nx, cy + 3), DIM)
+        bx = right
+        for what in ("up", "down", "dup", "del"):
+            br = pygame.Rect(bx, cy - 13, 26, 26)
+            ui.rect(s, (*CTRL_FILL, 255), br, border_radius=7)
+            ui.rect(s, (*CTRL, 255), br, width=1, border_radius=7)
+            gc = DIM
+            cx_, cy_ = br.center
+            if what == "up":
+                pygame.draw.polygon(s, gc, [(cx_ - 5, cy_ + 3), (cx_ + 5, cy_ + 3), (cx_, cy_ - 4)])
+            elif what == "down":
+                pygame.draw.polygon(s, gc, [(cx_ - 5, cy_ - 3), (cx_ + 5, cy_ - 3), (cx_, cy_ + 4)])
+            elif what == "dup":
+                pygame.draw.rect(s, gc, (cx_ - 6, cy_ - 6, 9, 9), 1)
+                pygame.draw.rect(s, gc, (cx_ - 2, cy_ - 2, 9, 9), 1)
+            else:
+                pygame.draw.line(s, gc, (cx_ - 5, cy_ - 5), (cx_ + 5, cy_ + 5), 2)
+                pygame.draw.line(s, gc, (cx_ - 5, cy_ + 5), (cx_ + 5, cy_ - 5), 2)
+            self.hits.append((br, cid, "ly", (what, i)))
+            bx += 34
+
+    def _dropdown_popup(self):
+        """The list of the dropdown that is open, over everything (drawn last, its hits win)."""
+        cid = self.dd_open
+        row = self.find(cid) if cid else None
+        box = self.dd_rects.get(cid) if cid else None
+        if row is None or box is None:
+            self.dd_open = None
+            return
+        s, c = self.surf, self.cfg
+        opts = row["opts"]
+        ih = 34
+        h = len(opts) * ih + 8
+        below = (self.scroll2 if self.in_right_pane(box.x) else self.scroll) + max(300, min(self.view_h, 900)) - self.HEAD - self.reserved - box.bottom
+        y0 = box.bottom + 4 if (below > h or box.y - h < 0) else box.y - h - 4
+        pw = max(box.w, 150) if cid.startswith("scm:") else box.w                  # the ••• button is small: its menu is wider and hangs from its right edge
+        pr = pygame.Rect(box.right - pw if cid.startswith("scm:") else box.x, y0, pw, h)
+        self.popup_rect = pr.inflate(8, 8)
+        self.hits.append((pygame.Rect(0, 0, self.W, self.surf.get_height()), "ddclose", "ddclose", None))
+        ui.rect(s, (14, 16, 26, 255), pr.inflate(4, 4), border_radius=11)
+        ui.rect(s, (*ACCENT2, 255), pr.inflate(4, 4), width=1, border_radius=11)
+        cur = c.get(cid)
+        for k, (lbl, val) in enumerate(opts):
+            r = pygame.Rect(pr.x + 4, pr.y + 4 + k * ih, pr.w - 8, ih - 2)
+            hl = k == self.dd_hl or (self.hover == cid and False)
+            if hl:
+                ui.rect(s, (*HOVER_FILL, 255), r, border_radius=8)
+            if cur == val and cid not in ("ly_add", "ly_tpl"):
+                ui.rect(s, (*SEL, 255), pygame.Rect(r.x, r.y + 6, 3, r.h - 12), border_radius=2)
+            self._txt(self.fb if cur == val and cid not in ("ly_add", "ly_tpl") else self.f, lbl, (r.x + 12, r.y + 6), TEXT)
+            self.hits.append((r, cid, "ddopt", val))
+
+    def _draw_card(self, title, rows, y, x0, wc):
+        """One card at (x0, y) of width wc. In a column the rows are drawn on a piece of the surface (so they all think the panel is wc wide) and the hits, the
+        focus rectangles, the sliders and the dropdown boxes they leave are moved back to the surface. Returns the height of the card."""
+        full, wfull = self.surf, self.W
+        n_hits, k_fr, k_dd, k_sl, n_th = len(self.hits), set(self.frects), set(self.dd_rects), set(self.slider_geos), len(self.thumb_slots)
+        n_ear = len(self.ear_slots)
+        if x0 or wc != wfull:
+            self.surf = full.subsurface(pygame.Rect(x0, 0, wc, full.get_height()))
+            self.W = wc
+        s = self.surf
+        ch = self._card_h(rows, title, wc)
+        ui.rect(s, (*SURFACE, 255), (0, y, wc, ch), border_radius=14)
+        ui.rect(s, (*BORDER, 255), (0, y, wc, ch), width=1, border_radius=14)
+        if title:
+            self._txt(self.f_sb, title, (18, y + 14), TITLE)
+            self.card_marks.append((x0, y, ch, wc, title))
+        ry = y + (40 if title else 8)
+        i = 0
+        while i < len(rows):
+            if rows[i].get("tile"):                                                  # a run of choices drawn as live thumbnails
+                j = i
+                while j < len(rows) and rows[j].get("tile"):
+                    j += 1
+                ry += self._tile_rows(rows[i:j], ry, wc)
+                i = j
+            elif rows[i].get("flow"):                                                  # a run of switches drawn as pills that wrap
+                j = i
+                while j < len(rows) and rows[j].get("flow"):
+                    j += 1
+                ry += self._flow_rows(rows[i:j], ry, wc)
+                i = j
+            elif rows[i].get("kind") == "ear":                                         # a dark slot: the control window paints the live analysis over it
+                r = pygame.Rect(12, ry, wc - 24, self.EAR_H - 8)
+                ui.rect(s, (*widgets.BG, 255), r, border_radius=10)
+                self.ear_slots.append(r)
+                ry += self.EAR_H
+                i += 1
+            else:
+                self._row(rows[i], ry)
+                ry += self.ROW + (self.STACK if self._stacked(rows[i], wc) else 0)
+                i += 1
+        self.surf, self.W = full, wfull
+        if x0:
+            self.hits[n_hits:] = [(r.move(x0, 0), cid, kind, arg) for r, cid, kind, arg in self.hits[n_hits:]]
+            self.thumb_slots[n_th:] = [(r.move(x0, 0), i) for r, i in self.thumb_slots[n_th:]]
+            self.ear_slots[n_ear:] = [r.move(x0, 0) for r in self.ear_slots[n_ear:]]
+            for k in set(self.frects) - k_fr:
+                self.frects[k] = self.frects[k].move(x0, 0)
+            for k in set(self.dd_rects) - k_dd:
+                self.dd_rects[k] = self.dd_rects[k].move(x0, 0)
+            for k in set(self.slider_geos) - k_sl:
+                tl, tw = self.slider_geos[k]
+                self.slider_geos[k] = (tl + x0, tw)
+        return ch
+
+    def _ctl_left(self, row, kind, R, W):
+        """Where the control of a row starts (its left edge): the text of the row has to end before it."""
+        if kind == "seg":
+            return R - sum(max(56, self.f.size(l)[0] + 26) for l, _ in row["opts"]) - (self.MODW + 12 if self._cyclable(row) else 0)
+        if kind == "dd":
+            return R - 220
+        if kind == "text":
+            return R - 250
+        if kind == "slider":
+            tlen = max(110, min(420, int(W * 0.27)))
+            if self._modable(row):
+                tlen = max(90, int(tlen * 0.6))                         # a number that can follow the music: a shorter track, the ♪ button beside it
+            return R - 56 - 14 - tlen - 12 - (self.MODW + 8 if self._modable(row) else 0)
+        if kind == "toggle":
+            return R - 46 - self.f_s.size("Desligado")[0] - 20
+        if kind == "action":
+            btn = row["btn"](self.cfg) if callable(row["btn"]) else row["btn"]
+            return R - max(120, self.fb.size(btn)[0] + 32) - 6
+        if kind == "swatches":
+            return R - len(row["items"]) * 32 - 4
+        if kind == "radio":
+            return R - 34
+        return R
+
+    MODW = 80                                                                      # the ♪ button of a number that can follow the music
+
+    def _modable(self, row):
+        """A number of the scene being edited that can follow the music (see mods.py)."""
+        return self.tab == TAB_SCENES and self.scene_view == "editor" and row.get("kind") == "slider" and row["id"] in MOD.MOD_KEYS
+
+    def _cyclable(self, row):
+        return self.tab == TAB_SCENES and self.scene_view == "editor" and row.get("kind") in ("seg", "radio") and row["id"] in MOD.CYCLE_KEYS
+
+    def mod_next(self, cid):
+        """The ♪ button: Fixo -> each source of the music in turn -> Fixo. The range starts around the value it had."""
+        mods = self.cfg.setdefault("mods", {})
+        m = mods.get(cid)
+        if m is None:
+            row = self.find(cid)
+            if row is None:
+                return
+            v = self.cfg[cid]
+            span = (row["hi"] - row["lo"]) * 0.25
+            mods[cid] = dict(src=0, lo=max(row["lo"], int(v - span)), hi=min(row["hi"], int(v + span)))
+        elif int(m["src"]) + 1 < len(MOD.SOURCES):
+            m["src"] = int(m["src"]) + 1
+        else:
+            mods.pop(cid)
+        self.store_scene()
+        self.need = True
+
+    def cyc_next(self, cid):
+        """The ⇄ button of a choice: one value -> alternate at every beat, bar, phrase, drop -> one value. The choice in use is the first one picked."""
+        cyc = self.cfg.setdefault("cycles", {})
+        c_ = cyc.get(cid)
+        if c_ is None:
+            cyc[cid] = dict(opts=[self.cfg[cid]], when=0)
+        elif int(c_["when"]) + 1 < len(MOD.WHEN):
+            c_["when"] = int(c_["when"]) + 1
+        else:
+            cyc.pop(cid)
+        self.store_scene()
+        self.need = True
+
+    def _music_pill(self, r, text, on, cid, kind):
+        s = self.surf
+        hov = self.hover == cid
+        ui.rect(s, (*((90, 20, 50) if on else (HOVER_FILL if hov else CTRL_FILL)), 255), r, border_radius=r.h // 2)
+        ui.rect(s, (*(ACCENT if on else CTRL), 255), r, width=1, border_radius=r.h // 2)
+        self._txt(self.f_s, self._fit(self.f_s, text, r.w - 10), (r.centerx, r.y + 5), (255, 200, 215) if on else TEXT, "c")
+        self.hits.append((r, cid, kind, None))
 
     def _row(self, row, y):
         s, c = self.surf, self.cfg
         cid, kind = row["id"], row["kind"]
+        if kind == "layer":
+            return self._layer_row(row, y)
+        if kind == "edbar":
+            return self._edbar(row, y)
+        if kind == "item":
+            return self._item_row(row, y)
+        if kind == "scene":
+            return self._scene_row(row, y)
+        if kind == "note":
+            lab = row["label"](c) if callable(row["label"]) else row["label"]
+            hp = row["help"](c) if callable(row["help"]) else row["help"]
+            self._txt(self.f, lab, (22, y + (7 if hp else 14)), DIM)
+            if hp:
+                self._txt(self.f_s, hp, (22, y + 29), DIM)
+            return
         en = self.enabled(row)
         W = self.W
         fkey = cid if kind != "radio" else f"{cid}#{row['value']}"
-        rowr = pygame.Rect(10, y, W - 20, self.ROW - 4)
-        if self.hover == cid and en:
+        stk = self._stacked(row, W)
+        rowr = pygame.Rect(10, y, W - 20, self.ROW - 4 + (self.STACK if stk else 0))
+        if kind == "radio" and cid == "sys_item" and c[cid] == row["value"]:      # a list of pages, not a choice of a setting: the page you are on is lit, with no circle
+            ui.rect(s, (*HOVER_FILL, 255), rowr, border_radius=10)
+            ui.rect(s, (*SEL, 255), pygame.Rect(rowr.x + 2, rowr.y + 8, 4, rowr.h - 16), border_radius=2)
+        elif self.hover == cid and en:
             ui.rect(s, (*SURFACE2, 255), rowr, border_radius=10)
-        tc, dc = (TEXT, DIM) if en else (dimmed(TEXT, 0.5), dimmed(DIM, 0.55))
-        lw = self._txt(self.f, row["label"], (22, y + 7), tc)
+        tc, dc = (TEXT, DIM) if en else (dimmed(TEXT, 0.62), dimmed(DIM, 0.74))
+        ic = icons.has(cid)
+        lx = 62 if ic else 22                                       # a row with an icon starts its text after it
+        if ic:
+            if kind == "slider":
+                tv = (c[cid] - row["lo"]) / max(1, row["hi"] - row["lo"])
+            elif kind == "seg":
+                tv = c[cid] / max(1, max(v for _, v in row["opts"]))
+            else:
+                tv = None
+            icol = ACCENT2 if en else dimmed(ACCENT2, 0.5)
+            icons.draw(s, cid, pygame.Rect(20, y + 6, 32, 32), icol, tv, bool(c[cid]) if kind == "toggle" else True)
+        R = W - 26
+        avail = max(60, (R if stk else self._ctl_left(row, kind, R, W)) - lx - 12)
+        lw = self._txt(self.f, self._fit(self.f, row["label"], avail - (28 if row.get("chip") else 0)), (lx, y + 7), tc)
         if row.get("chip"):
-            cr = pygame.Rect(22 + lw + 10, y + 8, 20, 20)
+            cr = pygame.Rect(lx + lw + 10, y + 8, 20, 20)
             ui.rect(s, (*BORDER, 255), cr, width=1, border_radius=5)
             self._txt(self.f_sb, row["chip"], (cr.centerx, cr.y + 2), dc, "c")
         h = row["help"](c) if callable(row["help"]) else row["help"]
-        self._txt(self.f_s, h, (22, y + 29), dc)
+        self._txt(self.f_s, self._fit(self.f_s, h, avail), (lx, y + 29), dc)
         cy = y + (self.ROW - 4) // 2
-        R = W - 26
         self.frects[fkey] = rowr
         if en:
             self.order.append(fkey)
             self.order_val.append(row.get("value"))
 
-        if kind == "radio":
+        if kind == "radio" and cid == "sys_item":                                 # (its highlight was drawn under the text, above)
+            self.hits.append((rowr, cid, "radio", row["value"]))
+        elif kind == "radio":
             sel = c[cid] == row["value"]
             rc = (R - 12, cy)
-            ui.circle(s, (*(ACCENT if sel else BORDER), 255), rc, 11, 0 if sel else 2)
+            ui.circle(s, (*(SEL if sel else CTRL), 255), rc, 11, 0 if sel else 2)
             if sel:
-                ui.circle(s, (*ON_ACCENT, 255), rc, 4)
+                ui.circle(s, (*ON_SEL, 255), rc, 4)
             self.hits.append((rowr, cid, "radio", row["value"]))
         elif kind == "toggle":
-            on = c[cid]
+            on = row["get"](c) if "get" in row else c[cid]
             pill = pygame.Rect(R - 46, cy - 13, 46, 26)
-            col = OK if on else (66, 64, 112)
+            col = OK if on else (74, 80, 108)
             ui.rect(s, (*(col if en else dimmed(col)), 255), pill, border_radius=13)
             kx = pill.right - 13 if on else pill.left + 13
             ui.circle(s, (255, 255, 255) if en else dimmed((255, 255, 255)), (kx, pill.centery), 9)
@@ -1433,19 +2428,24 @@ class Menu:
         elif kind == "seg":
             widths = [max(56, self.f.size(l)[0] + 26) for l, _ in row["opts"]]
             x = R - sum(widths)
+            if stk:
+                cy = y + self.ROW - 4 + self.STACK // 2 - 2
             n = len(widths)
+            cyc = (c.get("cycles") or {}).get(cid) if self._cyclable(row) else None
+            if self._cyclable(row):
+                self._music_pill(pygame.Rect(x - 12 - self.MODW, cy - 13, self.MODW, 26), MOD.WHEN[int(cyc["when"]) % len(MOD.WHEN)][0] if cyc else "Uma só", cyc is not None, cid, "cycbtn")
             for i, ((lbl, val), w) in enumerate(zip(row["opts"], widths)):
                 r = pygame.Rect(x, cy - 17, w, 34)
-                sel = c[cid] == val
+                sel = (val in cyc["opts"]) if cyc else c[cid] == val
                 hov = self.hover == cid and en
-                fill = ACCENT if sel else ((44, 42, 84) if hov else (34, 32, 66))
+                fill = SEL if sel else (HOVER_FILL if hov else CTRL_FILL)
                 if not en:
                     fill = dimmed(fill, 0.6)
                 radii = dict(border_top_left_radius=9 if i == 0 else 0, border_bottom_left_radius=9 if i == 0 else 0,
                              border_top_right_radius=9 if i == n - 1 else 0, border_bottom_right_radius=9 if i == n - 1 else 0)
                 ui.rect(s, (*fill, 255), r, **radii)
-                ui.rect(s, (*BORDER, 255), r, width=1, **radii)
-                tcol = ON_ACCENT if sel else (tc if en else dc)
+                ui.rect(s, (*CTRL, 255), r, width=1, **radii)
+                tcol = ON_SEL if sel else (tc if en else dc)
                 self._txt(self.fb if sel else self.f, lbl, (r.centerx, r.y + 7), tcol, "c")
                 self.hits.append((r, cid, "seg", val))
                 x += w
@@ -1457,40 +2457,77 @@ class Menu:
                 r_ = pygame.Rect(x0 + i * (sw + 4), cy - sw // 2, sw, sw)
                 ui.rect(s, (*col, 255), r_, border_radius=6)
                 sel = c[cid] == i
-                ui.rect(s, (*(ACCENT if sel else BORDER), 255), r_.inflate(4, 4) if sel else r_, width=2 if sel else 1, border_radius=7)
+                ui.rect(s, (*(SEL if sel else CTRL), 255), r_.inflate(4, 4) if sel else r_, width=2 if sel else 1, border_radius=7)
                 self.hits.append((r_, cid, "seg", i))
         elif kind == "action":
-            br = pygame.Rect(R - 120, cy - 15, 120, 30)
+            btn = row["btn"](c) if callable(row["btn"]) else row["btn"]
+            bw = max(120, self.fb.size(btn)[0] + 32)
+            br = pygame.Rect(R - bw, cy - 15, bw, 30)
             hov = self.hover == cid and en
-            fill = (44, 42, 82) if hov else (34, 32, 66)
-            ui.rect(s, (*(fill if en else dimmed(fill, 0.6)), 255), br, border_radius=9)
-            ui.rect(s, (*(ACCENT2 if (hov and en) else BORDER), 255), br, width=1, border_radius=9)
-            self._txt(self.fb, row["btn"], (br.centerx, br.y + 6), (ACCENT2 if en else dc), "c")
+            armed = (cid == "quit" and self.quit_armed > time.perf_counter()) or (cid == "scenes_restore" and self.restore_armed > time.perf_counter())
+            widgets.button(s, self.fb, br, btn, "primary" if (row.get("primary") and en) else "tone", hover=hov, armed=armed, enabled=en,
+                           tone=DANGER if row.get("danger") else SEL, radius=9, dy=1, tone_edge=bool(row.get("danger")))
             self.hits.append((br, cid, "btn", None))
+        elif kind == "dd":
+            box = pygame.Rect(R - 220, cy - 17, 220, 34)
+            hov = self.hover == cid and en
+            opn = self.dd_open == cid
+            ui.rect(s, (*(HOVER_FILL if (hov or opn) else CTRL_FILL), 255), box, border_radius=9)
+            ui.rect(s, (*(SEL if opn else (HOVER_EDGE if hov else CTRL)), 255), box, width=2 if opn else 1, border_radius=9)
+            cur = c.get(cid)
+            lbl = next((l for l, v in row["opts"] if v == cur), row.get("placeholder", ""))
+            self._txt(self.fb if cur in [v for _, v in row["opts"]] else self.f, lbl, (box.x + 14, box.y + 7), tc if en else dc)
+            kx, ky = box.right - 18, box.centery
+            pygame.draw.polygon(s, ACCENT2 if en else dc, [(kx - 5, ky + 3), (kx + 5, ky + 3), (kx, ky - 3)] if opn else [(kx - 5, ky - 3), (kx + 5, ky - 3), (kx, ky + 3)])
+            self.dd_rects[cid] = box
+            self.hits.append((box, cid, "dd", None))
         elif kind == "text":
             fr = pygame.Rect(R - 250, cy - 16, 250, 32)
             foc = self.text_focus == cid
             ui.rect(s, (34, 32, 66, 255), fr, border_radius=8)
-            ui.rect(s, (*(ACCENT if foc else BORDER), 255), fr, width=2 if foc else 1, border_radius=8)
+            ui.rect(s, (*(FOCUS if foc else CTRL), 255), fr, width=2 if foc else 1, border_radius=8)
             txt = str(c[cid]) + ("|" if foc and int(time.perf_counter() * 2) % 2 == 0 else "")
-            self._txt(self.f, txt, (fr.x + 10, fr.y + 5), tc)
+            if not c[cid] and not foc and row.get("placeholder"):                  # an empty field says what it is for
+                self._txt(self.f, row["placeholder"], (fr.x + 10, fr.y + 5), dc)
+            else:
+                self._txt(self.f, txt, (fr.x + 10, fr.y + 5), tc)
             self.hits.append((rowr, cid, "text", None))
         else:
             lo, hi = row["lo"], row["hi"]
             pw = 56
             tr = R - pw - 14
-            tl = tr - 170
-            self.slider_geo = (tl, 170)
+            tlen = max(110, min(420, int(W * 0.27)))                    # the track grows with the width of the panel (or of its column)
+            if self._modable(row):
+                tlen = max(90, int(tlen * 0.6))
+            tl = tr - tlen
+            self.slider_geo = (tl, tlen)
+            self.slider_geos[cid] = (tl, tlen)
+            m = (c.get("mods") or {}).get(cid) if self._modable(row) else None
+            if self._modable(row):
+                self._music_pill(pygame.Rect(tl - 12 - self.MODW, cy - 13, self.MODW, 26), MOD.SOURCES[int(m["src"]) % len(MOD.SOURCES)][0] if m else "Fixo", m is not None, cid, "modbtn")
+            if m is not None:                                           # with the music: the range it moves in, two handles
+                f0, f1 = sorted(((m["lo"] - lo) / (hi - lo), (m["hi"] - lo) / (hi - lo)))
+                ui.rect(s, (66, 72, 100, 255), (tl, cy - 3, tlen, 6), border_radius=3)
+                ui.rect(s, (*ACCENT, 255), (tl + int(tlen * f0), cy - 3, max(4, int(tlen * (f1 - f0))), 6), border_radius=3)
+                for fr_ in (f0, f1):
+                    kc = (tl + int(tlen * fr_), cy)
+                    ui.circle(s, (255, 255, 255), kc, 9)
+                    ui.circle(s, (*ACCENT, 255), kc, 9, 2)
+                vr = pygame.Rect(R - pw, cy - 14, pw, 28)
+                ui.rect(s, (34, 32, 66, 255), vr, border_radius=8)
+                self._txt(self.f_s, f"{min(m['lo'], m['hi'])}–{max(m['lo'], m['hi'])}", (vr.centerx, vr.y + 6), tc, "c")
+                self.hits.append((pygame.Rect(tl - 12, cy - 20, tlen + 24, 40), cid, "slider", None))
+                return
             frac = (c[cid] - lo) / (hi - lo)
             hov = (self.hover == cid or self.drag == cid) and en
-            ui.rect(s, (*(dimmed((54, 52, 96), 0.8) if not en else (54, 52, 96)), 255), (tl, cy - 3, 170, 6), border_radius=3)
+            ui.rect(s, (*(dimmed((66, 72, 100), 0.8) if not en else (66, 72, 100)), 255), (tl, cy - 3, tlen, 6), border_radius=3)
             dfrac = (DEFAULTS[cid] - lo) / (hi - lo)
-            pygame.draw.line(s, (*DIM, 255), (tl + int(170 * dfrac), cy + 7), (tl + int(170 * dfrac), cy + 11))
-            ui.rect(s, (*(ACCENT if en else dimmed(ACCENT)), 255), (tl, cy - 3, max(4, int(170 * frac)), 6), border_radius=3)
-            kc = (tl + int(170 * frac), cy)
+            pygame.draw.line(s, (*DIM, 255), (tl + int(tlen * dfrac), cy + 7), (tl + int(tlen * dfrac), cy + 11))
+            ui.rect(s, (*(ACCENT if en else dimmed(ACCENT)), 255), (tl, cy - 3, max(4, int(tlen * frac)), 6), border_radius=3)
+            kc = (tl + int(tlen * frac), cy)
             ui.circle(s, (255, 255, 255) if en else dimmed((255, 255, 255)), kc, 10 if hov else 9)
             ui.circle(s, (*(ACCENT if en else dimmed(ACCENT)), 255), kc, 10 if hov else 9, 2)
             vr = pygame.Rect(R - pw, cy - 14, pw, 28)
             ui.rect(s, (34, 32, 66, 255), vr, border_radius=8)
             self._txt(self.fb, f"{c[cid]}{row.get('unit', '%')}", (vr.centerx, vr.y + 4), tc, "c")
-            self.hits.append((pygame.Rect(tl - 12, cy - 20, 170 + 24, 40), cid, "slider", None))
+            self.hits.append((pygame.Rect(tl - 12, cy - 20, tlen + 24, 40), cid, "slider", None))
