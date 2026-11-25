@@ -91,7 +91,7 @@ class ControlWindow:
         self.surf = pygame.Surface((self.W, self.H))
         self.fb = wg.font("body", True)
         self.fs = wg.font("small")
-        self.fm = wg.font("head", True)
+        self.fm = wg.font("lead", True)                               # the scene name: the title size (lead), the same as the other titles of the panel
         self.live = DeckWindow(headless=True)                          # used only to draw the Ao vivo tab
         self.live.ear_open = bool(menu.cfg.get("ear_open", True))
         self.live.tour_open = not menu.cfg.get("tour_done", False)
