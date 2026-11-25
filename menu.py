@@ -1589,6 +1589,10 @@ class Menu(WizardMixin):
         if cid == "ed_discard":
             self.discard_scene()
             return None
+        if cid == "lbar_add":                                                    # "+ Ajuste": the list of kinds of effect opens (its row is the last of the list)
+            self.dd_open, self.dd_hl = "ly_add", 0
+            self.need = True
+            return None
         if cid.startswith("lbar_"):                                              # the toolbar over the list of effects: acts on the one selected
             what = {"lbar_up": "up", "lbar_down": "down", "lbar_dup": "dup", "lbar_del": "del"}[cid]
             self.layer_action((what, int(self.cfg.get("ly_sel", 0))))
@@ -2106,24 +2110,47 @@ class Menu(WizardMixin):
         return OK, "Tudo salvo"
 
     def _lbar_row(self, row, y):
-        """The toolbar over the list of effects (ScreenMaster's): move up, move down, duplicate and delete the effect that is selected."""
+        """The toolbar over the list of effects (ScreenMaster's): move up, move down, duplicate and delete the selected effect, and the main action "+ Ajuste"."""
         s, c = self.surf, self.cfg
         W = self.W
         cy = y + (self.ROW - 4) // 2
         sel = int(c.get("ly_sel", 0))
         n = len(c.get("layers") or [])
         x = W - 22
-        for cid, label in reversed((("lbar_del", "Apagar"), ("lbar_dup", "Duplicar"), ("lbar_down", "↓"), ("lbar_up", "↑"))):
-            w = max(34, self.f_s.size(label)[0] + 18)
-            x -= w
-            br = pygame.Rect(x, cy - 13, w, 26)
-            on = n > 0 and (cid == "lbar_del" or cid == "lbar_dup" or (cid == "lbar_up" and sel < n - 1) or (cid == "lbar_down" and sel > 0))
-            widgets.button(s, self.f_s, br, label, "quiet", hover=self.hover == cid and on, enabled=on, radius=8, dy=1)
+        add_lbl = "+ Ajuste"
+        aw = max(96, self.fb.size(add_lbl)[0] + 26)
+        br = pygame.Rect(x - aw, cy - 15, aw, 30)
+        widgets.button(s, self.fb, br, add_lbl, "primary", hover=self.hover == "lbar_add", radius=9, dy=1)
+        self.hits.append((br, "lbar_add", "btn", None))
+        self.order.append("lbar_add")
+        self.order_val.append(None)
+        self.frects["lbar_add"] = br
+        x = br.x - 12
+        icons = (("lbar_del", "del", n > 0), ("lbar_dup", "dup", n > 0), ("lbar_down", "down", n > 0 and sel > 0), ("lbar_up", "up", n > 0 and sel < n - 1))
+        for cid, kind, on in icons:
+            x -= 30
+            r = pygame.Rect(x, cy - 13, 26, 26)
+            col = TEXT if on else widgets.FAINT
+            hov = on and self.hover == cid
+            if hov:
+                ui.rect(s, widgets.HOVER_FILL, r, border_radius=6)
+            cx, cyy = r.center
+            if kind == "up":
+                pygame.draw.polygon(s, col, [(cx, cyy - 5), (cx - 6, cyy + 4), (cx + 6, cyy + 4)])
+            elif kind == "down":
+                pygame.draw.polygon(s, col, [(cx, cyy + 5), (cx - 6, cyy - 4), (cx + 6, cyy - 4)])
+            elif kind == "dup":
+                pygame.draw.rect(s, col, (cx - 6, cyy - 3, 9, 10), 1, border_radius=2)
+                pygame.draw.rect(s, col, (cx - 3, cyy - 6, 9, 10), 1, border_radius=2)
+            elif kind == "del":
+                pygame.draw.rect(s, col, (cx - 6, cyy - 4, 12, 11), 1, border_radius=2)
+                pygame.draw.line(s, col, (cx - 8, cyy - 5), (cx + 8, cyy - 5), 1)
+                pygame.draw.line(s, col, (cx - 3, cyy - 7), (cx + 3, cyy - 7), 1)
             if on:
-                self.hits.append((br, cid, "btn", None))
+                self.hits.append((r, cid, "btn", None))
                 self.order.append(cid)
                 self.order_val.append(None)
-                self.frects[cid] = br
+                self.frects[cid] = r
             x -= 4
 
     def _item_row(self, row, y):
