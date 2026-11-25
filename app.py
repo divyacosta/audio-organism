@@ -150,7 +150,8 @@ def main():
         menu.problem("audio", audio_err)
     dw, dh = pygame.display.get_desktop_sizes()[0]
     cw0, _ = ControlWindow.default_size(dw, dh)
-    ctl = ControlWindow(menu, pos=(max(20, min(dw - cw0 - 20, 1330)), 30), headless=test)
+    old_panel = bool(os.environ.get("VIS_OLD_PANEL"))                          # the pygame panel is retired: it is only drawn (no window) unless VIS_OLD_PANEL=1 asks for it
+    ctl = ControlWindow(menu, pos=(max(20, min(dw - cw0 - 20, 1330)), 30), headless=test or not old_panel)
     thumbs = None
     if not test:
         from thumbs import Thumbs                         # the live thumbnails of the scene gallery (their own small renderer, in a thread)
@@ -410,17 +411,16 @@ def main():
         if err_s:
             menu.say(err_s)
             cfg["phone_view"] = False
-        err_w = web.configure(cfg.get("web_ui", False))
-        if err_w:
-            menu.say(err_w)
-            cfg["web_ui"] = False
-        if cfg.get("web_ui") and not web_opened:
-            webui.open_window(web.url)
-            web_opened = True
-        elif not cfg.get("web_ui"):
-            web_opened = False
+        if not test:                                                                         # the panel is the page: always on, in its own window
+            err_w = web.configure(True)
+            if err_w:
+                menu.say(err_w)
+            elif not web_opened:
+                webui.open_window(web.url)
+                web_opened = True
         for c_ in web.poll():                                                                # what was done on the page: the same as doing it on the panel
-            webui.apply(menu, c_)
+            if webui.apply(menu, c_) == "quit":
+                running = False
         t_w = time.perf_counter()
         web.publish(menu, dict(fps=round(fps)))
         if web.server is not None:
