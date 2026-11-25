@@ -81,7 +81,7 @@ def test_menu():
         for r in rows:
             n += 1
             try:
-                assert r["id"] and r["label"] is not None and r["kind"] in ("seg", "slider", "toggle", "radio", "action", "text", "swatches", "dd", "layer", "note", "edbar", "item", "scene", "ear", "week", "lbar", "phead")
+                assert r["id"] and r["label"] is not None and r["kind"] in ("seg", "slider", "toggle", "radio", "action", "text", "swatches", "dd", "layer", "note", "edbar", "item", "scene", "ear", "week", "lane", "lbar", "phead")
                 h = r["help"](cfg) if callable(r["help"]) else r["help"]
                 assert isinstance(h, str)
                 if r.get("enabled"):
@@ -3048,10 +3048,14 @@ def test_lanes():
     check("12:30 escreve o valor da faixa no brilho (entre 20 e 180 aos 10:00 e 15:00)", cfg["bloom"] == 100, cfg["bloom"])
     m = menu.Menu(menu.fresh())
     m.cfg["agenda_lanes"] = [{"key": "bloom", "points": []}]
-    m.cfg["bloom"] = 77
-    m.press("la_val:0")
+    m.click_rect = pygame.Rect(0, 0, 1440, 200)
+    m.click_pos = (600, 100)
+    m.press("la_pt:0")
     pts = m.cfg["agenda_lanes"][0]["points"]
-    check("um clique grava o valor atual neste minuto", len(pts) == 1 and pts[0][1] == 77, pts)
+    check("um clique na linha do dia põe um ponto: a hora é onde clicou, o valor é a altura", pts == [[600, 100]], pts)
+    m.click_pos = (603, 100)
+    m.press("la_pt:0")
+    check("um clique perto de um ponto o apaga", m.cfg["agenda_lanes"][0]["points"] == [], m.cfg["agenda_lanes"][0]["points"])
 
 
 def test_safety_undo():

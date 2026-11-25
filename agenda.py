@@ -93,7 +93,7 @@ def apply(agenda, op, i, scenes=1):
 
 # ---- faixas (lanes): a number of the scene follows the day. Each lane has points (minute of the day, value); between two points the
 # value is a straight line, before the first and after the last it holds. The agenda writes it once a minute (the page is the editor).
-LANE_KEYS = {"bloom": ("Brilho das luzes", 0, 200), "expo": ("Exposição", 50, 200)}
+LANE_KEYS = {"bloom": ("Brilho das luzes", 0, 200), "expo": ("Exposição", 50, 200), "react": ("Reatividade ao som", 25, 200)}
 
 
 def lane_value(points, minute):

@@ -76,6 +76,7 @@ class Menu(WizardMixin):
         self.redo = []                                         # what Desfazer took back: Refazer puts it again
         self._peek = None                                      # while the header's Antes is held: the scene as it was, to put back on release
         self.hdr_hits = []                                     # the buttons of the header's undo strip: (rect, id), on the surface
+        self.click_pos, self.click_rect = (0, 0), pygame.Rect(0, 0, 1, 1)     # where the last click was, and the rectangle it hit (the lanes read them)
         self._reveal = None                                    # the item just opened: the next frame scrolls its row to the top
         self.sys_undo = []                                     # (when, label, restore function) of the Sistema actions with no confirmation: the toast offers "Desfazer"
         self._push_t = 0.0                                     # when the last scene snapshot was taken (Ctrl+Z undoes the newest of the two stacks)
@@ -252,6 +253,9 @@ class Menu(WizardMixin):
             elif rows[i].get("kind") == "week":
                 h += self.WEEK_H
                 i += 1
+            elif rows[i].get("kind") == "lane":
+                h += self.LANE_H
+                i += 1
             elif rows[i].get("kind") == "ear":
                 h += self.EAR_H
                 i += 1
@@ -260,6 +264,7 @@ class Menu(WizardMixin):
                 i += 1
         return h
 
+    LANE_H = 66                                                                  # a lane: its name and value, and the day with its curve
     WEEK_H = 7 * 24 + 40                                                         # the week of the agenda: seven days of 22 px and the ruler on top
     EAR_H = 492                                                                  # the analysis of the music in Sistema > Áudio (deck's card, open)
 
@@ -1681,16 +1686,21 @@ class Menu(WizardMixin):
             lanes = self.cfg.setdefault("agenda_lanes", [])
             if op == "la_new":
                 lanes.append(dict(key=idx, points=[]))
-            elif op == "la_val" and 0 <= int(idx) < len(lanes):
+            elif op == "la_pt" and 0 <= int(idx) < len(lanes):
                 lane = lanes[int(idx)]
-                now = time.localtime()
-                minute = now.tm_hour * 60 + now.tm_min
-                key = lane.get("key")
-                if key in AG3.LANE_KEYS:
-                    pts = [p for p in lane.get("points") or [] if int(p[0]) != minute]          # one point per minute: a new click at the same minute replaces it
-                    pts.append([minute, int(self.cfg.get(key, AG3.LANE_KEYS[key][1]))])
-                    lane["points"] = sorted(pts)
-                    self.say(f"Ponto gravado às {now.tm_hour:02d}:{now.tm_min:02d}")
+                import agenda as AG4
+                lo, hi = AG4.LANE_KEYS.get(lane.get("key"), ("?", 0, 100))[1:]
+                rect, pos = self.click_rect, self.click_pos
+                minute = int(max(0, min(1439, (pos[0] - rect.x) / max(1, rect.w) * 1440))) // 5 * 5
+                value = int(round(lo + (rect.bottom - pos[1]) / max(1, rect.h) * (hi - lo)))
+                pts = sorted([list(p) for p in lane.get("points") or []])
+                near = [p for p in pts if abs(int(p[0]) - (pos[0] - rect.x) / max(1, rect.w) * 1440) <= 8]
+                if near:
+                    pts.remove(near[0])                                       # a click by a point takes it away
+                else:
+                    pts = [p for p in pts if int(p[0]) != minute]
+                    pts.append([minute, max(lo, min(hi, value))])
+                lane["points"] = sorted(pts)
             elif op == "la_del" and 0 <= int(idx) < len(lanes):
                 del lanes[int(idx)]
             self.touch()
@@ -2095,6 +2105,7 @@ class Menu(WizardMixin):
                 self.focus = self.order.index(fk)
             self.need = True
             if kind == "btn":
+                self.click_pos, self.click_rect = pos, rect                  # a click where it was: the lanes take the hour and the value from it
                 return self.press(cid)
             if kind == "ddclose":
                 self.dd_open = None
@@ -2326,6 +2337,31 @@ class Menu(WizardMixin):
         if self.is_dirty():
             return (ACCENT, "Mudando ao vivo") if self.cfg.get("live") else (ACCENT2, "Só na prévia")
         return OK, "Tudo salvo"
+
+    def _lane_row(self, row, y, wc):
+        """A lane of the agenda: the value over the day as a curve between its points. A click on the day puts a point (the hour is where it was
+        clicked, the value its height); a click next to a point takes it away."""
+        s = self.surf
+        import agenda as AG
+        x0 = 18
+        label, lo, hi = AG.LANE_KEYS.get(row.get("key"), ("?", 0, 100))
+        lane = next((l for l in self.cfg.get("agenda_lanes") or [] if l.get("key") == row.get("key")), None)
+        idx = row.get("lane", 0)
+        self._txt(self.f_s, label, (x0, y + 4), TEXT)
+        now_v = int(self.cfg.get(row.get("key"), lo))
+        self._txt(self.f_s, f"agora {now_v}", (self.W - 18 - 0, y + 4), DIM, "r")
+        rect = pygame.Rect(x0, y + 24, max(60, self.W - 2 * x0 - 6), 36)
+        ui.rect(s, (*widgets.SURFACE2, 255), rect, border_radius=6)
+        pts = sorted((int(m), float(v)) for m, v in (lane or {}).get("points") or [])
+        def xy(m, v):
+            return (rect.x + int(rect.w * m / 1440.0), rect.bottom - int((v - lo) / max(1, hi - lo) * (rect.h - 6)) - 3)
+        if len(pts) > 1:
+            pygame.draw.lines(s, (*SEL, 255), False, [xy(m, v) for m, v in pts], 2)
+        for m, v in pts:
+            pygame.draw.circle(s, (*SEL, 255), xy(m, v), 3)
+        for h in (0, 6, 12, 18):
+            self._txt(self.f_s, f"{h:02d}", (rect.x + int(rect.w * h / 24.0) + 2, rect.bottom + 1), DIM)
+        self.hits.append((rect, f"la_pt:{idx}", "btn", None))
 
     def _week_row(self, row, y, wc):
         """The week: one line per day (Seg to Dom) over 24 hours. Each rule is a mark on the days it runs; a click on an hour adds a rule there."""
@@ -2728,6 +2764,10 @@ class Menu(WizardMixin):
             elif rows[i].get("kind") == "week":                                        # the week of the agenda: a click on an hour adds a rule for that day
                 self._week_row(rows[i], ry, wc)
                 ry += self.WEEK_H
+                i += 1
+            elif rows[i].get("kind") == "lane":                                        # a lane of the agenda: its curve over the day, points by clicks
+                self._lane_row(rows[i], ry, wc)
+                ry += self.LANE_H
                 i += 1
             elif rows[i].get("kind") == "ear":                                         # a dark slot: the control window paints the live analysis over it
                 r = pygame.Rect(12, ry, wc - 24, self.EAR_H - 8)

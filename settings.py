@@ -678,7 +678,7 @@ def agenda_rows(cfg):
     import agenda as AG2
     for i, lane in enumerate(cfg.get("agenda_lanes") or []):                             # Faixas: a number that follows the day (points: a minute and a value)
         label = AG2.LANE_KEYS.get(lane.get("key"), ("?", 0, 0))[0]
-        rows.append(dict(id=f"la_val:{i}", kind="action", label=f"Faixa: {label}", btn=f"{len(lane.get('points') or [])} pontos", help="Um clique grava o valor atual neste minuto da faixa"))
+        rows.append(dict(id=f"lane:{i}", kind="lane", label=label, lane=i, key=lane.get("key"), help="Um clique põe um ponto: a hora é onde clicou, o valor é a altura. Um clique num ponto o apaga"))
         rows.append(dict(id=f"la_del:{i}", kind="action", label="Apagar esta faixa", btn="Apagar", danger=True, help="Tira a faixa da agenda"))
     rows.append(dict(id="la_pick", kind="dd", label="Nova faixa", opts=[("Escolher", "")] + [(label, key) for key, (label, _, _) in AG2.LANE_KEYS.items()],
                      help="Uma faixa que segue o dia: escolha o que ela controla"))
