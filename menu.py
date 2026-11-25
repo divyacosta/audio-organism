@@ -33,9 +33,14 @@ from settings import (ae_current, auto_cards, CAM_AUTO, CAM_KEYS, CAM_MANUAL, CA
                       TAB_LIVE, TAB_SCENES, TAB_SYS, TABS, WIDE_MIN, _item_text)        # the data and the file on disk live in settings.py; these names stay readable as menu.X
 
 
+def parse_time_(text):
+    import agenda as _ag
+    return _ag.parse_time(text)
+
+
 class Menu(WizardMixin):
     W = 640
-    HEAD = 44
+    HEAD = 66                                                                          # the tab row (36) and, under it, the timeline of the day (ScreenMaster's strip)
     ROW = 52
     GAP = 12
     FOOT = 28
@@ -2071,6 +2076,7 @@ class Menu(WizardMixin):
             self.order_val.append(None)
             self.frects[cid] = r
             x += tw + 6
+        self._timeline(W, 44)
         on = bool(c.get("advanced", False))                                        # the switch of the advanced mode, on the right of the tab bar
         hv = self.hover == "advanced"
         ui.rect(s, (*(SURFACE2 if hv else SURFACE), 255), adv_r, border_radius=10)
@@ -2150,6 +2156,29 @@ class Menu(WizardMixin):
         if self.is_dirty():
             return (ACCENT, "Mudando ao vivo") if self.cfg.get("live") else (ACCENT2, "Só na prévia")
         return OK, "Tudo salvo"
+
+    def _timeline(self, W, y):
+        """The day, from midnight to midnight, under the tabs: the rules of the agenda as marks (lime when today's day is in them), and the time now as a lime line."""
+        s = self.surf
+        x0, x1 = 16, W - 16
+        ui.rect(s, (*BORDER, 255), (x0, y + 8, x1 - x0, 1))
+        for h in range(0, 25, 3):
+            hx = x0 + int((x1 - x0) * h / 24)
+            pygame.draw.line(s, (*DIM, 255), (hx, y + 5), (hx, y + 11), 1)
+            if h % 6 == 0 and h < 24:
+                self._txt(self.f_s, f"{h:02d}", (hx + 3, y + 1), DIM)
+        now = time.localtime()
+        today_ok = lambda rule: not rule.get("days") or now.tm_wday in rule.get("days")
+        for rule in self.cfg.get("agenda") or []:
+            m = parse_time_(rule.get("time"))
+            if m is None:
+                continue
+            mx = x0 + int((x1 - x0) * m / 1440)
+            on = rule.get("on", True) and today_ok(rule)
+            pygame.draw.rect(s, SEL if on else DIM, (mx - 3, y + 3, 6, 10), border_radius=2) if on else pygame.draw.rect(s, (*DIM, 255), (mx - 2, y + 4, 4, 8), 1)
+        nx = x0 + int((x1 - x0) * (now.tm_hour * 60 + now.tm_min) / 1440)
+        ui.rect(s, (*SEL, 255), (nx - 1, y + 1, 2, 16))
+        self._txt(self.f_s, time.strftime("%H:%M"), (x1, y + 1), SEL, "r")
 
     def _lbar_row(self, row, y):
         """The toolbar over the list of effects (ScreenMaster's): move up, move down, duplicate and delete the selected effect, and the main action "+ Ajuste"."""
