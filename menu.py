@@ -2034,13 +2034,18 @@ class Menu(WizardMixin):
         self.card_marks = []                                           # (x0, top, height, width, title) of every card with a title, on the surface: the control window pins the title of the one being scrolled
         W = self.W
         # tab bar
-        x = 0
+        # the brand, left, as ScreenMaster's: a lime dot, the name; then the tabs; the scene on the air and the clock in the middle
+        brand_w = 178 if W >= 900 else 0
+        if brand_w:
+            ui.circle(s, (*SEL, 255), (22, 18), 6)
+            self._txt(widgets.font("label", True), "Audio Organism", (36, 9), TEXT)
+        x = brand_w
         hidden_n = 0 if self.cfg.get("advanced", False) else self.adv_hidden()          # how many settings the simple mode keeps out of sight
         adv_w = 172 if hidden_n else 118                               # room for the +N of the hidden options
         adv_r = pygame.Rect(W - adv_w, 0, adv_w, 36)
         for i, (name, _) in enumerate(TABS):
             cid = f"tab{i}"
-            tw = min(220, (W - adv_w - 6 - 6 * (len(TABS) - 1)) // len(TABS))          # the tabs do not stretch across a wide window
+            tw = min(220, (W - adv_w - brand_w - 6 - 6 * (len(TABS) - 1)) // len(TABS))          # the tabs do not stretch across a wide window
             r = pygame.Rect(x, 0, tw, 36)
             sel, hov = i == self.tab, self.hover == cid
             if sel:                                                                     # the open tab: bright text and a lime line under it, no box (ScreenMaster)
