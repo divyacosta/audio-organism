@@ -982,6 +982,8 @@ def scene_layout(cfg, view="gallery", wide=False):
         right = [c for c in right if c[0] != SLOT_LIST_TITLE.get(slot)]         # the list of effects is on the left now
         ly = cfg.get("layers") or []
         i = int(cfg.get("ly_sel", 0))
+        if not (0 <= i < len(ly) and LY.SLOT_OF.get(ly[i].get("t")) == slot):
+            i = LY.first_of(cfg, slot)                                         # nothing of this slot selected: its top effect is the one shown
         if 0 <= i < len(ly) and LY.SLOT_OF.get(ly[i].get("t")) == slot:
             info = LY.TYPES.get(ly[i].get("t"), {})
             right = [("", [dict(id="phead", kind="phead", label=info.get("label", ""), help=info.get("help", ""))])] + right
