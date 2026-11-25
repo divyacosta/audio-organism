@@ -230,6 +230,7 @@ def save_cfg(cfg):
         pass
 
 
+FPS_FREE = 246                                   # the last step of the Fluidez slider: no cap at all (240 is the last number, then "Sem limite")
 FPS_OPTS = [("24", 24), ("30", 30), ("60", 60), ("90", 90), ("120", 120), ("144", 144), ("240", 240)]
 TARGET_OPTS = [("30", 30), ("60", 60), ("90", 90), ("120", 120), ("144", 144)]
 STROBE_OPTS = [("Desligado", 0), ("Suave", 1), ("Completo", 2)]
@@ -273,7 +274,7 @@ GRAPHICS = [
     ("DESEMPENHO", [
         dict(id="res", kind="slider", label="Nitidez da imagem", lo=25, hi=100, step=5, unit="%",
              help="Menos nitidez, mais fluida"),
-        dict(id="fps_out", kind="slider", label="Fluidez (FPS)", lo=24, hi=240, step=6, unit=" fps",
+        dict(id="fps_out", kind="slider", label="Fluidez (FPS)", lo=24, hi=FPS_FREE, step=6, unit=" fps", top=(FPS_FREE, "Sem limite"),
              help=lambda c: "O que o programa tenta manter" + (" · limitada pelo monitor" if c["vsync"] else "")),
         dict(id="dynres", kind="toggle", label="Ajuste automático de nitidez",
              help="Se a imagem começar a travar, o programa reduz a nitidez sozinho"),
@@ -314,8 +315,8 @@ GRAPHICS = [
         dict(id="fx_bloom", kind="toggle", label="Halo de luz", help="Desligado: sem o halo de luz, mais leve"),
         dict(id="fx_trail", kind="toggle", label="Rastro das camadas", help="Desligado: ignora as camadas de rastro (feedback)"),
         dict(id="fx_parts", kind="toggle", label="Partículas das camadas", help="Desligado: ignora as camadas de partículas"),
-        dict(id="fx_mblur", kind="toggle", label="Borrão de movimento", help="Desligado: sem o obturador, mais leve"),
-        dict(id="fx_none", kind="action", label="Todos os efeitos pesados", btn=lambda c: "Desligar todos" if any(c[k] for k in ("fx_glass", "fx_bloom", "fx_trail", "fx_parts", "fx_mblur")) else "Ligar todos", help="Os cinco acima de uma vez"),
+
+        dict(id="fx_none", kind="action", label="Todos os efeitos pesados", btn=lambda c: "Desligar todos" if any(c[k] for k in ("fx_glass", "fx_bloom", "fx_trail", "fx_parts")) else "Ligar todos", help="Os cinco acima de uma vez"),
         dict(id="img_style", kind="seg", label="Estilo da imagem", opts=[("Normal", 0), ("Chapado", 1), ("Linhas", 2), ("Pixelado", 3)],
              help=lambda c: ["A imagem como a cena desenha", "Poucas cores lisas, sem degradês", "Só os contornos, na cor da imagem, sobre preto", "Blocos grandes de cor, como um jogo antigo"][c["img_style"]]),
         dict(id="img_pix", kind="slider", label="Tamanho dos pixels", lo=2, hi=16, step=1, unit=" px",
@@ -1212,7 +1213,7 @@ def color_rows(cfg):
 GFX_CARDS = [_card("ATALHO DE QUALIDADE", "preset"), _card("NITIDEZ E FLUIDEZ", "res", "dynres", "fps_out", "dynmin", "rrate"),
              _card("QUANTIDADE DE DETALHES", "detail", "steps", "dist"), _card("BRILHO", "bloomq", "bloomres"),
              _card("NITIDEZ", "sharp"),
-             _card("EFEITOS PESADOS", "fx_glass", "fx_bloom", "fx_trail", "fx_parts", "fx_mblur", "fx_none")]
+             _card("EFEITOS PESADOS", "fx_glass", "fx_bloom", "fx_trail", "fx_parts", "fx_none")]
 OUT_CARDS = []                                   # the comfort limits and the finish live in each scene now (Estúdio), not in the system page
 SCREEN_CARD = _card("FORMATO", "scr_aspect", "scr_zoom", "scr_mirror")
 TABS = [

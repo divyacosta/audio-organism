@@ -1420,9 +1420,9 @@ def test_fx():
     check("heavy effects: glass off makes the faces opaque", float(np.abs(g_on - g_off).mean()) > 0.15, round(float(np.abs(g_on - g_off).mean()), 3))
     mfx = menu.Menu(menu.fresh())
     mfx.press("fx_none")
-    off_ = [mfx.cfg[k] for k in ("fx_glass", "fx_bloom", "fx_trail", "fx_parts", "fx_mblur")]
+    off_ = [mfx.cfg[k] for k in ("fx_glass", "fx_bloom", "fx_trail", "fx_parts")]
     mfx.press("fx_none")
-    check("heavy effects: one button turns all off, then all on", not any(off_) and all(mfx.cfg[k] for k in ("fx_glass", "fx_bloom", "fx_trail", "fx_parts", "fx_mblur")))
+    check("heavy effects: one button turns all off, then all on", not any(off_) and all(mfx.cfg[k] for k in ("fx_glass", "fx_bloom", "fx_trail", "fx_parts")))
     cp_ = {}
     for sm_ in (0, 2):                                                                 # Sistema > Imagem > Conforto: the camera tremor and swing shrink
         cfg_ = menu.fresh()
@@ -2982,9 +2982,9 @@ def test_safety_undo():
     m.press("reset")
     check("Restaurar não toca no Acabamento, que é de cada cena", cfg["scr_vig"] == 3, cfg["scr_vig"])
     m.press("fx_none")
-    off = not any(cfg[k] for k in ("fx_glass", "fx_bloom", "fx_trail", "fx_parts", "fx_mblur"))
+    off = not any(cfg[k] for k in ("fx_glass", "fx_bloom", "fx_trail", "fx_parts"))
     m.undo_last()
-    check("Desligar todos também desfaz", off and any(cfg[k] for k in ("fx_glass", "fx_bloom", "fx_trail", "fx_parts", "fx_mblur")), off)
+    check("Desligar todos também desfaz", off and any(cfg[k] for k in ("fx_glass", "fx_bloom", "fx_trail", "fx_parts")), off)
     cfg["profile"] = 1
     m.profile_save()
     cfg["safe_flash"] = 2

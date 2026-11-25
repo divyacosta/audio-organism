@@ -312,12 +312,12 @@ def main():
         dyn_floor = max(0.1, min(1.0, cfg["dynmin"] / max(cfg["res"], 1)))
         ctl.interval = 1.0 / cfg["panel_fps"] if cfg.get("panel_fps", 0) > 0 else 0.0           # 0: the panel is redrawn with every output frame
         ctl.view = cfg["panel_view"]
-        rend.mblur, rend.mblur_fps, rend.dt = (cfg["mblur"] if cfg["fx_mblur"] else 0), cfg["mblur_fps"], dt
+        rend.mblur, rend.mblur_fps, rend.dt = 0, cfg["mblur_fps"], dt                 # the motion blur is out of the program for now (its settings are gone)
         rend.fx_trail, rend.fx_parts = cfg["fx_trail"], cfg["fx_parts"]
         if cfg["dynres"] and not test and bench is None:
             if clock_t - dyn_t > 0.6:                           # trade resolution for FPS: down fast, up slowly
                 dyn_t = clock_t
-                target = cfg["fps_out"]
+                target = min(cfg["fps_out"], 240)                                    # "Sem limite" trades resolution for the 240 the screens go to
                 if fps < target * 0.93:
                     dyn = max(dyn_floor, dyn - 0.07)
                 elif fps > target * 1.20 and dyn < 1.0:
@@ -330,7 +330,7 @@ def main():
                 dts = sorted(bench["dts"][5:])                                         # skip the first frames (warm-up)
                 avg = len(dts) / max(sum(dts), 1e-6)
                 p1 = 1.0 / max(dts[max(0, int(len(dts) * 0.99) - 1)], 1e-6)            # the slowest 1% of frames
-                tgt, cur = cfg["fps_out"], int(cfg["preset"])
+                tgt, cur = min(cfg["fps_out"], 240), int(cfg["preset"])
                 if cur >= len(PRESETS_N):                                              # custom settings: compare with the middle preset
                     cur = 1
                 if avg >= 1.8 * tgt and p1 >= 1.2 * tgt:
@@ -569,7 +569,7 @@ def main():
             break
 
         # fps cap (only when not synced to the monitor)
-        pace = cfg["fps_out"]                                                                  # the output FPS: the picture is never drawn faster than this
+        pace = 0 if cfg["fps_out"] >= 246 else cfg["fps_out"]          # "Sem limite": no cap at all                                                                  # the output FPS: the picture is never drawn faster than this
         if not test and (not rend.vsync or skip) and pace > 0:                                 # a skipped frame (a long silence draws 1 in 6) never reaches the swap that vsync waits on: it needs the cap too, or the loop spins at 1500 fps
             target = 1.0 / pace
             prof.mark("Resto/fim do quadro")

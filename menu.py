@@ -1702,7 +1702,7 @@ class Menu(WizardMixin):
             self.say(f"Padrões de {SYS_ITEMS[int(self.cfg.get('sys_item', 0)) % len(SYS_ITEMS)][0].lower()} restaurados", undo=True)
             return None
         if cid == "fx_none":                                                       # all the heavy effects together: off if any is on, else back on
-            keys = ("fx_glass", "fx_bloom", "fx_trail", "fx_parts", "fx_mblur")
+            keys = ("fx_glass", "fx_bloom", "fx_trail", "fx_parts")
             on = not any(self.cfg[k] for k in keys)
             self.sys_push("efeitos pesados", keys)
             self.cfg.update({k: on for k in keys})
@@ -2573,5 +2573,6 @@ class Menu(WizardMixin):
             ui.circle(s, (*(ACCENT if en else dimmed(ACCENT)), 255), kc, 10 if hov else 9, 2)
             vr = pygame.Rect(R - pw, cy - 14, pw, 28)
             ui.rect(s, (34, 32, 66, 255), vr, border_radius=8)
-            self._txt(self.fb, f"{c[cid]}{row.get('unit', '%')}", (vr.centerx, vr.y + 4), tc, "c")
+            shown = row["top"][1] if row.get("top") and c[cid] == row["top"][0] else f"{c[cid]}{row.get('unit', '%')}"
+            self._txt(self.fb, shown, (vr.centerx, vr.y + 4), tc, "c")
             self.hits.append((pygame.Rect(tl - 12, cy - 20, tlen + 24, 40), cid, "slider", None))
