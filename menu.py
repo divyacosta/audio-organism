@@ -5,6 +5,7 @@ clearly stateful control: toggle, segmented choice or slider. Disabled controls 
 always visible. Changes apply instantly and show a short confirmation.
 """
 import json
+import math
 import os
 import time
 
@@ -280,11 +281,13 @@ class Menu(WizardMixin):
     # ------------------------------------------------------------ scene presets
     @property
     def wide(self):
-        return self.W >= WIDE_MIN
+        """The window is wide enough for the two columns. (While a column is drawn, self.W is the column's width: the window's own width is kept apart.)"""
+        return getattr(self, "W_window", self.W) >= WIDE_MIN
 
     def set_width(self, w):
         """The panel follows the window: a new width redraws everything, and the editor changes layout at WIDE_MIN."""
         w = max(560, int(w))
+        self.W_window = w
         if w == self.W:
             return
         self.W = w
@@ -2273,9 +2276,13 @@ class Menu(WizardMixin):
         self.hits.append((rowr, cid, "ly", ("sel", i)))
         cy = y + (self.ROW - 4) // 2
         eye = pygame.Rect(18, cy - 13, 26, 26)
-        pill = pygame.Rect(eye.x + 1, eye.centery - 8, 28, 16)                      # the same little switch as everywhere: on / off (it was a dot that looked like a radio)
-        ui.rect(s, (*(OK if on else (74, 80, 108)), 255), pill, border_radius=8)
-        ui.circle(s, (255, 255, 255), (pill.right - 8 if on else pill.left + 8, pill.centery), 6)
+        ec, col = eye.center, (widgets.TEXT if on else widgets.FAINT)           # an eye: open when the effect plays, closed when it is off
+        if on:
+            pygame.draw.ellipse(s, col, (ec[0] - 9, ec[1] - 5, 18, 10), 2)
+            pygame.draw.circle(s, col, ec, 3)
+        else:
+            pygame.draw.arc(s, col, (ec[0] - 9, ec[1] - 6, 18, 12), math.pi * 0.1, math.pi * 0.9, 2)
+            pygame.draw.line(s, col, (ec[0] - 8, ec[1] + 2), (ec[0] + 8, ec[1] + 2), 1)
         self.hits.append((eye, cid, "ly", ("eye", i)))
         tag = info["tag"]
         tw = self.f_sb.size(tag)[0] + 14
@@ -2285,7 +2292,7 @@ class Menu(WizardMixin):
         nx = tr.right + 10
         detail = LY.detail_of(L)
         bm = LY.BLEND[int(L.get("bm", 0)) % 4][0] if info["group"] in ("fx", "bg") and L.get("t") != "tone" else ""
-        right = W - 26 - 4 * 34 - 8
+        right = W - 26 - (60 if self.wide else 4 * 34 + 8)                 # wide: no per-row buttons (the toolbar has them), so the names get the room
         self._txt(self.f, self._fit(self.f, info["label"], right - nx - 8), (nx, cy - 17), TEXT if on else DIM)
         sub = "  ·  ".join(t for t in (detail, bm if bm and bm != "Normal" else "", f"{int(L.get('op', 100))}%" if int(L.get("op", 100)) != 100 else "") if t)
         self._txt(self.f_s, self._fit(self.f_s, sub, right - nx - 8), (nx, cy + 3), DIM)

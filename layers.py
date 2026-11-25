@@ -231,7 +231,7 @@ def list_items(cfg, slot=None):
     if not items:
         items.append(dict(id="ly_empty", kind="note", label="Nada aqui ainda", help="Adicione abaixo", idx=-1))
     items.append(dict(id="ly_add", kind="dd", label="Adicionar", placeholder="Escolha o tipo…", opts=[(TYPES[t]["label"], t) for t in kinds],
-                      help=f"{fx} de {MAX_FX} efeitos  ·  {bg} de {MAX_BG} fundos"))
+                      help=f"{fx}/{MAX_FX} efeitos  ·  {bg}/{MAX_BG} fundos"))
     if slot is not None:
         return items
     items.append(dict(id="ly_tpl", kind="dd", label="Começar de um modelo", placeholder="Aplicar um modelo…", opts=[(t[0], i) for i, t in enumerate(TEMPLATES)],

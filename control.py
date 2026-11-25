@@ -393,8 +393,18 @@ class ControlWindow:
         self._draw_scene_bar(px, py + mw.HEAD + mw.reserved)
         if mw.tab == M.TAB_SCENES and mw.scene_view == "editor":                  # the status line at the foot of the editor: the frame times, as ScreenMaster's footer
             t = (status or {}).get("timing") or {}
-            line = (f"{fps:.0f} fps   ·   imagem {t.get('GPU', 0):.1f} ms   ·   som {t.get('áudio', 0):.1f} ms   ·   cena {t.get('cena', 0):.1f} ms"
-                    f"   ·   {'shaders ok' if (status or {}).get('shader_ok', True) else 'shaders com erro'}")
+            now_w, now_c = time.perf_counter(), time.process_time()
+            if getattr(self, "_cpu_t", None) and now_w - self._cpu_t[0] >= 1.0:
+                self._cpu = round(100 * (now_c - self._cpu_t[1]) / (now_w - self._cpu_t[0]))       # this program's share of a core, once a second
+                self._cpu_t = (now_w, now_c)
+            elif not getattr(self, "_cpu_t", None):
+                self._cpu_t = (now_w, now_c)
+            st_ = status or {}
+            audio = "sem captura de áudio" if "audio" in mw.problems else "áudio ok"
+            shaders = "shaders ok" if st_.get("shader_ok", True) else "shaders com erro"
+            gname = (st_.get("gpu") or "")[:28]
+            line = (f"{fps:.0f} fps   ·   CPU {getattr(self, '_cpu', 0)}%   ·   imagem {t.get('GPU', 0):.1f} ms   ·   som {t.get('áudio', 0):.1f} ms   ·   cena {t.get('cena', 0):.1f} ms"
+                    f"   ·   {st_.get('backend', '')}  {gname}   ·   {audio}   ·   {shaders}")
             fy = self.H - 26                                                       # the foot of the window, inside it
             ui.rect(s, (*wg.BG, 255), (0, fy, self.W, 26))
             ui.rect(s, (*wg.BORDER, 255), (0, fy, self.W, 1))
