@@ -183,8 +183,9 @@ def button(surf, fnt, rect, text, kind="plain", hover=False, armed=False, enable
     r = pygame.Rect(rect)
     fill, edge, ink = button_colors(kind, hover, armed, enabled, tone, tone_edge)
     rad = radius if radius is not None else (8 if r.h >= 40 else 6 if r.h >= 24 else r.h // 2)     # the corners of the ScreenMaster's buttons: 6
-    ui.rect(surf, fill, r, border_radius=rad)
-    ui.rect(surf, edge, r, width=2 if armed else 1, border_radius=rad)
+    if not (kind == "quiet" and not hover):                                   # the quiet one has no fill and no edge at rest (ScreenMaster's Quiet)
+        ui.rect(surf, fill, r, border_radius=rad)
+        ui.rect(surf, edge, r, width=2 if armed else 1, border_radius=rad)
     img = fnt.render(fit(fnt, text, r.w - 2 * pad), True, ink)
     if hint:
         hf = hint_font or fnt

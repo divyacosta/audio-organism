@@ -2245,7 +2245,7 @@ class Menu(WizardMixin):
         tag = row["tag"]
         tw = self.f_sb.size(tag)[0] + 14
         tr = pygame.Rect(18, cy - 10, tw, 20)
-        ui.rect(s, (*self.TAG_COLORS.get(row.get("group"), (60, 60, 90)), 255), tr, border_radius=6)
+        ui.rect(s, (*self.TAG_COLORS.get(row.get("group"), widgets.SURFACE2), 255), tr, border_radius=6)
         self._txt(self.f_sb, tag, (tr.centerx, tr.y + 2), (255, 255, 255), "c")
         nx = tr.right + 12
         tw_ = rowr.right - (44 + 58 if row.get("sw") else 44) - nx
@@ -2258,7 +2258,7 @@ class Menu(WizardMixin):
             on = bool(c.get(row["sw"], True))
             pill = pygame.Rect(rowr.right - 36 - 46, cy - 13, 46, 26)
             ui.rect(s, (*(OK if on else widgets.FAINT), 255), pill, border_radius=13)
-            ui.circle(s, (255, 255, 255), (pill.right - 13 if on else pill.left + 13, pill.centery), 9)
+            ui.circle(s, widgets.BG, (pill.right - 13 if on else pill.left + 13, pill.centery), 9)
             self.hits.append((pill.inflate(8, 8), row["sw"], "toggle", None))
 
     def _fit(self, font, text, w):
@@ -2275,7 +2275,7 @@ class Menu(WizardMixin):
             return ("FIXA", ACCENT2, ON_LIGHT)
         scn = c.get("scenes") or []
         if 0 <= i < len(scn) and not scn[i].get("scene_auto", True):
-            return ("FORA DO AUTOMÁTICO", (46, 50, 72), DIM)
+            return ("FORA DO AUTOMÁTICO", widgets.SURFACE2, DIM)
         return None
 
     def _scene_row(self, row, y):
@@ -2294,7 +2294,7 @@ class Menu(WizardMixin):
         self.hits.append((rowr, cid, "sc", ("sel", i)))
         cy = y + (self.ROW - 4) // 2
         th = pygame.Rect(16, cy - 18, 64, 36)
-        ui.rect(s, (*(6, 7, 11), 255), th, border_radius=6)
+        ui.rect(s, (*widgets.BG, 255), th, border_radius=6)
         self.thumb_slots.append((th, i))
         nx = th.right + 12
         right = W - 26 - 28 - 6
@@ -2333,7 +2333,7 @@ class Menu(WizardMixin):
         hov = self.hover == cid
         ui.rect(s, (*((0x2E, 0x33, 0x24) if sel else (SURFACE2 if hov else widgets.SURFACE2)), 255), rowr, border_radius=10)
         ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
-        ui.rect(s, (*self.TAG_COLORS.get(info.get("group"), (60, 60, 90)), 255), pygame.Rect(rowr.x + 3, rowr.y + 8, 3, rowr.h - 16), border_radius=2)
+        ui.rect(s, (*self.TAG_COLORS.get(info.get("group"), widgets.SURFACE2), 255), pygame.Rect(rowr.x + 3, rowr.y + 8, 3, rowr.h - 16), border_radius=2)
         self.frects[cid] = rowr
         self.order.append(cid)
         self.order_val.append(None)
@@ -2351,7 +2351,7 @@ class Menu(WizardMixin):
         tag = info["tag"]
         tw = self.f_sb.size(tag)[0] + 14
         tr = pygame.Rect(56, cy - 10, tw, 20)
-        ui.rect(s, (*(self.TAG_COLORS.get(info["group"], (60, 60, 90)) if on else (46, 50, 72)), 255), tr, border_radius=6)
+        ui.rect(s, (*(self.TAG_COLORS.get(info["group"], widgets.SURFACE2) if on else widgets.SURFACE2), 255), tr, border_radius=6)
         self._txt(self.f_sb, tag, (tr.centerx, tr.y + 2), (255, 255, 255) if on else DIM, "c")
         nx = tr.right + 10
         detail = LY.detail_of(L)
@@ -2624,7 +2624,7 @@ class Menu(WizardMixin):
             self._txt(widgets.font("lead", True), row["label"], (22, y + 4), TEXT)
             x = 22
             if row.get("tag"):                                                   # "Tons · placa de vídeo": the category as a colour square, then the words, then the chip GPU
-                ui.rect(s, (*self.TAG_COLORS.get(row.get("group"), (60, 60, 90)), 255), (x, y + 33, 9, 9), border_radius=2)
+                ui.rect(s, (*self.TAG_COLORS.get(row.get("group"), widgets.SURFACE2), 255), (x, y + 33, 9, 9), border_radius=2)
                 x += 16
                 x += self._txt(self.f_s, row["tag"], (x, y + 30), DIM) + 14
             self._txt(self.f_s, row["help"], (x, y + 30), DIM)
@@ -2688,7 +2688,7 @@ class Menu(WizardMixin):
             col = OK if on else widgets.FAINT
             ui.rect(s, (*(col if en else dimmed(col)), 255), pill, border_radius=13)
             kx = pill.right - 13 if on else pill.left + 13
-            ui.circle(s, (255, 255, 255) if en else dimmed((255, 255, 255)), (kx, pill.centery), 9)
+            ui.circle(s, widgets.BG if en else dimmed(widgets.BG, 0.6), (kx, pill.centery), 9)
             self._txt(self.f_s, "Ligado" if on else "Desligado", (pill.left - 10, cy - 8), (OK if (on and en) else dc), "r")
             self.hits.append((rowr, cid, "toggle", None))
         elif kind == "seg":
@@ -2777,7 +2777,7 @@ class Menu(WizardMixin):
                 ui.rect(s, (*ACCENT, 255), (tl + int(tlen * f0), cy - 3, max(4, int(tlen * (f1 - f0))), 6), border_radius=3)
                 for fr_ in (f0, f1):
                     kc = (tl + int(tlen * fr_), cy)
-                    ui.circle(s, (255, 255, 255), kc, 9)
+                    ui.circle(s, widgets.BG, kc, 9)
                     ui.circle(s, (*ACCENT, 255), kc, 9, 2)
                 vr = pygame.Rect(R - pw, cy - 14, pw, 28)
                 ui.rect(s, (*widgets.SURFACE2, 255), vr, border_radius=8)
