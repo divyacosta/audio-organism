@@ -8,6 +8,7 @@ import sys
 import time
 
 import numpy as np
+import prof
 
 import layers as LY
 from fxstack import FxStack, pack_bg
@@ -519,6 +520,8 @@ class Renderer:
                 self.preview_err = repr(e)[:90]
 
     def _draw(self):
+        t_in = time.perf_counter()
+        prof.mark_start()
         tex = self.context.get_current_texture()
         out_v = tex.create_view()                                          # the window's picture: the last passes write here and the words go over it
         w, h = tex.width, tex.height
@@ -527,10 +530,12 @@ class Renderer:
             if (w, h) != self.size or scene_size != self.scene_size or self._bs != self.bloom_shift:
                 self._build_targets(w, h)
             self._build_bind()
+        prof.mark("GPU/obter a imagem da janela (aqui o programa espera a placa liberar o quadro)")
         p = self.params
         p["dist"] = self.dist
         d = self.device
         plan = self.stack.update(p, self.dt, self.bloom, w / max(h, 1), (w, h))
+        prof.mark("GPU/pilha de efeitos (plano do quadro)")
         if not self.fx_trail:
             plan.fb = None
         if not self.fx_parts:
@@ -554,6 +559,7 @@ class Renderer:
                                                       float(self.flash_mode), p["time"], float(self.sharp), float(p.get("duo_contrast", 1.0)),
                                                       *(p.get("duo") or ((0, 0, 0), (1, 1, 1)))[0], 1.0 if self.duo else 0.0, *(p.get("duo") or ((0, 0, 0), (1, 1, 1)))[1], 0.0,
                                                       *self._lights_block(p), float(plan.tone), 0.0, 0.0, 0.0], np.float32), pack_bg(plan, pal2))).astype(np.float32).tobytes())
+        prof.mark("GPU/enviar parâmetros (buffers)")
         enc = d.create_command_encoder()
         gen = int(p.get("visual", 0))                                        # NOT p["gen"]: that one is the director's own (the mandala uses it)
         if gen >= 2 and "gen" in self.bind:                                  # a visual other than the Mandala
@@ -561,6 +567,7 @@ class Renderer:
             self._pass(enc, self.scene_v, self.pipes["gen"], self.bind["gen"])
         else:
             self._pass(enc, self.scene_v, self.pipes["scene"], self.bind["scene"])
+        prof.mark("GPU/passe da cena (raymarching ou gerador)")
         # motion blur by SHUTTER ANGLE, as in cinema: the shutter is open for (angle / 360) of one frame of the reference film rate, so
         # 180 deg at 24 fps = 1/48 s, 360 deg = 1/24 s. The trail is an exponential filter over that exposure time, independent of the
         # real frame rate. A hard cut resets the trail.
@@ -578,10 +585,13 @@ class Renderer:
             self.taa_valid = True
         else:
             self.taa_valid = False
+        prof.mark("GPU/suavização temporal (TAA)")
         self._pass(enc, self.disp_v, self.pipes["accum"], self.bind["accum_taa" if self.taa else "accum"])
         enc.copy_texture_to_texture({"texture": self.disp}, {"texture": self.hist}, (self.scene_size[0], self.scene_size[1], 1))
         self.hist_valid = True
+        prof.mark("GPU/borrão de movimento (acúmulo)")
         self._particles(enc, p, plan.part)
+        prof.mark("GPU/partículas")
         fb = plan.fb
         step = max(0.25, min(4.0, self.dt * 60.0))                          # the per-frame zoom / turn is per 1/60 s, whatever the frame rate
         aspect = self.size[0] / max(self.size[1], 1)
@@ -593,12 +603,15 @@ class Renderer:
         self._pass(enc, self.fbo_v, self.pipes["fb"], self.bind["fb"])
         enc.copy_texture_to_texture({"texture": self.fbo}, {"texture": self.fb_hist}, (self.scene_size[0], self.scene_size[1], 1))
         self.fb_valid = fb is not None and fb["amt"] > 0.003
+        prof.mark("GPU/rastro (feedback)")
         for L in self.levels[:max(0, min(BLOOM_LEVELS, self.bloom_levels))]:      # unused bloom levels cost nothing
             self._pass(enc, L["dv"], self.pipes["down"], L["g_down"])
             self._pass(enc, L["tv"], self.pipes["blur"], L["g_h"])
             self._pass(enc, L["lvv"], self.pipes["blur"], L["g_v"])
+        prof.mark("GPU/brilho (bloom)")
         self._pv_count += 1
         self._read_preview()
+        prof.mark("GPU/leitura da prévia (volta da placa)")
         want_pv = self.preview and self._pv_count % max(1, self.preview_every) == 0
         post = plan.post
         fin = tuple(float(x) for x in self.fin)
@@ -623,12 +636,16 @@ class Renderer:
                                            (self.preview_size[0], self.preview_size[1], 1))
         else:
             self._pass(enc, out_v, self.pipes["comp"], self.bind["comp"])
+        prof.mark("GPU/composição, efeitos de tela, FXAA e cópia da prévia")
         if self.osd_a > 0.003 and self._osd_pipe is not None and self._osd_bind is not None:
             try:
                 self._osd_pass(enc, out_v, w, h)
             except Exception:
                 self._osd_pipe = None                                      # the words are a courtesy: they never take the picture down
+        prof.mark("GPU/texto na tela (OSD)")
         d.queue.submit([enc.finish()])
+        prof.mark("GPU/fechar e enviar os comandos (submit)")
+        self._drawn = time.perf_counter() - t_in
         if want_pv:
             self._pv_queue.append((self._pv_count, pv_idx))              # read it later, see _read_preview
 
@@ -734,7 +751,9 @@ class Renderer:
         if self.headless:
             self.canvas.request_draw(self._draw)
             return np.asarray(self.canvas.draw())
+        t_fd = time.perf_counter()
         self.canvas.force_draw()
+        prof.add("GPU/entregar o quadro (swap e espera pela placa)", max(0.0, time.perf_counter() - t_fd - getattr(self, "_drawn", 0.0)))
         return None
 
     # --------------------------------------------------------------- window glue

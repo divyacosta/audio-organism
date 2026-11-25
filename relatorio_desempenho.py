@@ -23,11 +23,13 @@ def main():
     cmd = ([exe] if exe else [sys.executable, os.path.join(HERE, "app.py")]) + extra
     t0 = time.time()
 
-    def run(label, fps=None):
+    def run(label, fps=None, profile=False):
         tmp = os.path.join(tempfile.mkdtemp(prefix="ao_rep_"), "r.json")
         env = dict(os.environ, VIS_REPORT=tmp, VIS_SYNTH="1")
         if fps:
             env["VIS_REPORT_FPS"] = str(fps)
+        if profile:
+            env["VIS_REPORT_PROF"] = "1"
         print(f"medindo em qualidade Ultra, {label} (cerca de 35 s)...", flush=True)
         try:
             subprocess.run(cmd, env=env, cwd=HERE, timeout=240)
@@ -42,12 +44,13 @@ def main():
         print("sem resultado: o programa fechou antes de medir (veja a saída acima)")
         return 1
     capped = run("com o limite do programa")
+    profiled = run("com o profiler por função", 1000, profile=True)
     os.makedirs(os.path.join(HERE, "relatorios"), exist_ok=True)
     stamp = time.strftime("%Y-%m-%d_%H%M")
     tag = ("_" + extra[1]) if extra else ""
     with open(os.path.join(HERE, "relatorios", stamp + tag + ".json"), "w", encoding="utf-8") as f:
         json.dump(r, f, ensure_ascii=False, indent=1)
-    md = report.markdown(r, capped)
+    md = report.markdown(r, capped, profiled)
     with open(os.path.join(HERE, "relatorio_desempenho.md"), "w", encoding="utf-8") as f:
         f.write(md)
     print(md)

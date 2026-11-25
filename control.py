@@ -8,6 +8,7 @@ import time
 
 os.environ.setdefault("SDL_RENDER_DRIVER", "software")   # keep this window off the OpenGL context
 
+import prof
 import pygame
 
 import ui
@@ -310,11 +311,14 @@ class ControlWindow:
         mw.live_scene = self.live_scene = li
         mw.reserved = (self.HEAD_ROW if mw.pv_mode() == "draft" else (self.pv_size()[1] + 18 if mw.pv_mode() else 0))
         mw.clamp_scroll()
+        prof.mark_start()
         mw.render()
+        prof.mark("UI/painel: desenhar linhas e cartões (menu.render)")
         px, py = self.panel_pos
         s.blit(mw.surf, (px, py), pygame.Rect(0, 0, mw.W, mw.HEAD))
         if mw.reserved:
             self._draw_preview(px, py + mw.HEAD, status)
+        prof.mark("UI/faixa de cima (prévia e botões)")
         if mw.panes():                                                  # two columns, each one scrolling on its own under what stays fixed (the bar of the editor)
             fixed, _, _ = mw.pane_dims()
             wl, wr, gap = mw._col_widths()
@@ -327,6 +331,7 @@ class ControlWindow:
         else:
             area = pygame.Rect(0, mw.HEAD + mw.scroll, mw.W, mw.content_h())
             s.blit(mw.surf, (px, py + mw.HEAD + mw.reserved), area)
+        prof.mark("UI/conteúdo e rolagem (cópia para a janela)")
         self._draw_sticky(px, py)
         self._draw_float_pic()
         if mw.tab == M.TAB_SYS and getattr(mw, "ear_slots", None):
@@ -1268,11 +1273,14 @@ class ControlWindow:
         self.now = now
         self.force = False
         self.draw(an, fps, lat, vsync, status)
+        prof.mark("UI/Palco, galeria, rolagem e avisos (resto do desenho)")
         if self.win is not None:
             self.tex.update(self.surf)
+            prof.mark("UI/enviar a imagem do painel à janela (textura)")
             self.ren.clear()
             self.tex.draw()
             self.ren.present()
+            prof.mark("UI/apresentar a janela do painel")
 
     def destroy(self):
         try:

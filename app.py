@@ -12,6 +12,7 @@ the settings. Display window keys: F / double click fullscreen, Esc leave fullsc
 import os
 import sys
 import time
+import prof
 
 import pygame
 
@@ -132,7 +133,8 @@ def main():
         import report
         import settings as _settings
         _settings.PATH = os.path.join(os.path.dirname(os.environ["VIS_REPORT"]), "settings.json")      # whatever the run saves goes next to the report, never over the person's settings
-        recorder = report.Recorder(os.environ["VIS_REPORT"])
+        recorder = report.Recorder(os.environ["VIS_REPORT"], profile=bool(os.environ.get("VIS_REPORT_PROF")))
+        prof.ON = True
         cfg["preset"], cfg["vsync"], cfg["dynres"] = len(PRESETS_N) - 1, False, False
         if os.environ.get("VIS_REPORT_FPS"):                                   # the FPS cap of the run (to see what the picture does with no cap in the way)
             cfg["fps_out"] = int(os.environ["VIS_REPORT_FPS"])
@@ -201,6 +203,7 @@ def main():
         clock_t += dt
         fps += (1.0 / max(dt, 1e-4) - fps) * 0.05
         manual_drop = False
+        prof.mark_start()
 
         # ------------------------------------------------------------ events
         for e in pygame.event.get():
@@ -363,7 +366,9 @@ def main():
             an.bursts_enabled = False
         rk = l_react / 100.0 * cfg.get("macro_energy", 100) / 100.0               # the Intensidade of the Palco on top of the scene's own
         if thumbs is not None:
+            prof.mark_start()
             thumbs.feed(an, cfg, rk)
+            prof.mark("UI/miniaturas das cenas (thumbs.feed)")
         want_hide = rend.fullscreen and clock_t - last_motion > 2.0
         if want_hide != cursor_hidden:
             cursor_hidden = want_hide
@@ -427,6 +432,7 @@ def main():
             menu.say(f"Shader recarregado: {name}")
 
         # ------------------------------------------------------------ audio
+        prof.mark("Resto/eventos, atalhos, comandos remotos e painel web")
         t_st = time.perf_counter()
         if syn is not None:
             an.feed(syn.chunk(int(rate * dt)))
@@ -461,8 +467,10 @@ def main():
                             an = Analyzer(cap.rate)
                     except Exception:
                         pass
+        prof.mark("áudio/entrada (captura ou sinal de teste) e troca de dispositivo")
         menu.apply_taps(an)                                                       # tap tempo asked for since the last frame (TAP, the T key, a controller)
         an.update(dt)
+        prof.mark("áudio/análise (FFT, bandas, batida, estados da música)")
         vis = an                                             # what the picture follows: the real analyzer, always
         lap("áudio", t_st)
         if manual_drop:
@@ -474,10 +482,13 @@ def main():
 
         # --------------------------------------------------- procedural scene
         t_st = time.perf_counter()
+        prof.mark("Resto/gestos de drop e checagens")
         params = ndir.update(dt, vis, cfg)
         params["glass_on"] = cfg["fx_glass"]
         lap("cena", t_st)
+        prof.mark("cena/diretor (escolha de cena, câmera, movimento, parâmetros)")
         look.apply(rend, params, ndir.cur, cfg["detail"])                  # shader kind, room colour, the black scene
+        prof.mark("cena/look: tipo de shader, cores e sala")
         gb, gm, gh = live.get("react_bass", 100) / 100.0, live.get("react_mid", 100) / 100.0, live.get("react_high", 100) / 100.0      # one gain per band
         rend.exposure = 1.1 * live.get("expo", 100) / 100.0
         params.update(bass=vis.bass * rk * gb, mid=vis.mid * rk * gm, high=vis.high * rk * gh, kick=vis.kick * rk, snare=vis.snare, hat=vis.hat,
@@ -487,12 +498,15 @@ def main():
         if not params.get("blank"):
             rend.bloom = live.get("bloom", cfg["bloom"]) / 100.0 * min(1.6, 0.6 + 0.4 * cfg.get("macro_energy", 100) / 100.0)
             rend.flash = min(1.0, max(max(vis.strobe, vis.burst_pulse) * strobe_on, vis.flash * strobe_on, vis.drop_flash * drop_gain)) * (1.0, 0.5, 0.12)[cfg["safe_flash"]]
+        prof.mark("cena/ligar o som aos parâmetros e ao flash")
         skip = (cfg["rrate"] > 0 and frame % (cfg["rrate"] + 1) != 0) and not test       # render rate: 1 frame out of 2 or 3 (silence is no reason to draw less: the picture keeps going)
         rend.preview = (not test) and (menu.reserved > 0 or menu.tab == 0 or phone.wanted)        # the strip of the editor, the picture of the Palco, or a phone watching
         rend.preview_every = 3 if (menu.tab == 0 or phone.wanted) else 8                         # live: about 20 pictures a second
         t_st = time.perf_counter()
+        prof.mark("Resto/preparar o quadro")
         frame_img = None if skip else rend.render(params)
         lap("GPU", t_st)
+        prof.mark_start()
         if rend.preview and rend.preview_rgba is not None and rend.preview_n != pv_n:
             pv_n = rend.preview_n
             ctl.set_preview(rend.preview_rgba, rend.preview_size, rend.fmt)
@@ -524,6 +538,7 @@ def main():
             status["look"] = ndir.look_name() + (f"  ·  gênero: {ndir.genre}" if ndir.genre != "?" else "")
             status["timing"] = dict(tm)
             t_st = time.perf_counter()
+            prof.mark("Resto/prévia, estado e salvar configurações")
             ctl.update(time.perf_counter(), an, fps, lat, rend.vsync, status)
             lap("UI", t_st)
             if menu.dirty and time.perf_counter() - menu.dirty_t > 1.0:
@@ -556,8 +571,10 @@ def main():
         pace = cfg["fps_out"]                                                                  # the output FPS: the picture is never drawn faster than this
         if not test and (not rend.vsync or skip) and pace > 0:                                 # a skipped frame (a long silence draws 1 in 6) never reaches the swap that vsync waits on: it needs the cap too, or the loop spins at 1500 fps
             target = 1.0 / pace
+            prof.mark("Resto/fim do quadro")
             while time.perf_counter() - t_start < target:
                 time.sleep(0.0005)
+            prof.mark("Resto/limitador de FPS (espera para chegar à meta)")
 
     if test:
         print("diretor:", " | ".join(ndir.log), flush=True)

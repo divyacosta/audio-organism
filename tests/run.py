@@ -3107,13 +3107,25 @@ def test_webui():
 
 
 def test_report():
-    section("Relatório de desempenho: o texto sai com cada parte e nunca mexe nas configurações da pessoa")
+    section("Relatório de desempenho: cada parte tem suas subpartes, e nunca mexe nas configurações da pessoa")
+    import prof
     import report
     r = dict(when="x", gpu="GPU", backend="D3D12", preset="Ultra", res=100.0, scene=[1280, 720], steps=110, frames=100, seconds=1.0, avg_fps=60.0, p1_fps=40.0, worst_ms=30.0,
-             avg_ms=16.0, p99_ms=25.0, stages={"áudio": 1.0, "cena": 0.1, "GPU": 8.0, "UI": 3.0, "web": 0.0}, cpu_pct=30.0, mem_mb=400, mem_peak_mb=410, python="3", os="Windows", fps_out=60)
-    md = report.markdown(r, dict(r, avg_fps=55.0, fps_out=60))
-    check("o relatório lista as partes e o consumo", all(t in md for t in ("Desenho da imagem", "Painel de controles", "Análise do som", "Resto", "Memória", "55.0 fps")), md[:80])
-    check("a partir de zero ms uma parte some", "Painel novo" not in md)
+             avg_ms=16.0, p99_ms=25.0, parts={"GPU/passe da cena": 6.0, "GPU/submit": 2.0, "UI/menu.render": 3.0, "áudio/análise": 1.0, "cena/diretor": 0.1, "Resto/eventos": 0.2},
+             cpu_pct=30.0, mem_mb=400, mem_peak_mb=410, python="3", os="Windows", fps_out=60)
+    prof_run = dict(r, avg_fps=40.0, modules={"wgpu": 5.0}, funcs=[dict(name="proxy_func", where="x.py:1", module="wgpu", calls=150.0, ms=5.0)])
+    md = report.markdown(r, dict(r, avg_fps=55.0, fps_out=60), prof_run)
+    check("o relatório lista as partes com as subpartes", all(t in md for t in ("Desenho da imagem", "passe da cena", "submit", "menu.render", "análise", "Memória", "55.0 fps")), md[:80])
+    check("traz a visão por módulo e por função", "proxy_func" in md and "Tempo próprio por módulo" in md)
+    prof.ON = True
+    prof.reset()
+    prof.mark_start()
+    prof.mark("UI/teste")
+    prof.add("UI/outro", 0.5)
+    t = prof.totals()
+    prof.ON = False
+    prof.reset()
+    check("os cronômetros somam por nome e ficam parados quando desligados", "UI/teste" in t and abs(t["UI/outro"] - 0.5) < 1e-9 and prof.totals() == {} and (prof.mark("x") or True) and prof.totals() == {})
     rec = report.Recorder(os.path.join(tempfile.mkdtemp(prefix="ao_rec_"), "r.json"))
     check("durante o aquecimento nada é medido", rec.step(1.0, 0.016, {}) is False and not rec.started)
     app_src = open(os.path.join(ROOT, "app.py"), encoding="utf-8").read()
