@@ -2722,15 +2722,13 @@ class Menu(WizardMixin):
                 return
             frac = (c[cid] - lo) / (hi - lo)
             hov = (self.hover == cid or self.drag == cid) and en
-            ui.rect(s, (*(dimmed((66, 72, 100), 0.8) if not en else (66, 72, 100)), 255), (tl, cy - 3, tlen, 6), border_radius=3)
+            # ScreenMaster's slider: a hairline track, a white fill up to the value, a small round knob, and the value written on the right
+            ui.rect(s, (*(dimmed(BORDER, 0.8) if not en else widgets.LINE_STRONG), 255), (tl, cy - 1, tlen, 2))
             dfrac = (DEFAULTS[cid] - lo) / (hi - lo)
-            pygame.draw.line(s, (*DIM, 255), (tl + int(tlen * dfrac), cy + 7), (tl + int(tlen * dfrac), cy + 11))
-            ui.rect(s, (*(ACCENT if en else dimmed(ACCENT)), 255), (tl, cy - 3, max(4, int(tlen * frac)), 6), border_radius=3)
+            pygame.draw.line(s, (*DIM, 255), (tl + int(tlen * dfrac), cy - 4), (tl + int(tlen * dfrac), cy + 4))
+            ui.rect(s, (*(TEXT if en else dimmed(TEXT)), 255), (tl, cy - 1, max(2, int(tlen * frac)), 2))
             kc = (tl + int(tlen * frac), cy)
-            ui.circle(s, (255, 255, 255) if en else dimmed((255, 255, 255)), kc, 10 if hov else 9)
-            ui.circle(s, (*(ACCENT if en else dimmed(ACCENT)), 255), kc, 10 if hov else 9, 2)
-            vr = pygame.Rect(R - pw, cy - 14, pw, 28)
-            ui.rect(s, (34, 32, 66, 255), vr, border_radius=8)
+            ui.circle(s, (*(TEXT if en else dimmed(TEXT)), 255), kc, 6 if hov else 5)
             shown = row["top"][1] if row.get("top") and c[cid] == row["top"][0] else f"{c[cid]}{row.get('unit', '%')}"
-            self._txt(self.fb, shown, (vr.centerx, vr.y + 4), tc, "c")
+            self._txt(self.fb, shown, (R, cy - 9), tc, "r")
             self.hits.append((pygame.Rect(tl - 12, cy - 20, tlen + 24, 40), cid, "slider", None))
