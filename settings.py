@@ -661,7 +661,7 @@ def agenda_rows(cfg):
     """The agenda: each rule is a small group of clicks (time, scene, days, on/off, delete), and a row to add one. A click changes the value."""
     import agenda as AG
     scn = cfg.get("scenes") or []
-    rows = []
+    rows = [dict(id="ag_week", kind="week", label="Semana", help="Um clique numa hora cria uma regra para aquele dia")]                       # the week first: a click on an hour adds a rule for that day
     for i, rule in enumerate(cfg.get("agenda") or []):
         name = scn[int(rule.get("scene", 0))].get("scene_name", "?") if 0 <= int(rule.get("scene", 0)) < len(scn) else "?"
         rows.append(dict(id=f"ag_time:{i}", kind="action", label=f"Regra {i + 1}  ·  horário", btn=AG.clock(rule), help="Um clique avança 30 minutos"))

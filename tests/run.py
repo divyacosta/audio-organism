@@ -81,7 +81,7 @@ def test_menu():
         for r in rows:
             n += 1
             try:
-                assert r["id"] and r["label"] is not None and r["kind"] in ("seg", "slider", "toggle", "radio", "action", "text", "swatches", "dd", "layer", "note", "edbar", "item", "scene", "ear", "lbar", "phead")
+                assert r["id"] and r["label"] is not None and r["kind"] in ("seg", "slider", "toggle", "radio", "action", "text", "swatches", "dd", "layer", "note", "edbar", "item", "scene", "ear", "week", "lbar", "phead")
                 h = r["help"](cfg) if callable(r["help"]) else r["help"]
                 assert isinstance(h, str)
                 if r.get("enabled"):
@@ -736,7 +736,7 @@ def test_chips():
     m.render()
     w1 = next(r.w for r, cid, kind, arg in m.hits if cid == "sc_auto:1")
     check("a very long name gets a pill of at most 200 px (the name is cut with an ellipsis)", w1 <= 200, w1)
-    check("the page of the Automático is shorter than the list was (the agenda adds its rows at the foot)", m.heights[menu.TAB_SYS] < 900, m.heights[menu.TAB_SYS])
+    check("the page of the Automático stays short: the week grid (about 200 px) and the rules are the agenda", m.heights[menu.TAB_SYS] < 1100, m.heights[menu.TAB_SYS])
 
 
 # ------------------------------------------------------------------ 6m. No idle demo
@@ -3009,6 +3009,16 @@ def test_program_rules():
         FG.current = orig
 
 
+def test_agenda_week():
+    section("Agenda: a semana aceita um clique numa hora e cria a regra daquele dia")
+    cfg = menu.fresh()
+    m = menu.Menu(cfg)
+    m.cfg["agenda"] = []
+    m.press("wk:2:8")
+    rule = (m.cfg.get("agenda") or [{}])[-1]
+    check("um clique em quarta às 08:00 cria a regra", rule.get("time") == "08:00" and rule.get("days") == [2], rule)
+
+
 def test_safety_undo():
     section("Segurança e Desfazer: restaurar e perfis nunca baixam os limites de conforto, e o toast desfaz")
     cfg = menu.fresh()
@@ -3162,7 +3172,7 @@ def test_agenda():
 
 def main():
     exe = sys.argv[sys.argv.index("--exe") + 1] if "--exe" in sys.argv else None
-    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_navigation, test_sticky_titles, test_report):
+    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_agenda_week, test_navigation, test_sticky_titles, test_report):
         try:
             fn()
         except Exception as e:

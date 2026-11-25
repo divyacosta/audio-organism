@@ -249,6 +249,9 @@ class Menu(WizardMixin):
                     j += 1
                 h += self._flow_layout(rows[i:j], wc)[1]
                 i = j
+            elif rows[i].get("kind") == "week":
+                h += self.WEEK_H
+                i += 1
             elif rows[i].get("kind") == "ear":
                 h += self.EAR_H
                 i += 1
@@ -257,6 +260,7 @@ class Menu(WizardMixin):
                 i += 1
         return h
 
+    WEEK_H = 7 * 24 + 40                                                         # the week of the agenda: seven days of 22 px and the ruler on top
     EAR_H = 492                                                                  # the analysis of the music in Sistema > Áudio (deck's card, open)
 
     STACK = 40                                                                   # the extra height of a row whose choices go on a line of their own
@@ -1551,6 +1555,18 @@ class Menu(WizardMixin):
                 return self.press("ed_discard")
             self.say("Nada para restaurar: a cena está como foi salva")
             return None
+        if cid.startswith("wk:"):                                                 # the week: a click on an hour adds a rule for that day at that hour
+            import agenda as AG
+            _, d, h = cid.split(":")
+            rule = AG.new_rule(scene=0)
+            rule["time"] = f"{int(h):02d}:00"
+            rule["days"] = [int(d)]
+            self.cfg.setdefault("agenda", []).append(rule)
+            self.say(f"Regra nova às {rule['time']}")
+            self.touch()
+            self.rebuild_scenes()
+            self.need = True
+            return None
         if cid == "hd_agenda":
             self.tab = self.cfg["ui_tab"] = TAB_SYS
             self.cfg["sys_item"] = 2                                # the Automático page: the agenda's rules
@@ -2255,6 +2271,36 @@ class Menu(WizardMixin):
             return (ACCENT, "Mudando ao vivo") if self.cfg.get("live") else (ACCENT2, "Só na prévia")
         return OK, "Tudo salvo"
 
+    def _week_row(self, row, y, wc):
+        """The week: one line per day (Seg to Dom) over 24 hours. Each rule is a mark on the days it runs; a click on an hour adds a rule there."""
+        s = self.surf
+        x0, x1 = 18, wc - 18
+        gx = x0 + 44
+        colw = (x1 - gx) / 24.0
+        for h in range(0, 25, 6):
+            hx = int(gx + colw * h)
+            self._txt(self.f_s, f"{h:02d}", (min(hx + 2, x1 - 18), y + 6), DIM)
+        names = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+        for d in range(7):
+            yd = y + 26 + d * 24
+            self._txt(self.f_s, names[d], (x0, yd + 5), DIM)
+            ui.rect(s, (*BORDER, 255), (gx, yd + 23, int(colw * 24), 1))
+            for h in range(0, 24, 4):                                    # a block of four hours is one click: wide enough to press
+                cell = pygame.Rect(int(gx + colw * h), yd, max(24, int(colw * 4)), 24)
+                self.hits.append((cell, f"wk:{d}:{h}", "btn", None))
+        for rule in self.cfg.get("agenda") or []:
+            m = parse_time_(rule.get("time"))
+            if m is None:
+                continue
+            on = bool(rule.get("on", True))
+            days = rule.get("days") or list(range(7))
+            for d in days:
+                if not 0 <= int(d) < 7:
+                    continue
+                yd = y + 26 + int(d) * 24
+                mx = int(gx + colw * m / 60.0)
+                ui.rect(s, (*(SEL if on else DIM), 255), (mx - 2, yd + 5, 4, 14), border_radius=2)
+
     def _timeline(self, W, y):
         """The day, from midnight to midnight, under the tabs: the rules of the agenda as marks (lime when today's day is in them), and the time now as a lime line."""
         s = self.surf
@@ -2623,6 +2669,10 @@ class Menu(WizardMixin):
                     j += 1
                 ry += self._flow_rows(rows[i:j], ry, wc)
                 i = j
+            elif rows[i].get("kind") == "week":                                        # the week of the agenda: a click on an hour adds a rule for that day
+                self._week_row(rows[i], ry, wc)
+                ry += self.WEEK_H
+                i += 1
             elif rows[i].get("kind") == "ear":                                         # a dark slot: the control window paints the live analysis over it
                 r = pygame.Rect(12, ry, wc - 24, self.EAR_H - 8)
                 ui.rect(s, (*widgets.BG, 255), r, border_radius=10)
