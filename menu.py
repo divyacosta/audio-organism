@@ -1567,6 +1567,12 @@ class Menu(WizardMixin):
             self.rebuild_scenes()
             self.need = True
             return None
+        if cid == "master":                                                      # Ajustes: the master switch (off: the picture goes black, nothing runs)
+            self.cfg["master_on"] = not self.cfg.get("master_on", True)
+            self.say("Ajustes ligados" if self.cfg["master_on"] else "Ajustes desligados: a imagem está apagada")
+            self.touch()
+            self.need = True
+            return None
         if cid == "hd_agenda":
             self.tab = self.cfg["ui_tab"] = TAB_SYS
             self.cfg["sys_item"] = 2                                # the Automático page: the agenda's rules
@@ -2161,7 +2167,7 @@ class Menu(WizardMixin):
         adv_w = 172 if hidden_n else 118                               # room for the +N of the hidden options
         adv_r = pygame.Rect(W - adv_w, 0, adv_w, 36)
         strip = [("hd_undo", "Desfazer", 84), ("hd_redo", "Refazer", 74), ("hd_before", "Antes", 62), ("hd_restore", "Restaurar", 86)] if W >= 900 else []     # the undo strip: Desfazer, Refazer, Antes held, and Restaurar (danger: back to the saved scene)
-        strip_w = sum(w + 4 for _, _, w in strip)
+        strip_w = sum(w + 4 for _, _, w in strip) + (104 if W >= 900 else 0)   # the master switch (Ajustes) sits after the strip
         self.hdr_hits = []
         for i, (name, _) in enumerate(TABS):
             cid = f"tab{i}"
@@ -2179,7 +2185,17 @@ class Menu(WizardMixin):
             self.order_val.append(None)
             self.frects[cid] = r
             x += tw + 6
-        sx = adv_r.x - strip_w
+        master_on = bool(self.cfg.get("master_on", True))
+        if W >= 900:                                                                 # Ajustes: the master switch (ScreenMaster's), off = the picture goes black
+            mr = pygame.Rect(adv_r.x - strip_w, 6, 96, 24)
+            ui.rect(s, (*(SEL if master_on else widgets.FAINT), 255), pygame.Rect(mr.x, mr.y + 4, 36, 16), border_radius=8)
+            ui.circle(s, (*widgets.BG, 255), (mr.x + 26 if master_on else mr.x + 10, mr.y + 12), 6)
+            self._txt(self.ftab, "Ajustes", (mr.x + 44, mr.y + 2), TEXT if master_on else DIM)
+            self.hits.append((mr, "master", "btn", None))
+            self.order.append("master")
+            self.order_val.append(None)
+            self.frects["master"] = mr
+        sx = adv_r.x - strip_w + (104 if W >= 900 else 0)
         for cid, label, w in strip:
             br = pygame.Rect(sx, 6, w, 24)
             widgets.button(s, self.ftab, br, label, "danger" if cid == "hd_restore" else "quiet", hover=self.hover == cid, radius=6)

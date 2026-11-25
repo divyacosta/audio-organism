@@ -3019,6 +3019,20 @@ def test_agenda_week():
     check("um clique em quarta às 08:00 cria a regra", rule.get("time") == "08:00" and rule.get("days") == [2], rule)
 
 
+def test_master_switch():
+    section("Ajustes (interruptor mestre): desligado, a imagem fica apagada e o cabeçalho mostra o botão")
+    cfg = menu.fresh()
+    m = menu.Menu(cfg)
+    check("Ajustes começa ligado", cfg.get("master_on", True) is True, cfg.get("master_on"))
+    m.press("master")
+    check("um clique desliga Ajustes", cfg["master_on"] is False, cfg["master_on"])
+    m.set_width(1000)
+    m.render()
+    check("o cabeçalho desenha o botão Ajustes", any(cid == "master" for _, cid, _, _ in m.hits), [h[1] for h in m.hits[:5]])
+    m.press("master")
+    check("outro clique liga de novo", cfg["master_on"] is True, cfg["master_on"])
+
+
 def test_safety_undo():
     section("Segurança e Desfazer: restaurar e perfis nunca baixam os limites de conforto, e o toast desfaz")
     cfg = menu.fresh()
@@ -3172,7 +3186,7 @@ def test_agenda():
 
 def main():
     exe = sys.argv[sys.argv.index("--exe") + 1] if "--exe" in sys.argv else None
-    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_agenda_week, test_navigation, test_sticky_titles, test_report):
+    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_agenda_week, test_master_switch, test_navigation, test_sticky_titles, test_report):
         try:
             fn()
         except Exception as e:

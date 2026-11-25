@@ -534,6 +534,12 @@ class Renderer:
         p = self.params
         p["dist"] = self.dist
         d = self.device
+        if p.get("master_off"):                                          # Ajustes off (ScreenMaster's master switch): the picture is black, the effects do not run
+            enc = d.create_command_encoder()
+            rp = enc.begin_render_pass(color_attachments=[{"view": out_v, "clear_value": (0, 0, 0, 1), "load_op": "clear", "store_op": "store"}])
+            rp.end()
+            d.queue.submit([enc.finish()])
+            return
         plan = self.stack.update(p, self.dt, self.bloom, w / max(h, 1), (w, h))
         prof.mark("GPU/pilha de efeitos (plano do quadro)")
         if not self.fx_trail:

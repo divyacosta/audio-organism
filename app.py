@@ -502,6 +502,7 @@ def main():
         rend.preview_every = 3 if (menu.tab == 0 or phone.wanted) else 8                         # live: about 20 pictures a second
         t_st = time.perf_counter()
         prof.mark("Resto/preparar o quadro")
+        params["master_off"] = not cfg.get("master_on", True)                   # Ajustes off: the window goes black (see renderer._draw)
         frame_img = None if skip else rend.render(params)
         lap("GPU", t_st)
         prof.mark_start()
