@@ -49,10 +49,10 @@ class Menu(WizardMixin):
         self.need = True
         self.f = widgets.font("body")
         self.fb = widgets.font("body", True)
-        self.f_s = widgets.font("cap")
+        self.f_s = widgets.font("small")                              # help lines: the same size everywhere (small)
         self.f_sb = widgets.font("cap", True)
         self.title = widgets.font("title", True)
-        self.ftab = widgets.font("small", True)
+        self.ftab = widgets.font("label", True)                      # tabs and the choices of a row: label, bold
         self.hits = []
         self._tile_cache, self._tile_sig = {}, None
         self.base, self._live_eff = None, None             # the scene as it was saved when the editor opened (Live), and the Auto / fixed choice to bring back when Live ends
@@ -439,7 +439,7 @@ class Menu(WizardMixin):
 
     def select_item(self, k):
         """A click on an item of the stack of the editor: its parameters show below (a layer of the six opens on the top thing it has)."""
-        if int(self.cfg.get("ed_item", 0)) == int(k):                       # the open item again: it folds
+        if int(self.cfg.get("ed_item", 0)) == int(k) and not self.wide:      # the open item again: it folds (wide: it stays, the page is on the right)
             self.cfg["ed_item"] = -1
             self.dd_open = None
             self.rebuild_scenes()
@@ -1579,6 +1579,10 @@ class Menu(WizardMixin):
         if cid == "ed_discard":
             self.discard_scene()
             return None
+        if cid.startswith("lbar_"):                                              # the toolbar over the list of effects: acts on the one selected
+            what = {"lbar_up": "up", "lbar_down": "down", "lbar_dup": "dup", "lbar_del": "del"}[cid]
+            self.layer_action((what, int(self.cfg.get("ly_sel", 0))))
+            return None
         if cid == "undo":
             self.undo_last()
             return None
@@ -2091,6 +2095,27 @@ class Menu(WizardMixin):
             return (ACCENT, "Mudando ao vivo") if self.cfg.get("live") else (ACCENT2, "Só na prévia")
         return OK, "Tudo salvo"
 
+    def _lbar_row(self, row, y):
+        """The toolbar over the list of effects (ScreenMaster's): move up, move down, duplicate and delete the effect that is selected."""
+        s, c = self.surf, self.cfg
+        W = self.W
+        cy = y + (self.ROW - 4) // 2
+        sel = int(c.get("ly_sel", 0))
+        n = len(c.get("layers") or [])
+        x = W - 22
+        for cid, label in reversed((("lbar_del", "Apagar"), ("lbar_dup", "Duplicar"), ("lbar_down", "↓"), ("lbar_up", "↑"))):
+            w = max(34, self.f_s.size(label)[0] + 18)
+            x -= w
+            br = pygame.Rect(x, cy - 13, w, 26)
+            on = n > 0 and (cid == "lbar_del" or cid == "lbar_dup" or (cid == "lbar_up" and sel < n - 1) or (cid == "lbar_down" and sel > 0))
+            widgets.button(s, self.f_s, br, label, "quiet", hover=self.hover == cid and on, enabled=on, radius=8, dy=1)
+            if on:
+                self.hits.append((br, cid, "btn", None))
+                self.order.append(cid)
+                self.order_val.append(None)
+                self.frects[cid] = br
+            x -= 4
+
     def _item_row(self, row, y):
         """An item of the stack of the editor (the mandala, the camera ...): its tag, its name and how it is set; the selected one is lit."""
         s, c = self.surf, self.cfg
@@ -2220,7 +2245,7 @@ class Menu(WizardMixin):
         sub = "  ·  ".join(t for t in (detail, bm if bm and bm != "Normal" else "", f"{int(L.get('op', 100))}%" if int(L.get("op", 100)) != 100 else "") if t)
         self._txt(self.f_s, self._fit(self.f_s, sub, right - nx - 8), (nx, cy + 3), DIM)
         bx = right
-        for what in ("up", "down", "dup", "del"):
+        for what in (() if self.wide else ("up", "down", "dup", "del")):          # wide: the toolbar of the list has them
             br = pygame.Rect(bx, cy - 13, 26, 26)
             ui.rect(s, (*CTRL_FILL, 255), br, border_radius=7)
             ui.rect(s, (*CTRL, 255), br, width=1, border_radius=7)
@@ -2403,6 +2428,8 @@ class Menu(WizardMixin):
         cid, kind = row["id"], row["kind"]
         if kind == "layer":
             return self._layer_row(row, y)
+        if kind == "lbar":
+            return self._lbar_row(row, y)
         if kind == "item":
             return self._item_row(row, y)
         if kind == "scene":

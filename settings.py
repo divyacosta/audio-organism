@@ -933,6 +933,8 @@ def scene_layout(cfg, view="gallery", wide=False):
         item = layer_item(cfg)
     left, right = stack_cards(cfg, item), []
     closed = int(cfg.get("ed_item", 0)) < 0                                      # the accordion with every item folded
+    if wide and closed:
+        closed, item = False, 6                                                  # the wide editor always shows a page (the settings of the scene)
     # ---- the page of the item (the right column when the window is wide)
     if closed:
         item = -1
@@ -972,7 +974,15 @@ def scene_layout(cfg, view="gallery", wide=False):
             dict(id="undo", kind="action", label="Desfazer", btn="Desfazer", help="Volta a última mudança  ·  Ctrl+Z"),
             dict(id="scene_more", kind="note", label="Duplicar e apagar ficam no ••• da cena, na lista", help=""),
         ]))
-    return _accordion(left, right, item), []                                     # (Salvar, Descartar and Galeria are in the strip over the editor)                             # one column, in every width: the page of an item opens right under its row
+    if not wide:
+        return _accordion(left, right, item), []                                 # narrow: one column, the page of an item opens right under its row
+    # wide (ScreenMaster's layout): the stack and the effects of the layer on the left, the page of the chosen effect on the right
+    slot = ITEM_SLOT.get(item)
+    if slot is not None:
+        right = [c for c in right if c[0] != SLOT_LIST_TITLE.get(slot)]         # the list of effects is on the left now
+        left = left + [("EFEITOS  ·  " + SLOT_LIST_TITLE.get(slot, "").capitalize(), [dict(id="lbar", kind="lbar", label="", help="")] + LY.list_items(cfg, slot))]
+    cards = left + right
+    return cards, ["L"] * len(left) + ["R"] * len(right)
 
 
 def _accordion(stack, page, item):
@@ -1037,6 +1047,9 @@ def scene_settings_cards(cfg, adv):
         dict(id="scene_more", kind="note", label="Duplicar e apagar ficam no ••• da cena, na galeria", help=""),
     ]))
     return cards
+
+
+SLOT_LIST_TITLE = {"bg": "GRADIENTES", "lights": "LUZES", "parts": "PARTÍCULAS E RASTRO", "finish": "EFEITOS DE LENTE E TOM"}
 
 
 def slot_cards(cfg, slot, adv):

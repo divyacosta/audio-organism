@@ -81,7 +81,7 @@ def test_menu():
         for r in rows:
             n += 1
             try:
-                assert r["id"] and r["label"] is not None and r["kind"] in ("seg", "slider", "toggle", "radio", "action", "text", "swatches", "dd", "layer", "note", "edbar", "item", "scene", "ear")
+                assert r["id"] and r["label"] is not None and r["kind"] in ("seg", "slider", "toggle", "radio", "action", "text", "swatches", "dd", "layer", "note", "edbar", "item", "scene", "ear", "lbar")
                 h = r["help"](cfg) if callable(r["help"]) else r["help"]
                 assert isinstance(h, str)
                 if r.get("enabled"):
@@ -1682,7 +1682,7 @@ def test_responsive():
     m.store_scene()
     m.rebuild_scenes()
     cols = m.cols[menu.TAB_SCENES]
-    check("the editor is one column in every width, an accordion", m.wide and not cols and not m.panes(), cols)
+    check("the wide editor: the list of effects on the left, the page on the right (ScreenMaster's layout)", m.wide and "L" in cols and "R" in cols and m.panes(), cols)
     left = [r["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs if r["id"].startswith("stk_")]
     check("the stack: the settings of the scene, then the six layers top first", left == ["stk_scene", "stk_links", "stk_over", "stk_finish", "stk_parts", "stk_form", "stk_lights", "stk_bg"], left)
     m.cfg["ed_item"], m.cfg["ed_sub"] = 0, 0
@@ -1789,14 +1789,14 @@ def test_responsive():
     cfg["ed_item"], cfg["ed_sub"] = 0, 0
     m.rebuild_scenes()
     cw.update(time.time(), an, 60.0, 10.0, False, st, force=True)
-    check("the editor is one column that scrolls as a whole", not m.panes() and m.max_scroll() > 0, (m.panes(), m.max_scroll()))
+    check("the wide editor: each column scrolls on its own", m.panes() and m.max_scroll(0) > 0, (m.panes(), m.max_scroll(0)))
     m.scroll = min(m.max_scroll(), 150)
     cw.update(time.time(), an, 60.0, 10.0, False, st, force=True)
     row = next(r for r, cid, kind, arg in m.hits if cid == "stk_form" and kind == "it")
     py_ = cw.panel_pos[1] + m.HEAD + m.reserved + row.centery - m.HEAD - m.scroll
     for typ, extra in ((pygame.MOUSEMOTION, dict(buttons=(0, 0, 0))), (pygame.MOUSEBUTTONDOWN, dict(button=1, buttons=(1, 0, 0))), (pygame.MOUSEBUTTONUP, dict(button=1, buttons=(0, 0, 0)))):
         cw.handle(types.SimpleNamespace(type=typ, pos=(cw.panel_pos[0] + row.centerx, py_), **extra))
-    check("a click on a layer of the scrolled editor folds it (it was the open one)", cfg["ed_item"] == -1, cfg["ed_item"])
+    check("a click on a layer of the scrolled editor opens it (wide: it does not fold)", cfg["ed_item"] != -1, cfg["ed_item"])
     m.open_item(7)
     cw.update(time.time(), an, 60.0, 10.0, False, st, force=True)
     check("opening an item brings its row to the top, with its page under it", m.scroll > 0, m.scroll)
