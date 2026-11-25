@@ -96,9 +96,7 @@ def apply(menu, c):
     elif op == "set":
         menu.set_value(str(c["id"]), c["value"])
     elif op == "press":
-        r = menu.press(str(c["id"]))
-        if r == "quit":
-            return "quit"
+        menu.press(str(c["id"]))
     elif op == "item":
         menu.select_item(int(c["k"]))
     elif op == "layer":

@@ -700,7 +700,7 @@ def sys_cards(cfg, k, devices=(), monitors=1, menu=None):
         return [("PERFIS", perfis), ("VER NO CELULAR", celular)] + ([("CONTROLE EXTERNO", externo)] if adv else [])
     ver = lambda c: (m.info if m is not None and m.info else "Procura uma versão nova agora")
     lang = ("IDIOMA", [dict(id="lang", kind="seg", label="Idioma", opts=[(n, c) for n, c in i18n.LANGS], help="Começa pelo idioma do Windows")])
-    return [lang] + ([("MOTOR DE VÍDEO", [_ROWS["backend"], _ROWS["gpu"]])] if adv else []) + [
+    return [lang, ("PAINEL", [dict(id="web_ui", kind="toggle", label="Painel web (padrão)", help="Desligado: volta ao painel antigo (pygame)")])] + ([("MOTOR DE VÍDEO", [_ROWS["backend"], _ROWS["gpu"]])] if adv else []) + [
             ("ATUALIZAÇÃO", [_ROWS["auto_update"],
                               dict(id="update_check", kind="action", label="Verificar atualização", btn="Verificar", help=ver),
                               dict(id="update_apply", kind="action", label="Instalar a atualização", btn=lambda c: (m.upd_label if m is not None and m.upd_label else "Atualizar"),
