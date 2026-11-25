@@ -410,16 +410,16 @@ class ControlWindow:
                     ch = mw.pane_view_h()
                     th = max(40, int(ch * ch / max(1, hh)))
                     ty = top + int((ch - th) * sc / mw.max_scroll(pane))
-                    ui.rect(s, wg.LINE_STRONG, (tx, top, 5, ch), border_radius=3)
-                    ui.rect(s, wg.ACCENT2, (tx, ty, 5, th), border_radius=3)
+                    ui.rect(s, wg.BORDER, (tx, top, 5, ch), border_radius=3)
+                    ui.rect(s, wg.LINE_STRONG, (tx, ty, 5, th), border_radius=3)
         elif mw.max_scroll() > 0:
             top = py + mw.HEAD + mw.reserved
             ch = mw.content_h()
             tx = px + mw.W + 4
             th = max(40, int(ch * ch / max(1, mw.heights[mw.tab] - mw.HEAD)))
             ty = top + int((ch - th) * mw.scroll / mw.max_scroll())
-            ui.rect(s, wg.LINE_STRONG, (tx, top, 5, ch), border_radius=3)
-            ui.rect(s, wg.ACCENT2, (tx, ty, 5, th), border_radius=3)
+            ui.rect(s, wg.BORDER, (tx, top, 5, ch), border_radius=3)
+            ui.rect(s, wg.LINE_STRONG, (tx, ty, 5, th), border_radius=3)
         self._draw_scene_bar(px, py + mw.HEAD + mw.reserved)
         if mw.tab >= 0:                                                            # the status line at the foot of every page: the frame times, as ScreenMaster's footer
             t = (status or {}).get("timing") or {}
@@ -457,7 +457,7 @@ class ControlWindow:
             txt = " · ".join(mw.problems.values())
             while len(txt) > 8 and self.fs.size(txt)[0] > mw.W - 40:
                 txt = txt[:-2]
-            r = pygame.Rect(self.panel_pos[0], self.panel_pos[1] + mw.HEAD + mw.reserved - 28, mw.W, 24)     # a full-width strip, as the ScreenMaster's warnings
+            r = pygame.Rect(self.panel_pos[0], self.H - 52, mw.W, 24)     # a full-width strip, as the ScreenMaster's warnings
             ui.rect(s, wg.SURFACE2, r)
             ui.rect(s, wg.BORDER, (r.x, r.y, r.w, 1))
             self._t(self.fs, txt, (r.x + 12, r.y + 4), wg.TEXT)
@@ -873,7 +873,7 @@ class ControlWindow:
         pend = info.get("pending_scene", -1)
         if self.thumbs is not None and not 0 <= pend < len(scn):
             self.thumbs.show([])                                            # nothing waits: no thumbnail to draw (the graphics card rests)
-        self._t_on(surf, "xs", "CENAS  ·  clique para tocar", (0, y), wg.TITLE)
+        self._t_on(surf, "xs", "Cenas  ·  clique para tocar", (0, y), wg.TITLE)
         nl = "+ Nova cena"
         nw = f["xs"].size(nl)[0] + 22
         nb = pygame.Rect(Wc - nw, y - 4, nw, wg.MIN_H)
@@ -1070,7 +1070,7 @@ class ControlWindow:
             elif fixed:
                 txt, col, fg = "FIXA", wg.ACCENT2, wg.ON_LIGHT
             elif off:
-                txt, col, fg = "FORA DO AUTOMÁTICO", wg.SURFACE2, wg.DIM
+                txt, col, fg = "Fora do automático", wg.SURFACE2, wg.DIM
             else:
                 txt = ""
             if txt:

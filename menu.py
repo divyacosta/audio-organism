@@ -2231,7 +2231,7 @@ class Menu(WizardMixin):
         s = self.surf
         x0, x1 = 16, W - 16
         ui.rect(s, (*BORDER, 255), (x0, y + 8, x1 - x0, 1))
-        for h in range(0, 25, 3):
+        for h in range(0, 24, 3):
             hx = x0 + int((x1 - x0) * h / 24)
             pygame.draw.line(s, (*DIM, 255), (hx, y + 5), (hx, y + 11), 1)
             if h % 6 == 0 and h < 24:
@@ -2263,10 +2263,11 @@ class Menu(WizardMixin):
         n = len(c.get("layers") or [])
         # the column's header (ScreenMaster's): a small caption, the big name of the layer, and the toolbar on the right
         self._txt(self.f_s, row.get("help", ""), (22, y + 2), DIM)
-        self._txt(widgets.font("lead", True), self._fit(widgets.font("lead", True), row.get("label", ""), max(80, W - 300)), (22, y + 14), TEXT)
-        x = W - 22
         add_lbl = "+ Ajuste"
         aw = max(96, self.fb.size(add_lbl)[0] + 26)
+        tool_left = W - 22 - aw - 12 - 4 * 30                                  # where the toolbar starts: the name stops before it
+        self._txt(widgets.font("lead", True), self._fit(widgets.font("lead", True), row.get("label", ""), max(60, tool_left - 22 - 12)), (22, y + 14), TEXT)
+        x = W - 22
         br = pygame.Rect(x - aw, cy - 15, aw, 30)
         widgets.button(s, self.fb, br, add_lbl, "primary", hover=self.hover == "lbar_add", radius=6, dy=1)
         self.hits.append((br, "lbar_add", "btn", None))
@@ -2827,7 +2828,7 @@ class Menu(WizardMixin):
             ui.rect(s, (*(SEL if opn else (HOVER_EDGE if hov else CTRL)), 255), box, width=2 if opn else 1, border_radius=6)
             cur = c.get(cid)
             lbl = next((l for l, v in row["opts"] if v == cur), row.get("placeholder", ""))
-            self._txt(self.fb if cur in [v for _, v in row["opts"]] else self.f, lbl, (box.x + 14, box.y + 7), tc if en else dc)
+            self._txt(self.fb if cur in [v for _, v in row["opts"]] else self.f, lbl, (box.x + 14, box.centery - (self.fb if cur in [v for _, v in row["opts"]] else self.f).get_height() // 2), tc if en else dc)
             kx, ky = box.right - 18, box.centery
             pygame.draw.polygon(s, ACCENT2 if en else dc, [(kx - 5, ky + 3), (kx + 5, ky + 3), (kx, ky - 3)] if opn else [(kx - 5, ky - 3), (kx + 5, ky - 3), (kx, ky + 3)])
             self.dd_rects[cid] = box

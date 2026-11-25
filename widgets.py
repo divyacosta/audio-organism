@@ -9,7 +9,7 @@ One colour, one meaning:
   ACCENT     the same lime: the theme colour (NO AR, the main highlight)
   DANGER     a real error and what deletes (never a fill for ordinary actions)
   HOVER_EDGE the pointer is over it: a neutral, never the theme colour
-  FOCUS      the keyboard focus ring: near white, never the theme colour
+  FOCUS      the keyboard focus ring: the theme lime, as the ScreenMaster's Accent focus ring
 """
 import os
 
