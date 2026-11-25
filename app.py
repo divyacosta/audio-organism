@@ -129,6 +129,8 @@ def main():
 
     menu = Menu(cfg)
     recorder = None
+    import agenda as _agenda
+    agenda_tk = _agenda.Ticker()
     if os.environ.get("VIS_REPORT"):                                          # the performance report (report.py): Ultra, VSync and dynamic resolution off, then measure and quit
         import report
         import settings as _settings
@@ -453,6 +455,11 @@ def main():
                         pass
         prof.mark("áudio/entrada (captura ou sinal de teste) e troca de dispositivo")
         menu.apply_taps(an)                                                       # tap tempo asked for since the last frame (TAP, the T key, a controller)
+        for rule in agenda_tk.check(cfg.get("agenda") or []):                       # the agenda: a rule of this minute brings its scene to the picture
+            scn_ = cfg.get("scenes") or []
+            if 0 <= int(rule.get("scene", -1)) < len(scn_):
+                menu.play_scene(int(rule["scene"]))
+                menu.say(f"Agenda: {scn_[int(rule['scene'])].get('scene_name', '?')}")
         an.update(dt)
         prof.mark("áudio/análise (FFT, bandas, batida, estados da música)")
         vis = an                                             # what the picture follows: the real analyzer, always

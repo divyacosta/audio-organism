@@ -3103,6 +3103,22 @@ def test_design_system():
     check("o botão principal é neutro, sem cor de tema", W.button_colors("primary")[0] == W.PRIMARY_FILL)
 
 
+def test_agenda():
+    section("Agenda: uma regra dispara no horário e nos dias marcados, uma vez por minuto")
+    import agenda as AG
+    import time as _t
+    mon_9 = _t.struct_time((2026, 11, 23, 9, 0, 0, 0, 327, -1))           # a Monday, 09:00
+    tue_9 = _t.struct_time((2026, 11, 24, 9, 0, 0, 1, 328, -1))           # a Tuesday, 09:00
+    rules = [{"time": "09:00", "days": [0, 2], "scene": 3, "on": True},
+             {"time": "09:00", "days": [], "scene": 5, "on": True},
+             {"time": "09:00", "days": [], "scene": 7, "on": False}]
+    check("a regra de segunda dispara às 09:00", [r["scene"] for r in AG.due(rules, mon_9)] == [3, 5])
+    check("na terça só a regra de todos os dias dispara", [r["scene"] for r in AG.due(rules, tue_9)] == [5])
+    check("um horário inválido não dispara nem trava", AG.parse_time("25:00") is None and AG.parse_time("x") is None and AG.parse_time("07:30") == 450)
+    tk = AG.Ticker()
+    check("o mesmo minuto dispara uma vez só", len(tk.check(rules, mon_9)) == 2 and tk.check(rules, mon_9) == [])
+
+
 def main():
     exe = sys.argv[sys.argv.index("--exe") + 1] if "--exe" in sys.argv else None
     for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_navigation, test_sticky_titles, test_report):
