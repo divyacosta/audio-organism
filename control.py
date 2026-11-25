@@ -441,7 +441,8 @@ class ControlWindow:
             parts = [q.strip() for q in line.split("   ·   ")]
             hint = "F1  atalhos"
             self._t(self.fs, hint, (16, fy + 5), wg.DIM)
-            x = 16 + self.fs.size(hint)[0] + 22
+            total = sum(self.fs.size(q)[0] + 30 for q in parts)                   # the status docks to the right, as ScreenMaster's footer
+            x = max(16 + self.fs.size(hint)[0] + 22, self.W - 16 - total)
             for k, part in enumerate(parts):
                 if k:
                     x += self._t(self.fs, "·", (x + 4, fy + 5), wg.DIM) + 14
