@@ -850,7 +850,7 @@ def _item_text(cfg, k):
 
 
 # the three big controls of the Palco, valid for every scene: how strongly the picture answers the music, how fast it moves, which colours it wears
-MACRO_ENERGY = [("Calma", 35), ("Suave", 70), ("Normal", 100), ("Forte", 140), ("Explosiva", 190)]
+MACRO_ENERGY = [("Calma", 35), ("Suave", 70), ("Normal", 100), ("Forte", 140), ("Máxima", 190)]
 MACRO_SPEED = [("Lenta", 40), ("Calma", 70), ("Normal", 100), ("Rápida", 150), ("Turbo", 230)]
 
 

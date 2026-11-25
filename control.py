@@ -417,7 +417,7 @@ class ControlWindow:
                 if x_from <= x0 < x_to and y >= view and y + 14 < edge and y + ch - self.STICKY_H > edge:
                     r = pygame.Rect(px + x0 + 1, top, wc - 2, self.STICKY_H)
                     ui.rect(s, wg.SURFACE2, r, border_radius=8)
-                    ui.rect(s, wg.BORDER, pygame.Rect(r.x, r.bottom - 1, r.w, 1))
+                    ui.rect(s, wg.BORDER, pygame.Rect(r.x, r.bottom - 2, r.w, 2))
                     self._t(mw.f_sb, title, (r.x + 17, r.y + 7), wg.TITLE)
                     break
 

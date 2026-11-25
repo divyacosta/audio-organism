@@ -60,6 +60,8 @@ def rect(surf, color, rect, width=0, border_radius=-1, border_top_left_radius=-1
     r = pygame.Rect(rect)
     if r.w <= 0 or r.h <= 0:
         return r
+    if width > 0:
+        width = 2                                                                    # every border is 2 px: a 1 px line on a rounded corner is drawn unevenly
     tl, tr, bl, br = _radii(border_radius, border_top_left_radius, border_top_right_radius, border_bottom_left_radius, border_bottom_right_radius, r.w, r.h)
     if not (tl or tr or bl or br):
         return pygame.draw.rect(surf, color, r, width)
