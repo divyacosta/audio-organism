@@ -3106,9 +3106,23 @@ def test_webui():
     check("o servidor fecha", w.server is None)
 
 
+def test_report():
+    section("Relatório de desempenho: o texto sai com cada parte e nunca mexe nas configurações da pessoa")
+    import report
+    r = dict(when="x", gpu="GPU", backend="D3D12", preset="Ultra", res=100.0, scene=[1280, 720], steps=110, frames=100, seconds=1.0, avg_fps=60.0, p1_fps=40.0, worst_ms=30.0,
+             avg_ms=16.0, p99_ms=25.0, stages={"áudio": 1.0, "cena": 0.1, "GPU": 8.0, "UI": 3.0, "web": 0.0}, cpu_pct=30.0, mem_mb=400, mem_peak_mb=410, python="3", os="Windows", fps_out=60)
+    md = report.markdown(r, dict(r, avg_fps=55.0, fps_out=60))
+    check("o relatório lista as partes e o consumo", all(t in md for t in ("Desenho da imagem", "Painel de controles", "Análise do som", "Resto", "Memória", "55.0 fps")), md[:80])
+    check("a partir de zero ms uma parte some", "Painel novo" not in md)
+    rec = report.Recorder(os.path.join(tempfile.mkdtemp(prefix="ao_rec_"), "r.json"))
+    check("durante o aquecimento nada é medido", rec.step(1.0, 0.016, {}) is False and not rec.started)
+    app_src = open(os.path.join(ROOT, "app.py"), encoding="utf-8").read()
+    check("o modo relatório grava as configurações ao lado do relatório, não por cima das da pessoa", "_settings.PATH" in app_src and "VIS_REPORT" in app_src)
+
+
 def main():
     exe = sys.argv[sys.argv.index("--exe") + 1] if "--exe" in sys.argv else None
-    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_navigation, test_sticky_titles, test_webui):
+    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_navigation, test_sticky_titles, test_webui, test_report):
         try:
             fn()
         except Exception as e:

@@ -1,0 +1,32 @@
+{
+ "when": "2026-11-25 07:06:42",
+ "gpu": "NVIDIA GeForce RTX 5060 Ti",
+ "backend": "D3D12",
+ "preset": "Ultra",
+ "res": 100.0,
+ "scene": [
+  1280,
+  720
+ ],
+ "steps": 110,
+ "frames": 1137,
+ "seconds": 20.01,
+ "avg_fps": 56.7,
+ "p1_fps": 32.1,
+ "worst_ms": 38.8,
+ "avg_ms": 17.62,
+ "p99_ms": 31.11,
+ "stages": {
+  "áudio": 1.27,
+  "cena": 0.12,
+  "GPU": 12.1,
+  "UI": 3.94,
+  "web": 0.0
+ },
+ "cpu_pct": 38.7,
+ "mem_mb": 414,
+ "mem_peak_mb": 417,
+ "python": "3.14.7",
+ "os": "Windows-11-10.0.26200-SP0",
+ "fps_out": 240
+}

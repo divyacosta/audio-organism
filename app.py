@@ -114,6 +114,8 @@ def main():
     cap, syn, rate, audio_err = None, None, 48000, None
     if test:
         syn = Synth(rate)
+    elif os.environ.get("VIS_SYNTH"):                                            # VIS_SYNTH=1: the test music instead of the capture (the performance report: the same load every time)
+        syn = Synth(rate)
     elif os.environ.get("VIS_SILENT"):                                          # VIS_SILENT=1: the audio input is replaced by silence (tests and pictures of the first screen)
         syn = Silence()
     else:
@@ -125,6 +127,16 @@ def main():
     an = Analyzer(rate)
 
     menu = Menu(cfg)
+    recorder = None
+    if os.environ.get("VIS_REPORT"):                                          # the performance report (report.py): Ultra, VSync and dynamic resolution off, then measure and quit
+        import report
+        import settings as _settings
+        _settings.PATH = os.path.join(os.path.dirname(os.environ["VIS_REPORT"]), "settings.json")      # whatever the run saves goes next to the report, never over the person's settings
+        recorder = report.Recorder(os.environ["VIS_REPORT"])
+        cfg["preset"], cfg["vsync"], cfg["dynres"] = len(PRESETS_N) - 1, False, False
+        if os.environ.get("VIS_REPORT_FPS"):                                   # the FPS cap of the run (to see what the picture does with no cap in the way)
+            cfg["fps_out"] = int(os.environ["VIS_REPORT_FPS"])
+        menu.set_value("preset", len(PRESETS_N) - 1, announce=False)
     if cap is not None:                                                       # the pickers of Ajustes list what the system has
         menu.audio_devices = cap.devices()
         menu.monitors = rend.monitor_count()
@@ -403,7 +415,10 @@ def main():
             web_opened = False
         for c_ in web.poll():                                                                # what was done on the page: the same as doing it on the panel
             webui.apply(menu, c_)
+        t_w = time.perf_counter()
         web.publish(menu, dict(fps=round(fps)))
+        if web.server is not None:
+            lap("web", t_w)
         for k_ in remote.poll() + phone.poll():                                              # a controller or another program: the same as pressing the key
             rend.events.append({"event_type": "key_down", "key": k_, "remote": True})         # (marked: a controller may be driving a projection, no words on the picture)
 
@@ -516,6 +531,9 @@ def main():
                 menu.dirty = False
 
         frame += 1
+        if recorder is not None and recorder.step(clock_t, dt, tm):
+            recorder.write(rend, cfg, PRESETS_N[int(cfg["preset"]) % len(PRESETS_N)])
+            running = False
         if not test and frame % 20 == 0:                    # resolution and FPS in the window title, so the picture stays clean
             sw, sh = rend.scene_size
             rend.set_title(f"Audio Organism  ·  {sw}×{sh}  ·  {fps:.0f} fps")
