@@ -63,7 +63,7 @@ def contrast(a, b):
 
 
 # ------------------------------------------------------------------ fonts
-FAMILY = "segoeui"
+FAMILY = "Segoe UI Variable,segoeui"      # the Windows 11 face for screens (the old segoeui file is the Light weight: thin and pixelated at 12-15 px)
 SIZES = dict(cap=12, small=13, label=14, body=15, lead=18, head=20, title=22, h1=26, h2=34, display=60)         # the sizes the program writes with, by role
 _fonts = {}
 
