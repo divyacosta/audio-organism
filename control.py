@@ -196,6 +196,13 @@ class ControlWindow:
                 self.menu.open_search()
                 self.force = True
                 return None
+            if self.menu.dd_open == "ly_add" and (e.unicode or e.key == pygame.K_BACKSPACE) and e.key not in (pygame.K_RETURN, pygame.K_ESCAPE, pygame.K_TAB):
+                q = self.menu.dd_q
+                self.menu.dd_q = q[:-1] if e.key == pygame.K_BACKSPACE else (q + e.unicode)[:28]      # the search of the add menu
+                self.menu.dd_hl = 0
+                self.menu.need = True
+                self.force = True
+                return None
             if self.menu.shortcut(getattr(e, "unicode", ""), int(getattr(self, "live_scene", 0))):
                 return None
             return self.menu.key(e.key, getattr(e, "mod", 0))
@@ -384,6 +391,13 @@ class ControlWindow:
             ui.rect(s, (36, 40, 58), (tx, top, 5, ch), border_radius=3)
             ui.rect(s, wg.ACCENT2, (tx, ty, 5, th), border_radius=3)
         self._draw_scene_bar(px, py + mw.HEAD + mw.reserved)
+        if mw.tab == M.TAB_SCENES and mw.scene_view == "editor":                  # the status line at the foot of the editor: the frame times, as ScreenMaster's footer
+            t = (status or {}).get("timing") or {}
+            line = (f"{fps:.0f} fps   ·   imagem {t.get('GPU', 0):.1f} ms   ·   som {t.get('áudio', 0):.1f} ms   ·   cena {t.get('cena', 0):.1f} ms"
+                    f"   ·   {'shaders ok' if (status or {}).get('shader_ok', True) else 'shaders com erro'}")
+            ui.rect(s, (*wg.BG, 255), (px, py + self.H - 24, self.W, 24))
+            ui.rect(s, (*wg.BORDER, 255), (px, py + self.H - 24, self.W, 1))
+            self._t(self.fs, line, (px + 14, py + self.H - 19), wg.DIM)
         if mw.problems:
             txt = " · ".join(mw.problems.values())
             while len(txt) > 8 and self.fs.size(txt)[0] > mw.W - 40:

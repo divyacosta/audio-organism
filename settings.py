@@ -980,7 +980,13 @@ def scene_layout(cfg, view="gallery", wide=False):
     slot = ITEM_SLOT.get(item)
     if slot is not None:
         right = [c for c in right if c[0] != SLOT_LIST_TITLE.get(slot)]         # the list of effects is on the left now
-        left = left + [("EFEITOS  ·  " + SLOT_LIST_TITLE.get(slot, "").capitalize(), [dict(id="lbar", kind="lbar", label="", help="")] + LY.list_items(cfg, slot))]
+        ly = cfg.get("layers") or []
+        i = int(cfg.get("ly_sel", 0))
+        if 0 <= i < len(ly) and LY.SLOT_OF.get(ly[i].get("t")) == slot:
+            info = LY.TYPES.get(ly[i].get("t"), {})
+            right = [("", [dict(id="phead", kind="phead", label=info.get("label", ""), help=info.get("help", ""))])] + right
+        left = left + [("EFEITOS  ·  " + SLOT_LIST_TITLE.get(slot, "").capitalize(), [dict(id="lbar", kind="lbar", label="", help="")] + LY.list_items(cfg, slot)
+                        + [dict(id="lhint", kind="note", label="A ordem de cima para baixo é a ordem de aplicação", help="")])]
     cards = left + right
     return cards, ["L"] * len(left) + ["R"] * len(right)
 

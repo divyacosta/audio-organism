@@ -81,7 +81,7 @@ def test_menu():
         for r in rows:
             n += 1
             try:
-                assert r["id"] and r["label"] is not None and r["kind"] in ("seg", "slider", "toggle", "radio", "action", "text", "swatches", "dd", "layer", "note", "edbar", "item", "scene", "ear", "lbar")
+                assert r["id"] and r["label"] is not None and r["kind"] in ("seg", "slider", "toggle", "radio", "action", "text", "swatches", "dd", "layer", "note", "edbar", "item", "scene", "ear", "lbar", "phead")
                 h = r["help"](cfg) if callable(r["help"]) else r["help"]
                 assert isinstance(h, str)
                 if r.get("enabled"):

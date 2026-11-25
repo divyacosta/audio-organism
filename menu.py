@@ -1591,7 +1591,7 @@ class Menu(WizardMixin):
             return None
         if cid == "lbar_add":                                                    # "+ Ajuste": the list of kinds of effect opens (its row is the last of the list)
             self.dd_open, self.dd_hl = "ly_add", 0
-            self.dd_groups = {"fx"}                                           # the first group opens, the others fold
+            self.dd_groups, self.dd_q = {"fx"}, ""                             # the first group opens, the others fold; the search starts empty
             self.need = True
             return None
         if cid.startswith("lbar_"):                                              # the toolbar over the list of effects: acts on the one selected
@@ -2099,6 +2099,8 @@ class Menu(WizardMixin):
                 self.need = True
         if self.dd_open:
             self._dropdown_popup()
+            if getattr(self, "dd_q", "") and self.dd_open != "ly_add":
+                self.dd_q = ""
         # keyboard focus ring, drawn once the full focus order is known
         if self.kbd and self.order:
             fr = self.frects.get(self.order[self.focus % len(self.order)])
@@ -2264,6 +2266,7 @@ class Menu(WizardMixin):
         hov = self.hover == cid
         ui.rect(s, (*((0x2E, 0x33, 0x24) if sel else (SURFACE2 if hov else (22, 25, 38))), 255), rowr, border_radius=10)
         ui.rect(s, (*(ACCENT2 if sel else BORDER), 255), rowr, width=1, border_radius=10)
+        ui.rect(s, (*self.TAG_COLORS.get(info.get("group"), (60, 60, 90)), 255), pygame.Rect(rowr.x + 3, rowr.y + 8, 3, rowr.h - 16), border_radius=2)
         self.frects[cid] = rowr
         self.order.append(cid)
         self.order_val.append(None)
@@ -2351,8 +2354,15 @@ class Menu(WizardMixin):
             groups.setdefault(TYPES.get(val, {}).get("group", "fx"), []).append((lbl, val))
         if not hasattr(self, "dd_groups"):
             self.dd_groups = {"fx"}
+        if not hasattr(self, "dd_q"):
+            self.dd_q = ""
+        q = self.dd_q.lower().strip()
+        if q:                                                                  # searching: the groups that have a match open, the others fold
+            groups = {g: [o for o in items if q in o[0].lower()] for g, items in groups.items()}
+            groups = {g: items for g, items in groups.items() if items}
+            self.dd_groups = set(groups) if groups else set()
         pw = max(box.w, 340)
-        ui_h = 0
+        ui_h = 44                                                              # the search field on the top line
         for g in groups:
             ui_h += 40 + (len(groups[g]) * 30 if g in self.dd_groups else 0)
         below = (self.scroll2 if self.in_right_pane(box.x) else self.scroll) + max(300, min(self.view_h, 900)) - self.HEAD - self.reserved - box.bottom
@@ -2362,7 +2372,11 @@ class Menu(WizardMixin):
         self.hits.append((pygame.Rect(0, 0, self.W, self.surf.get_height()), "ddclose", "ddclose", None))
         ui.rect(s, (*widgets.SURFACE2, 255), pr.inflate(4, 4), border_radius=10)
         ui.rect(s, (*widgets.CTRL, 255), pr.inflate(4, 4), width=1, border_radius=10)
-        yy = pr.y + 6
+        sf = pygame.Rect(pr.x + 6, pr.y + 6, pr.w - 12, 32)                   # the search field
+        ui.rect(s, (*widgets.BG, 255), sf, border_radius=7)
+        ui.rect(s, (*widgets.CTRL, 255), sf, width=1, border_radius=7)
+        self._txt(self.f, self.dd_q if self.dd_q else "Buscar ajuste…", (sf.x + 10, sf.y + 7), widgets.TEXT if self.dd_q else widgets.DIM)
+        yy = pr.y + 44
         for g, items in groups.items():
             name, desc = self.GROUP_INFO.get(g, (g, ""))
             open_ = g in self.dd_groups
@@ -2529,6 +2543,10 @@ class Menu(WizardMixin):
             return self._item_row(row, y)
         if kind == "scene":
             return self._scene_row(row, y)
+        if kind == "phead":                                                      # the title of the page: the effect's name big, what it is under it
+            self._txt(widgets.font("lead", True), row["label"], (22, y + 4), TEXT)
+            self._txt(self.f_s, row["help"], (22, y + 30), DIM)
+            return
         if kind == "note":
             lab = row["label"](c) if callable(row["label"]) else row["label"]
             hp = row["help"](c) if callable(row["help"]) else row["help"]
