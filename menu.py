@@ -20,6 +20,7 @@ import layers as LY
 import mods as MOD
 import i18n
 import scenes as SC
+import agenda as AGM
 import settings
 import shaderpresets as SP
 import widgets
@@ -1332,7 +1333,7 @@ class Menu(WizardMixin):
     def set_value(self, cid, value, announce=True):
         if cid == "la_pick":                                                     # Faixas: the chosen number gets a lane (points come with clicks on the lane's row)
             if value:
-                self.cfg.setdefault("agenda_lanes", []).append(dict(key=value, points=[]))
+                AGM.edit_lanes(self.cfg).append(dict(key=value, points=[]))
                 self.say("Faixa criada: clique em Gravar agora nos horários que quiser")
             self.touch()
             self.rebuild_scenes()
@@ -1585,7 +1586,7 @@ class Menu(WizardMixin):
             rule = AG.new_rule(scene=0)
             rule["time"] = f"{int(h):02d}:00"
             rule["days"] = [int(d)]
-            self.cfg.setdefault("agenda", []).append(rule)
+            AGM.edit_rules(self.cfg).append(rule)
             self.say(f"Regra nova às {rule['time']}")
             self.touch()
             self.rebuild_scenes()
@@ -1681,10 +1682,29 @@ class Menu(WizardMixin):
             self.touch()
             self.say("Paletas de fábrica restauradas")
             return None
+        if cid.startswith("pf_"):                                               # Perfis da agenda: a new one, its days, or delete it
+            import agenda as AGP2
+            profs = self.cfg.setdefault("agenda_profiles", [])
+            ei = AGP2.edit_index(self.cfg)
+            if cid == "pf_new":
+                profs.append(dict(name=f"Perfil {len(profs) + 1}", days=[5, 6], rules=[], lanes=[]))
+                self.cfg["agenda_edit"] = len(profs) - 1
+            elif cid == "pf_days" and ei >= 0:
+                cur = list(profs[ei].get("days") or [])
+                opts = AGP2.DAY_CHOICES
+                i = opts.index(cur) if cur in opts else -1
+                profs[ei]["days"] = list(opts[(i + 1) % len(opts)])
+            elif cid == "pf_del" and ei >= 0:
+                del profs[ei]
+                self.cfg["agenda_edit"] = -1
+            self.touch()
+            self.rebuild_scenes()
+            self.need = True
+            return None
         if cid.startswith("la_"):                                                # Faixas: a click grabs the value now, deletes a lane, or starts one
             import agenda as AG3
             op, _, idx = cid.partition(":")
-            lanes = self.cfg.setdefault("agenda_lanes", [])
+            lanes = AGM.edit_lanes(self.cfg)
             if op == "la_new":
                 lanes.append(dict(key=idx, points=[]))
             elif op == "la_pt" and 0 <= int(idx) < len(lanes):
@@ -1740,9 +1760,9 @@ class Menu(WizardMixin):
             op, _, idx = cid.partition(":")
             kind = op[3:]
             if kind == "add":
-                AG.apply(self.cfg.setdefault("agenda", []), "add", 0)
+                AG.apply(AGM.edit_rules(self.cfg), "add", 0)
             elif kind != "none":
-                AG.apply(self.cfg.setdefault("agenda", []), {"time": "time", "scene": "scene", "days": "days", "on": "on", "del": "del"}[kind], int(idx or 0), scenes=len(self.cfg.get("scenes") or []))
+                AG.apply(AGM.edit_rules(self.cfg), {"time": "time", "scene": "scene", "days": "days", "on": "on", "del": "del"}[kind], int(idx or 0), scenes=len(self.cfg.get("scenes") or []))
             self.touch()
             self.rebuild_scenes()
             self.need = True
@@ -2074,7 +2094,7 @@ class Menu(WizardMixin):
     def _drag_point(self, ev, ox, oy):
         """A point of a lane follows the pointer: the hour is where it is, the value its height. Release takes it away when it did not move."""
         d = self._drag
-        lanes = self.cfg.get("agenda_lanes") or []
+        lanes = AGM.edit_lanes(self.cfg)
         if not 0 <= d["lane"] < len(lanes):
             self._drag = None
             return
@@ -2386,7 +2406,7 @@ class Menu(WizardMixin):
         import agenda as AG
         x0 = 18
         label, lo, hi = AG.LANE_KEYS.get(row.get("key"), ("?", 0, 100))
-        lane = next((l for l in self.cfg.get("agenda_lanes") or [] if l.get("key") == row.get("key")), None)
+        lane = next((l for l in AGM.edit_lanes(self.cfg) if l.get("key") == row.get("key")), None)
         idx = row.get("lane", 0)
         self._txt(self.f_s, label, (x0, y + 4), TEXT)
         now_v = int(self.cfg.get(row.get("key"), lo))
@@ -2421,7 +2441,7 @@ class Menu(WizardMixin):
             for h in range(0, 24, 4):                                    # a block of four hours is one click: wide enough to press
                 cell = pygame.Rect(int(gx + colw * h), yd, max(24, int(colw * 4)), 24)
                 self.hits.append((cell, f"wk:{d}:{h}", "btn", None))
-        for rule in self.cfg.get("agenda") or []:
+        for rule in AGM.edit_rules(self.cfg):
             m = parse_time_(rule.get("time"))
             if m is None:
                 continue
@@ -2446,7 +2466,7 @@ class Menu(WizardMixin):
                 self._txt(self.f_s, f"{h:02d}", (hx + 3, y + 1), DIM)
         now = time.localtime()
         today_ok = lambda rule: not rule.get("days") or now.tm_wday in rule.get("days")
-        for rule in self.cfg.get("agenda") or []:
+        for rule in AGM.edit_rules(self.cfg):
             m = parse_time_(rule.get("time"))
             if m is None:
                 continue

@@ -111,10 +111,10 @@ def lane_value(points, minute):
     return pts[-1][1]
 
 
-def apply_lanes(cfg, now):
-    """Writes every lane's value at this minute into the settings it drives (clamped to the slider's range)."""
+def apply_lanes(cfg, now, lanes=None):
+    """Writes every lane's value at this minute into the settings it drives (clamped to the slider's range). `lanes`: the ones that run now."""
     minute = now.tm_hour * 60 + now.tm_min
-    for lane in cfg.get("agenda_lanes") or []:
+    for lane in (lanes if lanes is not None else playback(cfg, now)[1]):
         key = lane.get("key")
         if key not in LANE_KEYS:
             continue
@@ -138,3 +138,37 @@ class LaneTicker:
             return False
         self.last = key
         return True
+
+
+# ---- perfis da agenda (ScreenMaster's day profiles): a profile has days and its own rules and lanes. A day covered by a profile uses it;
+# the other days use the agenda as it is (the "Padrão"). The page edits one of them at a time (cfg["agenda_edit"]: -1 = the Padrão).
+def profiles(cfg):
+    return cfg.setdefault("agenda_profiles", [])
+
+
+def edit_index(cfg):
+    i = int(cfg.get("agenda_edit", -1))
+    return i if 0 <= i < len(profiles(cfg)) else -1
+
+
+def edit_rules(cfg):
+    i = edit_index(cfg)
+    if i < 0:
+        return cfg.setdefault("agenda", [])
+    return profiles(cfg)[i].setdefault("rules", [])
+
+
+def edit_lanes(cfg):
+    i = edit_index(cfg)
+    if i < 0:
+        return cfg.setdefault("agenda_lanes", [])
+    return profiles(cfg)[i].setdefault("lanes", [])
+
+
+def playback(cfg, now):
+    """The rules and the lanes that run today (at this time): the profile that covers the weekday, or the Padrão."""
+    wd = now.tm_wday
+    for p in profiles(cfg):
+        if wd in (p.get("days") or []):
+            return p.get("rules") or [], p.get("lanes") or []
+    return cfg.get("agenda") or [], cfg.get("agenda_lanes") or []

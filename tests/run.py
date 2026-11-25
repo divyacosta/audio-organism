@@ -736,7 +736,7 @@ def test_chips():
     m.render()
     w1 = next(r.w for r, cid, kind, arg in m.hits if cid == "sc_auto:1")
     check("a very long name gets a pill of at most 200 px (the name is cut with an ellipsis)", w1 <= 200, w1)
-    check("the page of the Automático stays under 1200 px: the week grid (about 200 px), the picker of programs and the rules are the agenda", m.heights[menu.TAB_SYS] < 1200, m.heights[menu.TAB_SYS])
+    check("the page of the Automático stays under 1400 px: the profiles, the week grid, the picker of programs and the rules are the agenda", m.heights[menu.TAB_SYS] < 1400, m.heights[menu.TAB_SYS])
 
 
 # ------------------------------------------------------------------ 6m. No idle demo
@@ -3067,6 +3067,20 @@ def test_lanes():
     check("um clique num ponto, sem arrastar, o apaga", m.cfg["agenda_lanes"][0]["points"] == [], m.cfg["agenda_lanes"][0]["points"])
 
 
+def test_agenda_profiles():
+    section("Perfis da agenda: o dia coberto por um perfil roda as regras dele; a edição vai para o perfil escolhido")
+    import agenda as AG
+    cfg = {"agenda": [{"time": "09:00", "days": [], "scene": 0, "on": True}], "agenda_lanes": [], "agenda_profiles": [
+        {"name": "Fim de semana", "days": [5, 6], "rules": [{"time": "11:00", "days": [], "scene": 1, "on": True}], "lanes": []}]}
+    sat = time.struct_time((2026, 11, 28, 10, 0, 0, 5, 332, -1))
+    mon = time.struct_time((2026, 11, 30, 10, 0, 0, 0, 334, -1))
+    check("no sábado roda o perfil", AG.playback(cfg, sat)[0][0]["time"] == "11:00", AG.playback(cfg, sat)[0])
+    check("na segunda roda o Padrão", AG.playback(cfg, mon)[0][0]["time"] == "09:00", AG.playback(cfg, mon)[0])
+    cfg["agenda_edit"] = 0
+    AG.edit_rules(cfg).append({"time": "12:00", "days": [], "scene": 0, "on": True})
+    check("editar com o perfil escolhido grava nele", len(cfg["agenda_profiles"][0]["rules"]) == 2 and len(cfg["agenda"]) == 1, cfg["agenda_profiles"][0]["rules"])
+
+
 def test_safety_undo():
     section("Segurança e Desfazer: restaurar e perfis nunca baixam os limites de conforto, e o toast desfaz")
     cfg = menu.fresh()
@@ -3220,7 +3234,7 @@ def test_agenda():
 
 def main():
     exe = sys.argv[sys.argv.index("--exe") + 1] if "--exe" in sys.argv else None
-    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_agenda_week, test_master_switch, test_lanes, test_navigation, test_sticky_titles, test_report):
+    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_agenda_week, test_master_switch, test_lanes, test_agenda_profiles, test_navigation, test_sticky_titles, test_report):
         try:
             fn()
         except Exception as e:

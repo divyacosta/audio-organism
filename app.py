@@ -463,7 +463,8 @@ def main():
         if time.perf_counter() >= fg_next:
             fg_next = time.perf_counter() + 0.5
             fg_watch.update(cfg, menu.play_scene)
-        for rule in agenda_tk.check(cfg.get("agenda") or []):                       # the agenda: a rule of this minute brings its scene to the picture
+        rules_now = _agenda.playback(cfg, time.localtime())[0]
+        for rule in agenda_tk.check(rules_now):                       # the agenda: a rule of this minute brings its scene to the picture
             if fg_watch.paused:                                                     # a program's rule pauses the agenda while it is in front
                 break
             scn_ = cfg.get("scenes") or []
