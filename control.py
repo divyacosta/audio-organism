@@ -507,7 +507,7 @@ class ControlWindow:
                     r = pygame.Rect(px + x0 + 1, top, wc - 2, self.STICKY_H)
                     ui.rect(s, wg.SURFACE2, r, border_radius=8)
                     ui.rect(s, wg.BORDER, pygame.Rect(r.x, r.bottom - 2, r.w, 2))
-                    self._t(mw.f_sb, title, (r.x + 17, r.y + 7), wg.TITLE)
+                    self._t(mw.f_sb, title[:1] + title[1:].lower(), (r.x + 17, r.y + 7), wg.TITLE)     # the title in sentence case, as the card's
                     break
 
     def _draw_scene_bar(self, px, y):

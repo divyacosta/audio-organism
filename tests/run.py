@@ -3175,7 +3175,7 @@ def test_sticky_titles():
     cw.update(time.time() + 1, an, 60.0, 10.0, False, st, force=True)
     drawn.clear()
     cw._draw_sticky(*cw.panel_pos)
-    check("rolando, o título do cartão que passou fica preso", [t for t, _ in drawn] == ["NITIDEZ E FLUIDEZ"], drawn)
+    check("rolando, o título do cartão que passou fica preso", [t.lower() for t, _ in drawn] == ["nitidez e fluidez"], drawn)
 
 
 def test_report():

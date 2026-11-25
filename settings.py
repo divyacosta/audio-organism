@@ -552,7 +552,7 @@ def auto_sets_factory():
 
 
 _AS0 = auto_sets_factory()
-DEFAULTS.update(master_on=True, agenda_lanes=[], agenda_profiles=[], agenda_edit=-1, panel_fps=30, panel_fps_v=2, link_riser=False, link_vocal=False, remote_osc=False, remote_midi=False, phone_view=False, search="", ui_tab=0, agenda=[], app_rules=[], last_fg_app="", live=False, profile=1, ae_kind=0, ae_part=0, auto_sets=auto_sets_factory())
+DEFAULTS.update(master_on=True, ap_pick="", la_pick="", agenda_lanes=[], agenda_profiles=[], agenda_edit=-1, panel_fps=30, panel_fps_v=2, link_riser=False, link_vocal=False, remote_osc=False, remote_midi=False, phone_view=False, search="", ui_tab=0, agenda=[], app_rules=[], last_fg_app="", live=False, profile=1, ae_kind=0, ae_part=0, auto_sets=auto_sets_factory())
 DEFAULTS.update(LY.LP_DEFAULTS)
 DEFAULTS["starter_v"] = 4
 DEFAULTS.update(ed_item=0, ed_sub=0, ed_page=False, ed_tab=0, sc_filter=0, lib=-1, pal_open=False, sys_item=0, ear_open=True, tour_done=False, tour_marks=0, osd=True, advanced=False, macro_energy=100, macro_speed=100, macro_pal=0, detail_open=False)                                                  # the item of the editor of a scene that is open, and the sub-section of the mandala                                                          # 2: the mandala presets come as scenes of the gallery

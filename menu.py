@@ -266,7 +266,7 @@ class Menu(WizardMixin):
                 i += 1
         return h
 
-    LANE_H = 66                                                                  # a lane: its name and value, and the day with its curve
+    LANE_H = 80                                                                  # a lane: its name and value, and the day with its curve
     WEEK_H = 7 * 24 + 40                                                         # the week of the agenda: seven days of 22 px and the ruler on top
     EAR_H = 492                                                                  # the analysis of the music in Sistema > Áudio (deck's card, open)
 
@@ -1334,7 +1334,7 @@ class Menu(WizardMixin):
         if cid == "la_pick":                                                     # Faixas: the chosen number gets a lane (points come with clicks on the lane's row)
             if value:
                 AGM.edit_lanes(self.cfg).append(dict(key=value, points=[]))
-                self.say("Faixa criada: clique em Gravar agora nos horários que quiser")
+                self.say("Faixa criada: clique na linha do dia para pôr um ponto; num ponto, para tirá-lo")
             self.touch()
             self.rebuild_scenes()
             self.need = True
@@ -2421,7 +2421,8 @@ class Menu(WizardMixin):
         for m, v in pts:
             pygame.draw.circle(s, (*SEL, 255), xy(m, v), 3)
         for h in (0, 6, 12, 18):
-            self._txt(self.f_s, f"{h:02d}", (rect.x + int(rect.w * h / 24.0) + 2, rect.bottom + 1), DIM)
+            self._txt(self.f_s, f"{h:02d}", (rect.x + int(rect.w * h / 24.0) + 2, rect.bottom + 4), DIM)
+        self._txt(self.f_s, "24", (rect.right - 2, rect.bottom + 4), DIM, "r")
         self.hits.append((rect, f"la_pt:{idx}", "btn", None))
 
     def _week_row(self, row, y, wc):
