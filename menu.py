@@ -76,6 +76,7 @@ class Menu(WizardMixin):
         self.redo = []                                         # what Desfazer took back: Refazer puts it again
         self._peek = None                                      # while the header's Antes is held: the scene as it was, to put back on release
         self.hdr_hits = []                                     # the buttons of the header's undo strip: (rect, id), on the surface
+        self._drag = None                                      # a lane point being dragged (see _drag_point)
         self.click_pos, self.click_rect = (0, 0), pygame.Rect(0, 0, 1, 1)     # where the last click was, and the rectangle it hit (the lanes read them)
         self._reveal = None                                    # the item just opened: the next frame scrolls its row to the top
         self.sys_undo = []                                     # (when, label, restore function) of the Sistema actions with no confirmation: the toast offers "Desfazer"
@@ -1696,7 +1697,10 @@ class Menu(WizardMixin):
                 pts = sorted([list(p) for p in lane.get("points") or []])
                 near = [p for p in pts if abs(int(p[0]) - (pos[0] - rect.x) / max(1, rect.w) * 1440) <= 8]
                 if near:
-                    pts.remove(near[0])                                       # a click by a point takes it away
+                    self._drag = {"lane": int(idx), "minute": int(near[0][0]), "rect": rect, "moved": False}      # a point: dragged, or taken away on a click (release)
+                    lane["points"] = sorted(pts)
+                    self.need = True
+                    return None
                 else:
                     pts = [p for p in pts if int(p[0]) != minute]
                     pts.append([minute, max(lo, min(hi, value))])
@@ -2067,7 +2071,39 @@ class Menu(WizardMixin):
                 return rect, cid, kind, arg
         return None
 
+    def _drag_point(self, ev, ox, oy):
+        """A point of a lane follows the pointer: the hour is where it is, the value its height. Release takes it away when it did not move."""
+        d = self._drag
+        lanes = self.cfg.get("agenda_lanes") or []
+        if not 0 <= d["lane"] < len(lanes):
+            self._drag = None
+            return
+        lane = lanes[d["lane"]]
+        import agenda as AG5
+        lo, hi = AG5.LANE_KEYS.get(lane.get("key"), ("?", 0, 100))[1:]
+        rect = d["rect"]
+        if ev.type == pygame.MOUSEBUTTONUP:
+            if not d["moved"]:
+                lane["points"] = [p for p in lane.get("points") or [] if int(p[0]) != d["minute"]]
+            self._drag = None
+            self.touch()
+            self.need = True
+            return
+        px, py = ev.pos[0] - ox, ev.pos[1] - oy + self.scroll
+        minute = int(max(0, min(1439, (px - rect.x) / max(1, rect.w) * 1440))) // 5 * 5
+        value = int(max(lo, min(hi, round(lo + (rect.bottom - py) / max(1, rect.h) * (hi - lo)))))
+        pts = [p for p in lane.get("points") or [] if int(p[0]) != d["minute"]]
+        if minute != d["minute"] or abs(px - (rect.x + d["minute"] / 1440.0 * rect.w)) > 3:
+            d["moved"] = True
+        pts.append([minute, value])
+        lane["points"] = sorted(pts)
+        d["minute"] = minute
+        self.need = True
+
     def mouse(self, ev, ox, oy, scale):
+        if getattr(self, "_drag", None) and ev.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONUP):
+            self._drag_point(ev, ox, oy)
+            return None
         if ev.type == pygame.MOUSEWHEEL:
             self.dd_open = None
             if self.hover and self.find(self.hover) and self.find(self.hover)["kind"] == "slider":

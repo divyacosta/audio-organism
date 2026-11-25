@@ -3053,9 +3053,18 @@ def test_lanes():
     m.press("la_pt:0")
     pts = m.cfg["agenda_lanes"][0]["points"]
     check("um clique na linha do dia põe um ponto: a hora é onde clicou, o valor é a altura", pts == [[600, 100]], pts)
-    m.click_pos = (603, 100)
+    class Ev:
+        def __init__(self, t, pos):
+            self.type, self.pos = t, pos
+    m.click_pos = (600, 100)
     m.press("la_pt:0")
-    check("um clique perto de um ponto o apaga", m.cfg["agenda_lanes"][0]["points"] == [], m.cfg["agenda_lanes"][0]["points"])
+    m.mouse(Ev(pygame.MOUSEMOTION, (700, 100)), 0, 0, 1)
+    m.mouse(Ev(pygame.MOUSEBUTTONUP, (700, 100)), 0, 0, 1)
+    check("arrastar um ponto o move para onde foi solto", m.cfg["agenda_lanes"][0]["points"] == [[700, 100]], m.cfg["agenda_lanes"][0]["points"])
+    m.click_pos = (700, 100)
+    m.press("la_pt:0")
+    m.mouse(Ev(pygame.MOUSEBUTTONUP, (700, 100)), 0, 0, 1)
+    check("um clique num ponto, sem arrastar, o apaga", m.cfg["agenda_lanes"][0]["points"] == [], m.cfg["agenda_lanes"][0]["points"])
 
 
 def test_safety_undo():
