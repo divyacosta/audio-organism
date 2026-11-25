@@ -174,6 +174,19 @@ class ControlWindow:
             self.force = True
             return None
         if e.type == pygame.MOUSEBUTTONDOWN and getattr(e, "button", 0) == 1 and self.menu.side_on():
+            btn = next((c for r, c in getattr(self, "side_btns", []) if r.collidepoint(e.pos)), None)
+            if btn is not None:
+                mw_ = self.menu
+                if btn == "autoall_toggle":
+                    mw_.toggle_auto(int(mw_.cfg.get("effect", 0)) != 0)
+                elif btn == "scn_new":
+                    mw_.new_scene()
+                elif btn == "scn_dup":
+                    mw_.duplicate_scene(int(mw_.cfg.get("scene_edit", 0)))
+                elif btn == "scn_del":
+                    mw_.scene_action(("del", int(mw_.cfg.get("scene_edit", 0))))
+                self.force = True
+                return None
             hit = next((i for r, i in getattr(self, "side_hits", []) if r.collidepoint(e.pos)), None)
             if hit is not None:
                 self.menu.switch_scene(hit)                                # the list of scenes: open that scene (a scene with changes asks first)
@@ -465,37 +478,70 @@ class ControlWindow:
                     break
 
     def _draw_scene_bar(self, px, y):
-        """The list of scenes on the left of the wide editor: a fixed bar (it does not scroll with the page). A click opens that scene."""
+        """The scenes on the left of the wide editor (ScreenMaster's column of presets): a header with the switch of the automatic change,
+        a row of actions (new, duplicate, delete), the list (name, what it has, "agora" for the one on the air), and "+ Novo" at the foot.
+        It is a fixed bar: it does not scroll with the page; the list scrolls with the wheel over it."""
         mw = self.menu
         self.side_hits = []
+        self.side_btns = []
         if not mw.side_on():
             return
         s, cfg = self.surf, mw.cfg
         w, h = mw.side_w(), mw.content_h()
         ui.rect(s, wg.SURFACE, (px, y, w, h))
         ui.rect(s, wg.BORDER, (px + w - 1, y, 1, h))
-        self._t(wg.font("cap", True), "CENAS", (px + 12, y + 10), wg.TITLE)
-        top = y + 32
+        # header: the title and the switch "automático" (the whole automatic change on or off)
+        self._t(wg.font("label", True), "Cenas", (px + 14, y + 10), wg.TEXT)
+        auto_on = bool(cfg.get("effect", 0) == 0)
+        pill = pygame.Rect(px + w - 62, y + 12, 46, 22)
+        ui.rect(s, (*(wg.OK if auto_on else (74, 80, 108)), 255), pill, border_radius=11)
+        ui.circle(s, (255, 255, 255), (pill.right - 11 if auto_on else pill.left + 11, pill.centery), 8)
+        self.side_btns.append((pill, "autoall_toggle"))
+        # the actions row
+        ay = y + 42
+        for k, (cid, glyph) in enumerate((("scn_new", "+"), ("scn_dup", "copy"), ("scn_del", "trash"))):
+            r = pygame.Rect(px + 12 + k * 32, ay, 26, 26)
+            ui.rect(s, wg.SURFACE2, r, border_radius=6)
+            cx, cy = r.center
+            col = wg.TEXT
+            if glyph == "+":
+                pygame.draw.line(s, col, (cx - 5, cy), (cx + 5, cy), 2)
+                pygame.draw.line(s, col, (cx, cy - 5), (cx, cy + 5), 2)
+            elif glyph == "copy":
+                pygame.draw.rect(s, col, (cx - 6, cy - 6, 9, 9), 1, border_radius=2)
+                pygame.draw.rect(s, col, (cx - 3, cy - 3, 9, 9), 1, border_radius=2)
+            else:
+                pygame.draw.rect(s, col, (cx - 5, cy - 4, 10, 10), 1, border_radius=2)
+                pygame.draw.line(s, col, (cx - 7, cy - 5), (cx + 7, cy - 5), 1)
+            self.side_btns.append((r, cid))
+        # the list
+        top = y + 78
         total = len(cfg.get("scenes") or []) * 62
-        self.side_scroll = max(0, min(getattr(self, "side_scroll", 0), total - (h - 32)))     # the list scrolls with the wheel over it
+        self.side_scroll = max(0, min(getattr(self, "side_scroll", 0), total - (h - 110)))
         old_clip = s.get_clip()
-        s.set_clip(pygame.Rect(px, top, w, h - 32))
+        s.set_clip(pygame.Rect(px, top, w, h - 110))
         yy = top - self.side_scroll
         for i, sc in enumerate(cfg.get("scenes") or []):
             r = pygame.Rect(px + 8, yy, w - 16, 56)
             cur = i == int(cfg.get("scene_edit", 0))
-            ui.rect(s, wg.ACCENT_DIM if cur else wg.SURFACE2, r, border_radius=8)
+            ui.rect(s, wg.ACCENT_DIM if cur else wg.SURFACE2, r, border_radius=6)
             if cur:
                 ui.rect(s, wg.SEL, (r.x, r.y + 8, 3, r.h - 16), border_radius=2)
             name = sc.get("scene_name", "?")
-            self._t(wg.font("label"), wg.fit(wg.font("label"), name, r.w - 70), (r.x + 12, r.y + 8), wg.TEXT if cur else wg.DIM)
+            self._t(wg.font("label"), wg.fit(wg.font("label"), name, r.w - 80), (r.x + 12, r.y + 8), wg.TEXT if cur else wg.DIM)
             self._t(wg.font("small"), wg.fit(wg.font("small"), M.settings.scene_sub(cfg, sc), r.w - 24), (r.x + 12, r.y + 30), wg.DIM)
-            if i == getattr(self, "live_scene", -1):                                  # "agora": the scene on the air, as text in the theme colour (ScreenMaster)
+            if i == getattr(self, "live_scene", -1):
                 self._t(wg.font("small"), "agora", (r.right - 10, r.y + 8), wg.SEL, "r")
-            if top <= r.y and r.bottom <= y + h:
+            if top <= r.y and r.bottom <= y + h - 110:
                 self.side_hits.append((r, i))
             yy += 62
         s.set_clip(old_clip)
+        # the foot: "+ Novo"
+        fy = y + h - 36
+        ui.rect(s, wg.BORDER, (px + 8, fy - 6, w - 16, 1))
+        nr = pygame.Rect(px + 12, fy, w - 24, 26)
+        self._t(wg.font("small"), "+ Novo", (nr.x + 4, nr.y + 4), wg.DIM)
+        self.side_btns.append((nr, "scn_new"))
 
     def toast_rect(self, tw):
         """Where the confirmation toast goes: centred near the bottom of the window, never over the tabs."""
