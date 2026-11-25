@@ -32,7 +32,7 @@ Tipo de cor, sem exceção: texto em cor do tema sobre fundo escuro só quando �
 
 Segoe UI Variable (reserva: Segoe UI). Tamanhos em `SIZES`:
 `cap 12 · small 13 · label 14 · body 15 · lead 18 · head 20 · title 22 · h1 26 · h2 34 · display 60`.
-Títulos de cartão: `TITLE` (= `DIM`), em caixa alta, tamanho `cap`.
+Títulos de cartão: `TITLE` (= `DIM`), em frase normal (como as legendas do ScreenMaster), tamanho `cap`.
 
 ## Espaço e forma
 

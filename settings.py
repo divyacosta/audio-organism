@@ -743,7 +743,7 @@ def sys_layout(cfg, k, wide, devices=(), monitors=1, menu=None):
         foot = ("", [_quit_row(menu)])                                            # leaving the program is always at hand, under the pages
         page = [c for c in page if c[0] != "SESSÃO"]
         return [find, nav, foot] + page, ["L", "L", "L"] + ["R"] * len(page)
-    nav = ("SISTEMA" if q else SYS_ITEMS[k][0].upper(), [dict(id="sys_item", kind="seg", label="", opts=[(SYS_ITEMS[i][0], i) for i in SYS_ORDER], help="")])
+    nav = ("Sistema" if q else SYS_ITEMS[k][0], [dict(id="sys_item", kind="seg", label="", opts=[(SYS_ITEMS[i][0], i) for i in SYS_ORDER], help="")])
     return [find, nav] + page, []
 
 
@@ -1149,7 +1149,7 @@ def mandala_rows(cfg):
                          dict(id="gen_clear", kind="action", label="Tirar a imagem", btn="Tirar", help="Volta a mostrar o texto", enabled=lambda c: bool(c.get("gen_img")))]
             for i, (lab, hp) in enumerate(names):
                 rows.append(dict(id="gen_p%d" % (i + 1), kind="slider", label=lab, lo=0, hi=100, step=5, unit="%", help=hp + "  ·  duplo clique restaura"))
-            cards.append(("AJUSTES  ·  " + SC.VISUALS[min(vis, len(SC.VISUALS) - 1)][0].upper(), rows))
+            cards.append(("Ajustes  ·  " + SC.VISUALS[min(vis, len(SC.VISUALS) - 1)][0], rows))
         if vis == 1:
             cards += [
                 ("MODELO DA MANDALA", [dict(id="scene_preset", kind="radio", tile=("preset", i), value=i, label=n, help="") for i, n in enumerate(SC.PRESET_NAMES)]),
@@ -1222,7 +1222,7 @@ def shader_rows(cfg):
         dict(id="shd_delete", kind="action", label="Apagar shader", btn="Apagar", help="As cenas dele voltam ao Automático",
              enabled=lambda c: len(c.get("shaders", [])) > 1),
         dict(id="shd_factory", kind="action", label="Shaders de fábrica", btn="Restaurar", help="Volta aos sete shaders que vêm com o programa"),
-    ]), (f"EDITANDO  ·  {sh['name'].upper()}", rows)]
+    ]), (f"Editando  ·  {sh['name']}", rows)]
 
 
 def color_rows(cfg):
@@ -1239,7 +1239,7 @@ def color_rows(cfg):
         dict(id="pal_delete", kind="action", label="Apagar paleta", btn="Apagar", help="As cenas dela voltam às do modelo",
              enabled=lambda c: len(c.get("palettes", [])) > 1),
         dict(id="pal_factory", kind="action", label="Paletas de fábrica", btn="Restaurar", help="Volta às seis paletas que vêm com o programa"),
-    ]), (f"EDITANDO  ·  {pal['name'].upper()}", [
+    ]), (f"Editando  ·  {pal['name']}", [
         dict(id="pal_name", kind="text", label="Nome", help="Clique e digite  ·  Enter confirma"),
         dict(id="pal_item", kind="swatches", label="Cor selecionada", help="Clique numa cor", items=[c for _, c in its]),
         dict(id="pal_r", kind="slider", label="Vermelho", lo=0, hi=255, step=5, unit="", help="Da cor selecionada"),

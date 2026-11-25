@@ -598,7 +598,7 @@ def test_sistema():
     for k in range(len(names)):
         wide_cards, wide_cols = menu.sys_layout(cfg, k, True)
         narrow_cards, narrow_cols = menu.sys_layout(cfg, k, False)
-        if [r["label"] for r in wide_cards[1][1]] != listed or [o[0] for o in narrow_cards[1][1][0]["opts"]] != listed or narrow_cards[1][0] != names[k].upper():
+        if [r["label"] for r in wide_cards[1][1]] != listed or [o[0] for o in narrow_cards[1][1][0]["opts"]] != listed or narrow_cards[1][0] != names[k]:
             bad.append(k)
         if wide_cards[0][1][0]["id"] != "search" or narrow_cards[0][1][0]["id"] != "search" or wide_cols[:2] != ["L", "L"]:
             top_ok = False
