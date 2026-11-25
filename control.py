@@ -518,7 +518,8 @@ class ControlWindow:
                 if mw.cfg.get("ed_page") and int(mw.cfg.get("ed_item", 0)) == 0 and int(mw.cfg.get("ed_sub", 0)) == 3 and mw.cfg.get("scene_visual", 1) == 1:
                     self._fold_overlay(r)
             else:
-                self._t(self.fs, "preparando o rascunho…", (r.centerx, r.centery - 8), wg.DIM, "c")
+                if r.w >= 160:                                                  # a small thumbnail (the header) has no room for words: it stays a dark square
+                    self._t(self.fs, "preparando o rascunho…", (r.centerx, r.centery - 8), wg.DIM, "c")
         ui.rect(s, wg.BORDER, r, width=1, border_radius=10)
         if label:
             self._pill(pygame.Rect(r.x + 8, r.y + 8, 84, 20), "RASCUNHO" if mw.is_dirty() else "EDITANDO", wg.ACCENT2, wg.ON_LIGHT)
