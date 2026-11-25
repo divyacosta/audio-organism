@@ -128,8 +128,7 @@ class Menu(WizardMixin):
                         tot[col] += self._card_h(rows, ttl, wcol[col]) + self.GAP
                 h += run + max(tot["L"], tot["R"])
             else:
-                for ttl, rows in secs:
-                    h += self._card_h(rows, ttl, self._single_w(t)) + self.GAP
+                h += sum(p["h"] + p["gap"] for p in self._single_plan(secs, self._single_w(t)))
             if t == TAB_LIVE:
                 h = self.HEAD + self.live_h + 8
             if t == TAB_SCENES and self.scene_view != "editor":
@@ -141,6 +140,20 @@ class Menu(WizardMixin):
     def _single_w(self, tab=None):
         """Width of a card in the one-column layout: the editor does not stretch across a wide window."""
         return min(self.W, self.EDITOR_W) if (self.tab if tab is None else tab) == TAB_SCENES else self.W
+
+    def _single_plan(self, cards, wc):
+        """The cards of the one-column layout as parts to draw: a run of cards whose title starts with "§" is ONE container (the open layer of the editor: its row, its page
+        inset and tinted, the rows after it), and the parts that start with "§§" are the inset ones."""
+        plan = []
+        for title, rows in cards:
+            grp, kid = title.startswith("§"), title.startswith("§§")
+            t = title.lstrip("§")
+            w = wc - 28 if kid else wc
+            plan.append(dict(title=t, rows=rows, grp=grp, kid=kid, w=w, h=self._card_h(rows, t, w) - (8 if grp and not t else 0), gap=self.GAP))
+        for i, p in enumerate(plan[:-1]):
+            if p["grp"] and plan[i + 1]["grp"]:
+                p["gap"] = 4                                                      # inside a container the parts nearly touch
+        return plan
 
     def _card_h(self, rows, title="x", wc=None):
         """A card with a title is 40 high before its rows; one without a title (the bar of the editor) only has a little air. wc is the width of the card: a run of
@@ -168,7 +181,7 @@ class Menu(WizardMixin):
         ncol = max(2, (inner + gap) // (118 + gap))
         tw = (inner - gap * (ncol - 1)) // ncol
         th = tw * 9 // 16
-        rh = th + 26
+        rh = th + 32
         cells = [(row, 18 + (k % ncol) * (tw + gap), 4 + (k // ncol) * (rh + gap), tw, th) for k, row in enumerate(rows)]
         lines = (len(rows) + ncol - 1) // ncol
         return cells, 4 + lines * (rh + gap) - gap + 6, rh
@@ -204,7 +217,7 @@ class Menu(WizardMixin):
             ui.rect(s, (6, 7, 11, 255), tr, border_radius=8)
             self.thumb_slots.append((tr, self._tile_scene(row)))
             ui.rect(s, (*(SEL if sel else BORDER), 255), r, width=3 if sel else 1, border_radius=10)
-            self._txt(self.f_s, self._fit(self.f_s, row["label"], tw - 12), (r.x + 8, r.y + th + 9), TEXT if sel else DIM)
+            self._txt(self.f_s, self._fit(self.f_s, row["label"], tw - 12), (r.x + 8, r.y + th + 11), TEXT if sel else DIM)
             self.frects[fkey] = r
             self.order.append(fkey)
             self.order_val.append(val)
@@ -1536,6 +1549,9 @@ class Menu(WizardMixin):
             self.touch()
             self.say("Paletas de fábrica restauradas")
             return None
+        if cid.startswith("layer_on:"):                                           # the button of a layer that is off: turns it on (the switch of its row does the same)
+            self.set_value("ly_" + cid[9:], True)
+            return None
         if cid.startswith("goto:"):                                               # a link that was only a note: it takes you there
             self.goto(cid[5:])
             return None
@@ -2029,8 +2045,30 @@ class Menu(WizardMixin):
             y = max(yl, yr)
         else:
             wc = self._single_w()
-            for title, rows in cards:
-                y += self._draw_card(title, rows, y, (W - wc) // 2, wc) + self.GAP
+            x0 = (W - wc) // 2
+            plan, i = self._single_plan(cards, wc), 0
+            while i < len(plan):
+                p = plan[i]
+                if not p["grp"]:
+                    y += self._draw_card(p["title"], p["rows"], y, x0, wc) + p["gap"]
+                    i += 1
+                    continue
+                j = i                                                             # one container for the whole run
+                while j < len(plan) and plan[j]["grp"]:
+                    j += 1
+                total = sum(q["h"] + q["gap"] for q in plan[i:j]) - plan[j - 1]["gap"]
+                ui.rect(self.surf, (*SURFACE, 255), (x0, y, wc, total), border_radius=14)
+                ui.rect(self.surf, (*BORDER, 255), (x0, y, wc, total), width=1, border_radius=14)
+                y0 = y
+                for q in plan[i:j]:
+                    if q["kid"]:
+                        ui.rect(self.surf, (23, 26, 39, 255), (x0 + 12, y, wc - 24, q["h"]), border_radius=10)
+                        self._draw_card(q["title"], q["rows"], y, x0 + 14, wc - 28, bg=False)
+                    else:
+                        self._draw_card(q["title"], q["rows"], y, x0, wc, bg=False)
+                    y += q["h"] + q["gap"]
+                y = y0 + total + plan[j - 1]["gap"]
+                i = j
         if self._reveal is not None:                                               # an item was opened: its row goes to the top, so its page is under it
             k, self._reveal = self._reveal, None
             rid = next((r["id"] for _, rs in TABS[self.tab][1] for r in rs if r.get("item") == k), None)
@@ -2174,13 +2212,13 @@ class Menu(WizardMixin):
         self.hits.append((rowr, cid, "ly", ("sel", i)))
         cy = y + (self.ROW - 4) // 2
         eye = pygame.Rect(18, cy - 13, 26, 26)
-        ui.circle(s, (*(ACCENT2 if on else (58, 63, 88)), 255), eye.center, 9, 0 if on else 2)
-        if on:
-            ui.circle(s, (*ON_LIGHT, 255), eye.center, 3)
+        pill = pygame.Rect(eye.x + 1, eye.centery - 8, 28, 16)                      # the same little switch as everywhere: on / off (it was a dot that looked like a radio)
+        ui.rect(s, (*(OK if on else (74, 80, 108)), 255), pill, border_radius=8)
+        ui.circle(s, (255, 255, 255), (pill.right - 8 if on else pill.left + 8, pill.centery), 6)
         self.hits.append((eye, cid, "ly", ("eye", i)))
         tag = info["tag"]
         tw = self.f_sb.size(tag)[0] + 14
-        tr = pygame.Rect(54, cy - 10, tw, 20)
+        tr = pygame.Rect(56, cy - 10, tw, 20)
         ui.rect(s, (*(self.TAG_COLORS.get(info["group"], (60, 60, 90)) if on else (46, 50, 72)), 255), tr, border_radius=6)
         self._txt(self.f_sb, tag, (tr.centerx, tr.y + 2), (255, 255, 255) if on else DIM, "c")
         nx = tr.right + 10
@@ -2241,7 +2279,7 @@ class Menu(WizardMixin):
             self._txt(self.fb if cur == val and cid not in ("ly_add", "ly_tpl") else self.f, lbl, (r.x + 12, r.y + 6), TEXT)
             self.hits.append((r, cid, "ddopt", val))
 
-    def _draw_card(self, title, rows, y, x0, wc):
+    def _draw_card(self, title, rows, y, x0, wc, bg=True):
         """One card at (x0, y) of width wc. In a column the rows are drawn on a piece of the surface (so they all think the panel is wc wide) and the hits, the
         focus rectangles, the sliders and the dropdown boxes they leave are moved back to the surface. Returns the height of the card."""
         full, wfull = self.surf, self.W
@@ -2252,8 +2290,9 @@ class Menu(WizardMixin):
             self.W = wc
         s = self.surf
         ch = self._card_h(rows, title, wc)
-        ui.rect(s, (*SURFACE, 255), (0, y, wc, ch), border_radius=14)
-        ui.rect(s, (*BORDER, 255), (0, y, wc, ch), width=1, border_radius=14)
+        if bg:
+            ui.rect(s, (*SURFACE, 255), (0, y, wc, ch), border_radius=14)
+            ui.rect(s, (*BORDER, 255), (0, y, wc, ch), width=1, border_radius=14)
         if title:
             self._txt(self.f_sb, title, (18, y + 14), TITLE)
             self.card_marks.append((x0, y, ch, wc, title))

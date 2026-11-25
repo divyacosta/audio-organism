@@ -2462,7 +2462,7 @@ def test_oneplace():
         seen.add(d_off.scene)
     check("with every scene out of the Automático (a track with phrases and drops) the director keeps the scene on the air and does not fail", seen == {0} and d_off.pick_scene(an2) == 0, seen)
     # the wide Estúdio no longer repeats what the Palco and the Automático page do
-    wide_titles =[t for t, _ in menu.scene_layout(menu.fresh(), "editor", True)[0]]
+    wide_titles = [t.lstrip("§") for t, _ in menu.scene_layout(menu.fresh(), "editor", True)[0]]
     check("the wide editor has the stack and no automatic-change card", "CAMADAS  ·  DE CIMA PARA BAIXO" in wide_titles and not any("TROCA" in (t or "") for t in wide_titles), wide_titles)
     # the narrow gallery: a click edits, nothing about the automatic change is on it
     cfg = menu.fresh()
@@ -3023,6 +3023,14 @@ def test_navigation():
     cfg["ed_item"] = 12
     m.open_scene(0)
     check("... mas nunca na página vazia de Segue a música", cfg["ed_item"] == 0, cfg["ed_item"])
+    m.open_scene(0)
+    m.open_item(11)
+    cfg["ly_over"] = False
+    m.rebuild_scenes()
+    ids = [r["id"] for _, rs in menu.TABS[menu.TAB_SCENES][1] for r in rs]
+    check("uma camada desligada oferece o botão Ligar", "layer_on:over" in ids, ids[:6])
+    m.press("layer_on:over")
+    check("... e o botão liga a camada", cfg["ly_over"] is True, cfg["ly_over"])
     check("o Avançado conta o que esconde", m.adv_hidden() > 0 and menu.Menu(dict(cfg, advanced=True)).adv_hidden() >= 0, m.adv_hidden())
 
 

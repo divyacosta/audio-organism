@@ -936,7 +936,7 @@ def scene_layout(cfg, view="gallery", wide=False):
     if closed:
         item = -1
     if item in ITEM_SLOT and not LY.slot_on(cfg, ITEM_SLOT[item]):
-        right.append(("", [dict(id="slot_off_note", kind="note", label="Esta camada está desligada", help="Ligue no interruptor dela, na pilha  ·  os ajustes ficam guardados")]))
+        right.append(("", [dict(id="layer_on:" + ITEM_SLOT[item], kind="action", label="Esta camada está desligada", btn="Ligar", help="Os ajustes ficam guardados")]))
     if item == 0:
         right += mandala_rows(dict(cfg, ed_sub=0 if int(cfg.get("ed_sub", 0)) == 1 else cfg.get("ed_sub", 0)))
     elif item == 6:
@@ -982,10 +982,10 @@ def _accordion(stack, page, item):
         if k < 0:
             out.append((title, rows))
             continue
-        out.append((title, rows[:k + 1]))
-        out += page
+        out.append(("§" + title, rows[:k + 1]))                                  # "§": drawn inside one container with the page of the open item
+        out += [("§§" + t, r) for t, r in page]                                  # "§§": a part of the page, inset and tinted
         if k + 1 < len(rows):
-            out.append(("", rows[k + 1:]))
+            out.append(("§", rows[k + 1:]))
         page = []
     return out + page
 
@@ -1069,7 +1069,7 @@ def layer_cards(cfg, adv, has_layers):
     acab[1] = dict(acab[1], enabled=lambda c: fin(c) and c["img_style"] == 3)
     out.append(("ACABAMENTO", acab))
     ov = lambda c: bool(c.get("ly_over", False))
-    out.append(("SOBREPOSIÇÃO", [
+    out.append(("TEXTO E LOGO", [
         dict(id="ov_kind", kind="seg", label="O que mostra", opts=[("Texto", 0), ("Logo", 1)], enabled=ov,
              help=lambda c: "O texto abaixo" if c["ov_kind"] == 0 else "logo.png em Documentos\\AudioOrganism"),
         dict(id="ov_text", kind="text", label="Texto", help="Clique e digite", enabled=lambda c: ov(c) and c["ov_kind"] == 0),

@@ -262,7 +262,7 @@ def detail_cards(cfg):
                          help=lambda c: ["Substitui o que está abaixo", "Soma luz ao que está abaixo", "Clareia sem estourar", "Mistura mantendo luzes e sombras"][c["lp_bm"] % 4], enabled=on))
         head.append(dict(id="lp_op", kind="slider", label="Opacidade", lo=0, hi=100, step=5, unit="%", help="Quanto desta camada entra na imagem", enabled=on))
     extra = grad_rows(cfg, on) if t == "grad" else []
-    cards = [(f"{info['label'].upper()}  ·  CAMADA {sel + 1}", head + type_rows(t, on) + extra)]
+    cards = [(info["label"].upper(), head + type_rows(t, on) + extra)]
     if t in FOLLOWS:
         cards.append(("SEGUIR A MÚSICA", follow_rows(cfg, on)))
     return cards
