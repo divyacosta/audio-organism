@@ -475,7 +475,7 @@ def test_widgets():
     bad = [(n, round(wg.contrast(a, b), 2)) for n, a, b, need in pairs if wg.contrast(a, b) < need]
     check("every colour pair is readable: text 4.5:1, the edge of a control 3:1", not bad, bad)
     check("what is chosen (the lime) has dark ink, and the ink reads on it", wg.contrast(wg.ON_SEL, wg.SEL) >= 4.5 and wg.contrast(wg.ON_ACCENT, wg.ACCENT) >= 4.5)
-    check("hover and focus are never the blue of 'chosen'", wg.HOVER_EDGE != wg.SEL and wg.FOCUS != wg.SEL)
+    check("hover is never the lime of 'chosen', and focus is the lime as in the ScreenMaster (its Accent focus ring)", wg.HOVER_EDGE != wg.SEL and wg.FOCUS == wg.SEL)
     f = wg.font("cap")
     cut = wg.fit(f, "Vermelho, azul e branco e mais um pouco", 90)
     check("a cut text ends in an ellipsis and fits", cut.endswith("…") and f.size(cut)[0] <= 90, cut)

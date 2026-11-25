@@ -49,7 +49,7 @@ ON_LIGHT = ON_SEL                  # the dark text on the light fills (lime, dan
 ON_ACCENT = ON_SEL                 # the text on ACCENT (the lime): the dark ink
 CTRL_FILL = SURFACE2               # the resting fill of a control
 HOVER_EDGE = (0x9A, 0x9A, 0xA0)    # the edge of what is under the pointer: the secondary neutral
-FOCUS = TEXT                       # the keyboard focus ring: near white, never the theme colour
+FOCUS = SEL                        # the keyboard focus ring: the theme lime, as the ScreenMaster's Accent focus ring
 PRIMARY_HOVER_EDGE = CTRL
 
 MIN_H = 24                     # the least height of anything that is clicked (WCAG 2.5.8)

@@ -439,8 +439,9 @@ class ControlWindow:
             while len(txt) > 8 and self.fs.size(txt)[0] > mw.W - 40:
                 txt = txt[:-2]
             r = pygame.Rect(self.panel_pos[0] + 8, self.panel_pos[1] + mw.HEAD + mw.reserved - 28, mw.W - 16, 24)
-            ui.rect(s, (150, 30, 50), r, border_radius=12)
-            self._t(self.fs, txt, (r.centerx, r.y + 4), (255, 255, 255), "c")
+            ui.rect(s, wg.SURFACE2, r, border_radius=12)
+            ui.rect(s, wg.CTRL, r, width=1, border_radius=12)
+            self._t(self.fs, txt, (r.centerx, r.y + 4), wg.TEXT, "c")
         if mw.toast:                                                    # at the bottom, centred: at the top it covered the tabs
             txt = mw.toast[0]
             while len(txt) > 8 and self.fb.size(txt)[0] + 28 > self.W - 32:
@@ -506,8 +507,8 @@ class ControlWindow:
         self._t(wg.font("label", True), "Cenas", (px + 14, y + 10), wg.TEXT)
         auto_on = bool(cfg.get("effect", 0) == 0)
         pill = pygame.Rect(px + w - 62, y + 12, 46, 22)
-        ui.rect(s, (*(wg.OK if auto_on else (74, 80, 108)), 255), pill, border_radius=11)
-        ui.circle(s, (255, 255, 255), (pill.right - 11 if auto_on else pill.left + 11, pill.centery), 8)
+        ui.rect(s, (*(wg.SEL if auto_on else wg.FAINT), 255), pill, border_radius=11)
+        ui.circle(s, wg.BG, (pill.right - 11 if auto_on else pill.left + 11, pill.centery), 8)
         self.side_btns.append((pill, "autoall_toggle"))
         # the actions row
         ay = y + 42
@@ -705,7 +706,7 @@ class ControlWindow:
         self._t(self.fm, self._fit(self.fm, ed, max(60, right - nx - extra)), (nx, row.centery - 12), wg.TEXT)
         nx += min(self.fm.size(ed)[0], max(60, right - nx - extra)) + 12
         if live_here:
-            self._pill(pygame.Rect(nx, row.centery - 11, 58, 22), "NO AR", wg.ACCENT, (255, 255, 255))
+            self._pill(pygame.Rect(nx, row.centery - 11, 58, 22), "NO AR", wg.ACCENT, wg.ON_ACCENT)
             nx += 70
         if nx + sw < right:
             ui.circle(s, col, (nx + 5, row.centery), 5)
