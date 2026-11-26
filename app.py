@@ -86,6 +86,11 @@ def main():
     pygame.init()
     cfg = fresh() if (test and not os.environ.get("VIS_USECFG")) else load_cfg()          # VIS_USECFG=1: test with the saved settings
     forced = parse_backend(cfg)
+    guard = not test and not os.environ.get("VIS_REPORT")                  # the startup guard (bootguard.py): a video engine that hangs or crashes while loading is swapped by itself
+    guard_notice, safe = None, False
+    if guard:
+        import bootguard
+        forced, guard_notice, safe = bootguard.start(forced)
     if forced:
         os.environ["WGPU_BACKEND_TYPE"] = forced
 
@@ -97,16 +102,24 @@ def main():
     from renderer import Renderer
 
     splash = make_splash()
-    notice = None
+    notice = guard_notice
     power = "low-power" if cfg.get("gpu", 0) == 1 else "high-performance"
+
+    def waiting():
+        splash[0]()
+        if guard:
+            bootguard.tick()                                # too long on the loading window: the engine is given up on and the program starts again with the other
+    on_adapter = bootguard.adapter if guard else None
     try:
-        rend = Renderer(headless=test, size=(1280, 720), power=power, on_wait=None if test else splash[0])
-    except Exception as e:                                  # forced backend not available: fall back to automatic
+        rend = Renderer(headless=test, size=(1280, 720), power=power, on_wait=None if test else waiting, on_adapter=on_adapter)
+    except Exception as e:                                  # the engine could not be made: start again with the other one (bootguard), else the old fallback below
+        if guard:
+            bootguard.give_up("erro ao abrir o motor de vídeo: " + str(e)[:100])       # returns only when it cannot start again
         if not forced:
             raise
         os.environ.pop("WGPU_BACKEND_TYPE", None)
         notice = f"Backend {forced} indisponível: usando automático"
-        rend = Renderer(headless=test, size=(1280, 720), power=power, on_wait=None if test else splash[0])
+        rend = Renderer(headless=test, size=(1280, 720), power=power, on_wait=None if test else waiting, on_adapter=on_adapter)
     splash[1]()
     rend.preview_size = (512, 288)                          # the picture of the Palco is big: rows of 2048 bytes (a multiple of 256, as the GPU wants)
     print(f"GPU: {rend.gpu_name} | backend: {rend.backend}", flush=True)
@@ -128,6 +141,8 @@ def main():
     an = Analyzer(rate)
 
     menu = Menu(cfg)
+    if safe:                                                                  # both video engines failed to load: the lightest picture, so there is a chance
+        menu.set_value("preset", 0, announce=False)
     recorder = None
     import agenda as _agenda
     agenda_tk = _agenda.Ticker()
@@ -549,6 +564,8 @@ def main():
                 menu.dirty = False
 
         frame += 1
+        if guard and frame == bootguard.FRAMES_OK:                          # real frames have been drawn: the video engine works, nothing is blamed
+            bootguard.ok()
         if recorder is not None and recorder.step(clock_t, dt, tm):
             recorder.write(rend, cfg, PRESETS_N[int(cfg["preset"]) % len(PRESETS_N)])
             running = False
@@ -579,6 +596,8 @@ def main():
                 time.sleep(0.0005)
             prof.mark("Resto/limitador de FPS (espera para chegar à meta)")
 
+    if guard:
+        bootguard.ok()                                                        # a normal quit: the start was fine, whatever the time it took
     if test:
         print("diretor:", " | ".join(ndir.log), flush=True)
     if menu.dirty and not test:
@@ -615,8 +634,18 @@ def _single_instance():
         return True
     import ctypes
     k32, u32 = ctypes.windll.kernel32, ctypes.windll.user32
-    k32.CreateMutexW(None, False, "Local\\AudioOrganismSingleInstance")
-    if k32.GetLastError() != 183:                                    # ERROR_ALREADY_EXISTS
+
+    def got_lock():
+        h = k32.CreateMutexW(None, False, "Local\\AudioOrganismSingleInstance")
+        if k32.GetLastError() != 183:                                # ERROR_ALREADY_EXISTS
+            return True
+        k32.CloseHandle(h)                                           # not ours: no handle kept that would hold the lock after its owner is gone
+        return False
+    if "--fallback" in sys.argv:                                     # started by bootguard.give_up(): the process that started it is still ending
+        import bootguard
+        if bootguard.wait_for_lock(got_lock):
+            return True
+    elif got_lock():
         return True
     hwnd = u32.FindWindowW(None, "Audio Organism - Controles")
     if hwnd:
@@ -648,6 +677,13 @@ if __name__ == "__main__":
             import traceback
             tb = traceback.format_exc()
             _log_crash(tb)                                           # the exe has no console: without this a crash is silent
+            try:
+                import bootguard
+                bootguard.give_up("erro: " + tb.strip().splitlines()[-1])       # a crash while loading: start again with the other video engine (does not return when it can)
+            except SystemExit:
+                raise
+            except Exception:
+                pass
             try:
                 import ctypes
                 ctypes.windll.user32.MessageBoxW(0, "O Audio Organism fechou por um erro.\nO detalhe foi salvo em:\n%APPDATA%\\AudioOrganism\\erro.log\n\n" + tb.strip().splitlines()[-1][:200],

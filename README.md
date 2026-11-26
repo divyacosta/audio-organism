@@ -14,6 +14,10 @@ Precisa de uma placa de vídeo com Vulkan ou Direct3D 12 e driver atualizado. Em
 Duas janelas abrem: a de imagem (só o efeito) e a de controles (monitor da música e ajustes).
 Na janela de imagem: `F` tela cheia (ou duplo clique), `Esc` sai dela, `V` VSync, `S` strobe, `D` drop de teste, `1` a `9` tocam a cena, `A` liga ou desliga a troca automática, `T` bate o ritmo (tap tempo, veja abaixo).
 
+### Se a abertura travar
+
+Se o motor de vídeo (Vulkan ou Direct3D 12) travar ou falhar enquanto o programa carrega, ele troca de motor sozinho: depois de 2 minutos na janela de carregamento (ou na hora, se houver erro) o programa reabre com o outro motor e guarda o que deu certo em `%APPDATA%\AudioOrganism\boot.json`. Se os dois falharem, abre no automático com a qualidade **Baixo**. O veredito é esquecido a cada versão nova. Sua escolha em Sistema > Motor de vídeo não é apagada. Em notebooks com placa dedicada, a dedicada passa a ser preferida à integrada.
+
 ## Como usar
 
 O painel tem **três abas**: **Palco** (tocar), **Estúdio** (criar) e **Sistema** (configurar o programa). A janela já abre larga o bastante para ver a imagem e as cenas sem rolar (todas, numa tela Full HD; a primeira fileira, num notebook de 1366×768) e pode ser redimensionada e maximizada: o painel se reorganiza.

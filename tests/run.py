@@ -3232,9 +3232,47 @@ def test_agenda():
     check("o mesmo minuto dispara uma vez só", len(tk.check(rules, mon_9)) == 2 and tk.check(rules, mon_9) == [])
 
 
+def test_bootguard():
+    """The startup guard (bootguard.py): which video engine is tried after a hang or a crash, and that it can never go round in circles."""
+    import bootguard as BG
+    check("sem culpados, o automático continua automático", BG.choose([], None) == (None, False))
+    check("a escolha da pessoa vale enquanto não for culpada", BG.choose([], "D3D12") == ("D3D12", False))
+    check("o motor culpado é trocado pelo outro", BG.choose(["D3D12"], "D3D12") == ("Vulkan", False) and BG.choose(["Vulkan"], "Vulkan") == ("D3D12", False))
+    check("no automático, com um culpado, vai para o outro", BG.choose(["Vulkan"], None) == ("D3D12", False) and BG.choose(["D3D12"], None) == ("Vulkan", False))
+    check("os dois culpados: automático e modo seguro, sem trocar mais", BG.choose(["Vulkan", "D3D12"], "Vulkan") == (None, True))
+    old = settings.APPDIR
+    settings.APPDIR = os.path.join(TMP, "boot")
+    try:
+        eng, note, safe = BG.start("D3D12")
+        check("primeira abertura: nada culpado, sem aviso", (eng, note, safe) == ("D3D12", None, False))
+        BG.adapter("D3D12")
+        eng, note, safe = BG.start("D3D12")                       # the first attempt never ended (no ok()): it hung or crashed
+        check("abertura que não terminou culpa o motor e troca", eng == "Vulkan" and safe is False and "D3D12" in (note or ""), (eng, note, safe))
+        BG.ok()
+        BG.adapter("Vulkan")                                       # after ok() the attempt is gone: this is a no-op, nothing is rewritten
+        eng, note, safe = BG.start(None)
+        check("depois de uma abertura boa, a troca continua valendo", eng == "Vulkan" and safe is False, (eng, note, safe))
+        BG.ok()
+        st = json.load(open(os.path.join(settings.APPDIR, "boot.json"), encoding="utf-8"))
+        check("o veredito fica salvo e a tentativa some", st["bad"] == ["D3D12"] and "attempt" not in st, st)
+        BG.start(None)
+        BG.adapter("Vulkan")
+        eng, note, safe = BG.start(None)                           # Vulkan failed too
+        check("os dois falharam: automático em modo seguro", eng is None and safe is True and "Baixo" in (note or ""), (eng, note, safe))
+        BG.ok()
+        st = json.load(open(os.path.join(settings.APPDIR, "boot.json"), encoding="utf-8"))
+        st["version"] = "0.0.1"
+        json.dump(st, open(os.path.join(settings.APPDIR, "boot.json"), "w", encoding="utf-8"))
+        eng, note, safe = BG.start("Vulkan")
+        check("uma versão nova esquece os vereditos", (eng, note, safe) == ("Vulkan", None, False), (eng, note, safe))
+        BG.ok()
+    finally:
+        settings.APPDIR = old
+
+
 def main():
     exe = sys.argv[sys.argv.index("--exe") + 1] if "--exe" in sys.argv else None
-    for fn in (test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_agenda_week, test_master_switch, test_lanes, test_agenda_profiles, test_navigation, test_sticky_titles, test_report):
+    for fn in (test_bootguard, test_menu, test_migration, test_gallery, test_help_texts, test_extras, test_layers, test_remote, test_ear, test_director, test_fuzz, test_fx, test_generators, test_global, test_control, test_palco, test_firstminute, test_oneplace, test_wizard, test_tap, test_widgets, test_sistema, test_custom, test_chips, test_demo, test_live, test_tiles, test_downbeat, test_slots, test_music, test_lang, test_review, test_palco_wide, test_thumbs, test_responsive, test_safety_undo, test_undo_redo_before, test_program_rules, test_agenda_week, test_master_switch, test_lanes, test_agenda_profiles, test_navigation, test_sticky_titles, test_report):
         try:
             fn()
         except Exception as e:

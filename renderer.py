@@ -41,6 +41,24 @@ struct VO { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
 """
 
 
+def pick_adapter(power):
+    """The adapter to draw with. wgpu's own power preference is trusted, except for one case: it handed an integrated GPU to laptops that also have
+    a discrete one. When the person did not ask for low power and a discrete GPU exists (same engine if possible), that one is used."""
+    adapter = wgpu.gpu.request_adapter_sync(power_preference=power)
+    try:
+        if power == "low-power" or str(adapter.info.get("adapter_type")) == "DiscreteGPU":
+            return adapter
+        want = os.environ.get("WGPU_BACKEND_TYPE")
+        found = [a for a in wgpu.gpu.enumerate_adapters_sync()
+                 if str(a.info.get("adapter_type")) == "DiscreteGPU" and (not want or str(a.info.get("backend_type")) == want)]
+        if found:
+            same = [a for a in found if str(a.info.get("backend_type")) == str(adapter.info.get("backend_type"))]
+            return (same or found)[0]
+    except Exception:
+        pass
+    return adapter
+
+
 def halton(i, base):
     f, r = 1.0, 0.0
     while i > 0:
@@ -171,14 +189,16 @@ def pack_gen(p, aspect, logo_aspect, kind):
 
 
 class Renderer:
-    def __init__(self, headless=False, size=(1280, 720), title="Audio Organism", shader_dir_arg=None, power="high-performance", on_wait=None):
+    def __init__(self, headless=False, size=(1280, 720), title="Audio Organism", shader_dir_arg=None, power="high-performance", on_wait=None, on_adapter=None):
         self.headless = headless
-        adapter = wgpu.gpu.request_adapter_sync(power_preference=power)
+        adapter = pick_adapter(power)
         self.device = adapter.request_device_sync()
         self.adapter = adapter
         info = adapter.info
         self.gpu_name = str(info.get("device"))
         self.backend = str(info.get("backend_type"))
+        if on_adapter is not None:
+            on_adapter(self.backend)
         if headless:
             from rendercanvas.offscreen import RenderCanvas
             self.canvas = RenderCanvas(size=size, pixel_ratio=1.0, format="rgba-u8")
@@ -247,6 +267,9 @@ class Renderer:
                 on_wait()
                 time.sleep(0.05)
             th.join()
+        need = [k for k in ("scene", "accum", "fb", "down", "blur", "comp", "fxaa") if k not in self.pipes]
+        if need and not headless:                  # the driver could not make the pipelines of the picture: a window that only says "Draw error" for ever is worse than an error the guard can act on
+            raise RuntimeError("o motor de vídeo não montou: " + ", ".join(need) + "  " + "; ".join(f"{k}: {v}" for k, v in self.pipe_errors.items())[:160])
         self.res, self.steps, self.bounces = 100, 72, 1
         self.style = 0                 # image style: 0 = 3D, 1 = neon, 2 = holograma
         self.duo = False               # duotone post-process
@@ -288,6 +311,13 @@ class Renderer:
             primitive={"topology": "triangle-list"})
 
     def _build_pipelines(self, only=None):
+        fake = os.environ.get("VIS_FAKE_FAIL")                          # tests of the startup guard: "<engine>:hang" or "<engine>:crash" (engine = Vulkan, D3D12 or any)
+        if fake and not self.headless and only is None:
+            eng, _, how = fake.partition(":")
+            if eng in ("any", self.backend):
+                if how == "crash":
+                    raise RuntimeError("falha simulada (VIS_FAKE_FAIL)")
+                time.sleep(10 ** 6)
         specs = {"neon3d": [("scene", "vs", "fs", HDR)],
                  "bloom": [("down", "vs", "fs_down", HDR), ("blur", "vs", "fs_blur", HDR)],
                  "composite": [("comp", "vs", "fs", None)],
